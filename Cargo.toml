@@ -10,8 +10,8 @@ name = "daemon"
 path = "src/bin/daemon.rs"
 
 [[bin]]
-name = "management"
-path = "src/bin/management.rs"
+name = "rpc"
+path = "src/bin/rpc.rs"
 
 [lib]
 path = "src/lib.rs"
