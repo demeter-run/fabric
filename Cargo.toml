@@ -1,0 +1,18 @@
+[package]
+name = "fabric"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[[bin]]
+name = "daemon"
+path = "src/bin/daemon.rs"
+
+[[bin]]
+name = "rpc"
+path = "src/bin/rpc.rs"
+
+[lib]
+path = "src/lib.rs"
+
