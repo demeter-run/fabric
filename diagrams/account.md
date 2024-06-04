@@ -6,6 +6,7 @@ The flow to create a new account will use the management API as RPC. The process
 
 ```mermaid
 sequenceDiagram   
+    actor User
     User->>+RPC_Driver: Create a new account
     RPC_Driver->>+Management_Domain: Call create account function
 
