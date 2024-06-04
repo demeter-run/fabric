@@ -54,7 +54,37 @@ sequenceDiagram
 
 ```
 
-## Fabric resource creation flow
+## RPC port creation flow
+
+The user will send the required payload to create a new port, the management will validate the payload and if it's true it will send an event to create the port in all cluster that accept this kind of port e.g. CardanoNodePort, KupoPort.
+
+```mermaid
+sequenceDiagram
+    actor User
+
+    User->>+RPC_Driver: Create a port
+    RPC_Driver->>+Management_Domain: Call create port function
+
+    alt invalid spec port
+
+    Management_Domain-->>RPC_Driver: Invalid spec port
+    RPC_Driver-->>User: Invalid payload
+
+    else valid spec port
+
+    Management_Domain->>+State_Driven: Persist the new port resource
+    State_Driven-->>-Management_Domain: State updated confirmation
+
+    Management_Domain->>Event_Driven: Dispatch the event to create resource(port) in all cluster
+    Note over Event_Driven: it will integrate with <br/> kafka protocol
+    Event_Driven-->>Management_Domain: Event sent to a topic
+
+    Management_Domain-->>-RPC_Driver: Port created
+    RPC_Driver-->>-User: Port ready to use
+    end
+```
+
+## Fabric namespace creation flow
 
 Each cluster will follow this flow to create resources, e.g. namespace and ports.
 
