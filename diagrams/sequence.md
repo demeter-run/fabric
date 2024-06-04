@@ -106,3 +106,35 @@ sequenceDiagram
     Daemon_Domain-->>-Fabric_Driver: Namespace created
     Fabric_Driver-->>-Kafka: Ack the event
 ```
+
+## Fabric port creation flow
+
+When the cluster receive the event to create a new port, the daemon need to validate if the port is available to create the resource in the cluster.
+
+```mermaid
+sequenceDiagram
+    actor Kafka
+
+    Kafka->>+Fabric_Driver: Push events
+    Fabric_Driver->>+Daemon_Domain: Call create port function
+
+    alt the cluster doesn't have the port available
+
+    Daemon_Domain-->>Fabric_Driver: Resource not available
+    Fabric_Driver-->>Kafka: Ack the event
+
+    else port available
+
+    Daemon_Domain->>+Cluster_Driven: Create resource into the cluster
+    Note over Cluster_Driven: This function will integrate with <br/> the cluster and create the resource there
+    Cluster_Driven-->>-Daemon_Domain: Confirmation resource created
+
+    Daemon_Domain->>+Event_Driven: Dispatch the event to update the state
+    Note over Event_Driven: Each cluster will dispatch the event if it accept <br/> the kind of port, and the state <br/> will be updated with each cluster <br/> that created the namespace
+    Event_Driven-->>-Daemon_Domain: Event sent to a topic
+
+    Daemon_Domain-->>-Fabric_Driver: Port created
+    Fabric_Driver-->>-Kafka: Ack the event
+
+    end
+```
