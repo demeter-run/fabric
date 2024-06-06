@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.86"
+async-trait = "0.1.80"
+tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread", "time"] }
 
 [[bin]]
 name = "daemon"
@@ -15,4 +18,7 @@ path = "src/bin/rpc.rs"
 
 [lib]
 path = "src/lib.rs"
+
+[dev-dependencies]
+mockall = "0.12.1"
 
