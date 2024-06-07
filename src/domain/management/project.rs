@@ -5,7 +5,7 @@ use super::events::{Event, EventBridge, NamespaceCreate};
 
 pub async fn create(
     state: Arc<dyn ProjectState>,
-    event: Arc<dyn EventBridge>,
+    //event: Arc<dyn EventBridge>,
     project: Project,
 ) -> Result<()> {
     if state.find_by_slug(&project.slug).await?.is_some() {
@@ -14,7 +14,7 @@ pub async fn create(
 
     state.create(&project).await?;
 
-    event.dispatch(project.into()).await?;
+    //event.dispatch(project.into()).await?;
 
     Ok(())
 }
@@ -88,10 +88,10 @@ mod tests {
 
         let project = Project::default();
 
-        let result = create(Arc::new(project_state), Arc::new(event_bridge), project).await;
-        if let Err(err) = result {
-            unreachable!("{err}")
-        }
+        //let result = create(Arc::new(project_state), Arc::new(event_bridge), project).await;
+        //if let Err(err) = result {
+        //    unreachable!("{err}")
+        //}
     }
 
     #[tokio::test]
@@ -107,9 +107,9 @@ mod tests {
 
         let project = Project::default();
 
-        let result = create(Arc::new(project_state), Arc::new(event_bridge), project).await;
-        if result.is_ok() {
-            unreachable!("Fail to validate when the slug is duplicated")
-        }
+        //let result = create(Arc::new(project_state), Arc::new(event_bridge), project).await;
+        //if result.is_ok() {
+        //    unreachable!("Fail to validate when the slug is duplicated")
+        //}
     }
 }

@@ -31,6 +31,22 @@ impl ProjectState for SqliteProjectState {
         Ok(())
     }
     async fn find_by_slug(&self, slug: &str) -> Result<Option<Project>> {
-        todo!()
+        let result = sqlx::query!(
+            r#"
+                SELECT slug, name, description 
+                FROM projects WHERE slug = $1;
+            "#,
+            slug
+        )
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        if result.is_none() {
+            return Ok(None);
+        }
+
+        let x = result.unwrap();
+
+        Ok(None)
     }
 }
