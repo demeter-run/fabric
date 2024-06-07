@@ -1,20 +1,20 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::domain::management::project::{Project, ProjectState};
+use crate::domain::management::project::{Project, ProjectCache};
 
-use super::SqliteState;
+use super::SqliteCache;
 
-pub struct SqliteProjectState {
-    sqlite: Arc<SqliteState>,
+pub struct SqliteProjectCache {
+    sqlite: Arc<SqliteCache>,
 }
-impl SqliteProjectState {
-    pub fn new(sqlite: Arc<SqliteState>) -> Self {
+impl SqliteProjectCache {
+    pub fn new(sqlite: Arc<SqliteCache>) -> Self {
         Self { sqlite }
     }
 }
 #[async_trait::async_trait]
-impl ProjectState for SqliteProjectState {
+impl ProjectCache for SqliteProjectCache {
     async fn create(&self, project: &Project) -> Result<()> {
         sqlx::query!(
             r#"

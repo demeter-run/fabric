@@ -4,15 +4,15 @@ use std::sync::Arc;
 use super::events::{Event, EventBridge, NamespaceCreate};
 
 pub async fn create(
-    state: Arc<dyn ProjectState>,
+    cache: Arc<dyn ProjectCache>,
     //event: Arc<dyn EventBridge>,
     project: Project,
 ) -> Result<()> {
-    if state.find_by_slug(&project.slug).await?.is_some() {
+    if cache.find_by_slug(&project.slug).await?.is_some() {
         return Err(Error::msg("invalid project slug"));
     }
 
-    state.create(&project).await?;
+    cache.create(&project).await?;
 
     //event.dispatch(project.into()).await?;
 
@@ -35,7 +35,7 @@ impl From<Project> for Event {
 }
 
 #[async_trait::async_trait]
-pub trait ProjectState {
+pub trait ProjectCache {
     async fn create(&self, project: &Project) -> Result<()>;
     async fn find_by_slug(&self, slug: &str) -> Result<Option<Project>>;
 }
@@ -47,10 +47,10 @@ mod tests {
     use super::*;
 
     mock! {
-        pub FakeProjectState { }
+        pub FakeProjectCache { }
 
         #[async_trait::async_trait]
-        impl ProjectState for FakeProjectState {
+        impl ProjectCache for FakeProjectCache {
             async fn create(&self, project: &Project) -> Result<()>;
             async fn find_by_slug(&self, slug: &str) -> Result<Option<Project>>;
         }
@@ -77,18 +77,18 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_create_project() {
-        let mut project_state = MockFakeProjectState::new();
-        project_state
+        let mut project_cache = MockFakeProjectCache::new();
+        project_cache
             .expect_find_by_slug()
             .return_once(|_| Ok(None));
-        project_state.expect_create().return_once(|_| Ok(()));
+        project_cache.expect_create().return_once(|_| Ok(()));
 
         let mut event_bridge = MockFakeEventBridge::new();
         event_bridge.expect_dispatch().return_once(|_| Ok(()));
 
         let project = Project::default();
 
-        //let result = create(Arc::new(project_state), Arc::new(event_bridge), project).await;
+        //let result = create(Arc::new(project_cache), Arc::new(event_bridge), project).await;
         //if let Err(err) = result {
         //    unreachable!("{err}")
         //}
@@ -96,18 +96,18 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_fail_when_project_slug_exist() {
-        let mut project_state = MockFakeProjectState::new();
-        project_state
+        let mut project_cache = MockFakeProjectCache::new();
+        project_cache
             .expect_find_by_slug()
             .return_once(|_| Ok(Some(Project::default())));
-        project_state.expect_create().return_once(|_| Ok(()));
+        project_cache.expect_create().return_once(|_| Ok(()));
 
         let mut event_bridge = MockFakeEventBridge::new();
         event_bridge.expect_dispatch().return_once(|_| Ok(()));
 
         let project = Project::default();
 
-        //let result = create(Arc::new(project_state), Arc::new(event_bridge), project).await;
+        //let result = create(Arc::new(project_cache), Arc::new(event_bridge), project).await;
         //if result.is_ok() {
         //    unreachable!("Fail to validate when the slug is duplicated")
         //}
