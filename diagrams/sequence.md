@@ -6,7 +6,7 @@ These diagrams show the flow of the processes into the architecture and how the 
 
 An account will be persisted into the queue when the user call a creation. The RPC driver (management API) will persist a cache to manipulate and make query easly. And the daemon will create the resource in each cluster.
 
-### RPC 
+### RPC Driver
 
 The RPC will call the domain to create the account where the domain will validate the information and integrate with the demeter legacy. When the account is created an event will be sent to the queue to handle the account creation.
 
@@ -22,10 +22,12 @@ sequenceDiagram
     Demeter_Driven-->>-Management_Domain: All old business logic and integrations executed
 
     Management_Domain->>Event_Driven: Submit an event to handle account
-    
+
     Management_Domain-->>-RPC_Driver: Account created
     RPC_Driver-->>-User: Account created
 ```
+
+### Event Driver
 
 The event driver will be running togheter to the RPC driver watching the queue where it will handle account created.
 
@@ -42,6 +44,8 @@ sequenceDiagram
     Management_Domain->>-Event_Driver: Account handled
     Event_Driver->>-Queue: Ack event
 ```
+
+### Daemon Driver
 
 The Daemon Driver will be running in each cluster and watching the queue as well, but it will create the resource into the cluster.
 
