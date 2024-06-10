@@ -11,6 +11,9 @@ async-trait = "0.1.80"
 sqlx = { version = "0.7.4", features = ["runtime-tokio-rustls", "sqlite"] }
 tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread", "time"] }
 tonic = "0.11.0"
+kafka = "0.10.0"
+serde = { version = "1.0.203", features = ["derive"] }
+serde_json = "1.0.117"
 
 [[bin]]
 name = "daemon"

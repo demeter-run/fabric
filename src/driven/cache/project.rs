@@ -45,7 +45,7 @@ impl ProjectCache for SqliteProjectCache {
             return Ok(None);
         }
 
-        let x = result.unwrap();
+        //let x = result.unwrap();
 
         Ok(None)
     }
