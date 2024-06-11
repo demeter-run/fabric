@@ -1,4 +1,6 @@
 use anyhow::Result;
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 use std::{path::Path, sync::Arc};
 
 use crate::domain::management;
@@ -12,13 +14,20 @@ pub async fn server() -> Result<()> {
 
     let project_state = Arc::new(SqliteProjectCache::new(sqlite_cache));
 
-    let event_bridge = Arc::new(KafkaEventBridge::new(&["localhost:19092".into()], "events")?);
+    let event_bridge = Arc::new(KafkaEventBridge::new(
+        &["localhost:19092".into()],
+        "events",
+    )?);
 
-    
+    let slug: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(7)
+        .map(char::from)
+        .collect();
 
     let project = Project {
         name: "test name".into(),
-        slug: "test-slug-4".into(),
+        slug,
         description: "test description".into(),
     };
 
