@@ -10,9 +10,7 @@ use crate::driven::kafka::KafkaEventBridge;
 
 pub async fn server() -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new("dev.db")).await?);
-    sqlite_cache.migrate().await?;
-
-    let project_state = Arc::new(SqliteProjectCache::new(sqlite_cache));
+    let project_cache = Arc::new(SqliteProjectCache::new(sqlite_cache));
 
     let event_bridge = Arc::new(KafkaEventBridge::new(
         &["localhost:19092".into()],
@@ -28,10 +26,9 @@ pub async fn server() -> Result<()> {
     let project = Project {
         name: "test name".into(),
         slug,
-        description: "test description".into(),
     };
 
-    management::project::create(project_state, event_bridge, project).await?;
+    management::project::create(project_cache, event_bridge, project).await?;
 
     Ok(())
 }

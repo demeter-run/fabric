@@ -1,7 +1,7 @@
 use anyhow::{Error, Result};
 use std::sync::Arc;
 
-use super::events::{Event, EventBridge, NamespaceCreate};
+use super::events::{Event, EventBridge, Namespace};
 
 pub async fn create(
     cache: Arc<dyn ProjectCache>,
@@ -12,9 +12,18 @@ pub async fn create(
         return Err(Error::msg("invalid project slug"));
     }
 
-    cache.create(&project).await?;
+    let namespace = Event::NamespaceCreation(Namespace {
+        name: project.name,
+        slug: project.slug,
+    });
 
-    event.dispatch(project.into()).await?;
+    event.dispatch(namespace).await?;
+
+    Ok(())
+}
+
+pub async fn create_cache(cache: Arc<dyn ProjectCache>, namespace: Namespace) -> Result<()> {
+    cache.create(&namespace.into()).await?;
 
     Ok(())
 }
@@ -22,15 +31,14 @@ pub async fn create(
 #[derive(Debug, Clone)]
 pub struct Project {
     pub name: String,
-    pub description: String,
     pub slug: String,
 }
-impl From<Project> for Event {
-    fn from(value: Project) -> Self {
-        Event::NamespaceCreate(NamespaceCreate {
-            slug: value.slug,
+impl From<Namespace> for Project {
+    fn from(value: Namespace) -> Self {
+        Self {
             name: value.name,
-        })
+            slug: value.slug,
+        }
     }
 }
 
@@ -69,7 +77,6 @@ mod tests {
         fn default() -> Self {
             Self {
                 name: "New Project".into(),
-                description: "Project to mock".into(),
                 slug: "sonic-vegas".into(),
             }
         }
@@ -81,7 +88,6 @@ mod tests {
         project_cache
             .expect_find_by_slug()
             .return_once(|_| Ok(None));
-        project_cache.expect_create().return_once(|_| Ok(()));
 
         let mut event_bridge = MockFakeEventBridge::new();
         event_bridge.expect_dispatch().return_once(|_| Ok(()));
@@ -100,16 +106,31 @@ mod tests {
         project_cache
             .expect_find_by_slug()
             .return_once(|_| Ok(Some(Project::default())));
-        project_cache.expect_create().return_once(|_| Ok(()));
 
-        let mut event_bridge = MockFakeEventBridge::new();
-        event_bridge.expect_dispatch().return_once(|_| Ok(()));
+        let event_bridge = MockFakeEventBridge::new();
 
         let project = Project::default();
 
         let result = create(Arc::new(project_cache), Arc::new(event_bridge), project).await;
         if result.is_ok() {
             unreachable!("Fail to validate when the slug is duplicated")
+        }
+    }
+
+    #[tokio::test]
+    async fn it_should_create_project_cache() {
+        let mut project_cache = MockFakeProjectCache::new();
+        project_cache.expect_create().return_once(|_| Ok(()));
+
+        let project = Project::default();
+        let namespace = Namespace {
+            name: project.name,
+            slug: project.slug,
+        };
+
+        let result = create_cache(Arc::new(project_cache), namespace).await;
+        if let Err(err) = result {
+            unreachable!("{err}")
         }
     }
 }

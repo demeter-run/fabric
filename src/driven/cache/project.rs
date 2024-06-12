@@ -18,12 +18,11 @@ impl ProjectCache for SqliteProjectCache {
     async fn create(&self, project: &Project) -> Result<()> {
         sqlx::query!(
             r#"
-                INSERT INTO projects (slug, name, description)
-                VALUES ($1, $2, $3)
+                INSERT INTO projects (slug, name)
+                VALUES ($1, $2)
             "#,
             project.slug,
             project.name,
-            project.description
         )
         .execute(&self.sqlite.db)
         .await?;
@@ -33,7 +32,7 @@ impl ProjectCache for SqliteProjectCache {
     async fn find_by_slug(&self, slug: &str) -> Result<Option<Project>> {
         let result = sqlx::query!(
             r#"
-                SELECT slug, name, description 
+                SELECT slug, name 
                 FROM projects WHERE slug = $1;
             "#,
             slug
@@ -44,8 +43,6 @@ impl ProjectCache for SqliteProjectCache {
         if result.is_none() {
             return Ok(None);
         }
-
-        //let x = result.unwrap();
 
         Ok(None)
     }

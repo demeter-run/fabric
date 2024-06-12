@@ -1,14 +1,16 @@
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
-pub enum Event {
-    NamespaceCreate(NamespaceCreate),
-}
-
-#[derive(Debug, Clone)]
-pub struct NamespaceCreate {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Namespace {
     pub name: String,
     pub slug: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Event {
+    NamespaceCreation(Namespace),
 }
 
 #[async_trait::async_trait]

@@ -3,7 +3,6 @@ use kafka::{
     client::KafkaClient,
     producer::{Producer, Record},
 };
-use serde_json::json;
 
 use crate::domain::management::events::{Event, EventBridge};
 
@@ -28,13 +27,9 @@ impl KafkaEventBridge {
 }
 #[async_trait::async_trait]
 impl EventBridge for KafkaEventBridge {
-    async fn dispatch(&self, _event: Event) -> Result<()> {
-        let json = json!({
-           "test": "123"
-        });
-        let value = serde_json::to_vec(&json)?;
-
-        let record = Record::from_key_value(&self.topic, "test".as_bytes(), value);
+    async fn dispatch(&self, event: Event) -> Result<()> {
+        let data = serde_json::to_vec(&event)?;
+        let record = Record::from_value(&self.topic, data);
 
         let mut producer = Producer::from_hosts(self.hosts.clone()).create()?;
         producer.send(&record)?;
