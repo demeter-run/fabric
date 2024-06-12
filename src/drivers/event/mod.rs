@@ -18,7 +18,7 @@ pub async fn subscribe() -> Result<()> {
     let project_cache = Arc::new(SqliteProjectCache::new(sqlite_cache));
 
     let topic = "events".to_string();
-    let hosts = &["localhost:19092".into()];
+    let hosts = &["localhost:9092".into()];
 
     let mut consumer = Consumer::from_hosts(hosts.to_vec())
         .with_topic(topic.clone())
