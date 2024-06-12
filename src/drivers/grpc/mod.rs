@@ -1,12 +1,19 @@
 use anyhow::Result;
-use rand::distributions::Alphanumeric;
-use rand::Rng;
+use std::net::SocketAddr;
+use std::str::FromStr;
 use std::{path::Path, sync::Arc};
+use tonic::transport::Server;
 
-use crate::domain::management;
-use crate::domain::management::project::Project;
 use crate::driven::cache::{project::SqliteProjectCache, SqliteCache};
 use crate::driven::kafka::KafkaEventBridge;
+
+mod project;
+
+pub mod proto {
+    pub mod project {
+        tonic::include_proto!("fabric.project.v1alpha");
+    }
+}
 
 pub async fn server() -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new("dev.db")).await?);
@@ -14,18 +21,16 @@ pub async fn server() -> Result<()> {
 
     let event_bridge = Arc::new(KafkaEventBridge::new(&["localhost:9092".into()], "events")?);
 
-    let slug: String = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(7)
-        .map(char::from)
-        .collect();
+    let project_inner = project::ProjectServiceImpl::new(project_cache, event_bridge);
+    let project_service =
+        proto::project::project_service_server::ProjectServiceServer::new(project_inner);
 
-    let project = Project {
-        name: format!("test name {slug}"),
-        slug,
-    };
+    let address = SocketAddr::from_str("0.0.0.0:5000")?;
 
-    management::project::create(project_cache, event_bridge, project).await?;
+    Server::builder()
+        .add_service(project_service)
+        .serve(address)
+        .await?;
 
     Ok(())
 }

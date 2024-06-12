@@ -1,6 +1,6 @@
 use anyhow::Result;
 use dotenv::dotenv;
-use tracing::Level;
+use tracing::{info, Level};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 #[tokio::main]
@@ -17,9 +17,12 @@ async fn main() -> Result<()> {
         .with(env_filter)
         .init();
 
-    fabric::drivers::grpc::server().await?;
+    let grpc_driver = tokio::spawn(async { fabric::drivers::grpc::server().await });
 
-    fabric::drivers::event::subscribe().await?;
+    let event_driver = tokio::spawn(async { fabric::drivers::event::subscribe().await });
+
+    info!("rpc services running");
+    let _result = futures::future::join(grpc_driver, event_driver).await;
 
     Ok(())
 }

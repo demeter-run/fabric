@@ -14,6 +14,6 @@ pub enum Event {
 }
 
 #[async_trait::async_trait]
-pub trait EventBridge {
+pub trait EventBridge: Send + Sync {
     async fn dispatch(&self, event: Event) -> Result<()>;
 }

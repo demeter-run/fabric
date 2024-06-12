@@ -43,7 +43,7 @@ impl From<Namespace> for Project {
 }
 
 #[async_trait::async_trait]
-pub trait ProjectCache {
+pub trait ProjectCache: Send + Sync {
     async fn create(&self, project: &Project) -> Result<()>;
     async fn find_by_slug(&self, slug: &str) -> Result<Option<Project>>;
 }

@@ -4,7 +4,6 @@ use kafka::{
     consumer::Consumer,
 };
 use std::{path::Path, sync::Arc};
-use tracing::info;
 
 use crate::{
     domain::management::{events::Event, project::create_cache},
@@ -26,8 +25,6 @@ pub async fn subscribe() -> Result<()> {
         .with_fallback_offset(FetchOffset::Earliest)
         .with_offset_storage(Some(GroupOffsetStorage::Kafka))
         .create()?;
-
-    info!("Event Driver started listening");
 
     loop {
         let mss = consumer.poll()?;

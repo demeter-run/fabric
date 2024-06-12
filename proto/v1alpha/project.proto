@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package fabric.project.v1alpha;
+
+message CreateProjectRequest {
+  string name = 1; 
+}
+
+message CreateProjectResponse {
+  string name = 1; 
+  string slug = 2; 
+}
+
+service ProjectService {
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
+}
