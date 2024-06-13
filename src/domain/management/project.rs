@@ -1,7 +1,9 @@
 use anyhow::{Error, Result};
+use rand::{distributions::Alphanumeric, Rng};
 use std::sync::Arc;
+use tracing::info;
 
-use crate::domain::events::{Event, EventBridge, Namespace};
+use crate::domain::events::{Event, EventBridge, NamespaceCreation};
 
 pub async fn create(
     cache: Arc<dyn ProjectCache>,
@@ -12,17 +14,18 @@ pub async fn create(
         return Err(Error::msg("invalid project slug"));
     }
 
-    let namespace = Event::NamespaceCreation(Namespace {
-        name: project.name,
-        slug: project.slug,
-    });
+    let namespace = Event::NamespaceCreation(project.clone().into());
 
     event.dispatch(namespace).await?;
+    info!(project = project.slug, "new project created");
 
     Ok(())
 }
 
-pub async fn create_cache(cache: Arc<dyn ProjectCache>, namespace: Namespace) -> Result<()> {
+pub async fn create_cache(
+    cache: Arc<dyn ProjectCache>,
+    namespace: NamespaceCreation,
+) -> Result<()> {
     cache.create(&namespace.into()).await?;
 
     Ok(())
@@ -33,9 +36,30 @@ pub struct Project {
     pub name: String,
     pub slug: String,
 }
-impl From<Namespace> for Project {
-    fn from(value: Namespace) -> Self {
+impl Project {
+    pub fn new(name: String) -> Self {
+        let slug: String = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(7)
+            .map(char::from)
+            .collect();
+
+        let slug = slug.to_lowercase();
+
+        Self { name, slug }
+    }
+}
+impl From<NamespaceCreation> for Project {
+    fn from(value: NamespaceCreation) -> Self {
         Self {
+            name: value.name,
+            slug: value.slug,
+        }
+    }
+}
+impl From<Project> for NamespaceCreation {
+    fn from(value: Project) -> Self {
+        NamespaceCreation {
             name: value.name,
             slug: value.slug,
         }
@@ -123,7 +147,7 @@ mod tests {
         project_cache.expect_create().return_once(|_| Ok(()));
 
         let project = Project::default();
-        let namespace = Namespace {
+        let namespace = NamespaceCreation {
             name: project.name,
             slug: project.slug,
         };

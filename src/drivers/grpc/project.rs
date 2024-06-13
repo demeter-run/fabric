@@ -1,4 +1,3 @@
-use rand::{distributions::Alphanumeric, Rng};
 use std::sync::Arc;
 use tonic::{async_trait, Request, Response, Status};
 
@@ -33,17 +32,7 @@ impl ProjectService for ProjectServiceImpl {
     ) -> Result<Response<CreateProjectResponse>, Status> {
         let req = request.into_inner();
 
-        let slug: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(7)
-            .map(char::from)
-            .collect();
-
-        let project = Project {
-            name: req.name,
-            slug,
-        };
-
+        let project = Project::new(req.name);
         let result =
             management::project::create(self.cache.clone(), self.event.clone(), project.clone())
                 .await;

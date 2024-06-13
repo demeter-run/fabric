@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Namespace {
+pub struct NamespaceCreation {
     pub name: String,
     pub slug: String,
 }
@@ -10,7 +10,7 @@ pub struct Namespace {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Event {
-    NamespaceCreation(Namespace),
+    NamespaceCreation(NamespaceCreation),
 }
 
 #[async_trait::async_trait]
