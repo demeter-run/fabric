@@ -10,7 +10,7 @@ pub async fn create_namespace(
     cluster: Arc<dyn NamespaceCluster>,
     namespace: NamespaceCreation,
 ) -> Result<()> {
-    if cluster.find_by_name(&namespace.name).await?.is_some() {
+    if cluster.find_by_name(&namespace.slug).await?.is_some() {
         return Err(Error::msg("namespace alread exist"));
     }
 

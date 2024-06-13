@@ -44,7 +44,7 @@ impl Project {
             .map(char::from)
             .collect();
 
-        let slug = slug.to_lowercase();
+        let slug = format!("prj-{}", slug.to_lowercase());
 
         Self { name, slug }
     }

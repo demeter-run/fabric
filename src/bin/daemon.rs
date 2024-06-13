@@ -1,6 +1,6 @@
 use anyhow::Result;
 use dotenv::dotenv;
-use tracing::Level;
+use tracing::{info, Level};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 #[tokio::main]
@@ -17,5 +17,6 @@ async fn main() -> Result<()> {
         .with(env_filter)
         .init();
 
+    info!("daemon services running");
     fabric::drivers::monitor::subscribe().await
 }
