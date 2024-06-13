@@ -17,7 +17,7 @@ jobs:
 
       - name: Prepare Environment
         run: |
-          cargo install sql-cli
+          cargo install --version=0.7.4 sql-cli
           cargo sqlx db create 
           cargo sqlx migrate run --source ./src/driven/cache/migrations
 
