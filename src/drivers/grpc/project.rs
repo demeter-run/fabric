@@ -2,10 +2,12 @@ use rand::{distributions::Alphanumeric, Rng};
 use std::sync::Arc;
 use tonic::{async_trait, Request, Response, Status};
 
-use crate::domain::management::{
-    self,
+use crate::domain::{
     events::EventBridge,
-    project::{Project, ProjectCache},
+    management::{
+        self,
+        project::{Project, ProjectCache},
+    },
 };
 
 use super::proto::project::{

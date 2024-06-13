@@ -4,7 +4,7 @@ use kafka::{
     producer::{Producer, Record},
 };
 
-use crate::domain::management::events::{Event, EventBridge};
+use crate::domain::events::{Event, EventBridge};
 
 pub struct KafkaEventBridge {
     hosts: Vec<String>,

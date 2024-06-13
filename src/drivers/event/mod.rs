@@ -6,7 +6,7 @@ use kafka::{
 use std::{path::Path, sync::Arc};
 
 use crate::{
-    domain::management::{events::Event, project::create_cache},
+    domain::{events::Event, management::project::create_cache},
     driven::cache::{project::SqliteProjectCache, SqliteCache},
 };
 

@@ -1,7 +1,7 @@
 use anyhow::{Error, Result};
 use std::sync::Arc;
 
-use super::events::{Event, EventBridge, Namespace};
+use crate::domain::events::{Event, EventBridge, Namespace};
 
 pub async fn create(
     cache: Arc<dyn ProjectCache>,
