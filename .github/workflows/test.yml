@@ -15,5 +15,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+
       - name: Run Unit Tests 
         run: cargo test --lib 
