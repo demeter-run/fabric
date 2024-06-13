@@ -15,5 +15,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Prepare Environment
+        run: |
+          cargo install sql-cli
+          cargo sqlx db create 
+          cargo sqlx migrate run --source ./src/driven/cache/migrations
+
       - name: Clippy check lints
         run: cargo clippy -- -D warnings
