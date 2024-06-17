@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+dmtri = { version = "0.1.0", git = "https://github.com/demeter-run/specs.git" }
+# dmtri = { version = "0.1.0", path = "../specs/gen/rust" }
+
 anyhow = "1.0.86"
 async-trait = "0.1.80"
 sqlx = { version = "0.7.4", features = ["runtime-tokio-rustls", "sqlite"] }
@@ -21,6 +24,10 @@ tonic-reflection = "0.11.0"
 futures = "0.3.30"
 k8s-openapi = { version = "0.22.0", features = ["latest"] }
 kube = { version = "0.92.0", features = ["client"] }
+protoc-wkt = "1.0.0"
+
+[dev-dependencies]
+mockall = "0.12.1"
 
 [[bin]]
 name = "daemon"
@@ -32,12 +39,6 @@ path = "src/bin/rpc.rs"
 
 [lib]
 path = "src/lib.rs"
-
-[dev-dependencies]
-mockall = "0.12.1"
-
-[build-dependencies]
-tonic-build = "0.11.0"
 
 [profile.dev.package.sqlx-macros]
 opt-level = 3

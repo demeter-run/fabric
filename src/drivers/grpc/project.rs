@@ -1,5 +1,6 @@
+use dmtri::demeter::ops::v1alpha as proto;
 use std::sync::Arc;
-use tonic::{async_trait, Request, Response, Status};
+use tonic::{async_trait, Status};
 
 use crate::domain::{
     events::EventBridge,
@@ -7,10 +8,6 @@ use crate::domain::{
         self,
         project::{Project, ProjectCache},
     },
-};
-
-use super::proto::project::{
-    project_service_server::ProjectService, CreateProjectRequest, CreateProjectResponse,
 };
 
 pub struct ProjectServiceImpl {
@@ -25,11 +22,11 @@ impl ProjectServiceImpl {
 }
 
 #[async_trait]
-impl ProjectService for ProjectServiceImpl {
+impl proto::project_service_server::ProjectService for ProjectServiceImpl {
     async fn create_project(
         &self,
-        request: Request<CreateProjectRequest>,
-    ) -> Result<Response<CreateProjectResponse>, Status> {
+        request: tonic::Request<proto::CreateProjectRequest>,
+    ) -> Result<tonic::Response<proto::CreateProjectResponse>, tonic::Status> {
         let req = request.into_inner();
 
         let project = Project::new(req.name);
@@ -41,10 +38,10 @@ impl ProjectService for ProjectServiceImpl {
             return Err(Status::failed_precondition(err.to_string()));
         }
 
-        let message = CreateProjectResponse {
+        let message = proto::CreateProjectResponse {
             name: project.name,
-            slug: project.slug,
+            namespace: project.slug,
         };
-        Ok(Response::new(message))
+        Ok(tonic::Response::new(message))
     }
 }
