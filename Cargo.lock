@@ -364,14 +364,14 @@ dependencies = [
 [[package]]
 name = "dmtri"
 version = "0.1.0"
-source = "git+https://github.com/demeter-run/specs.git#0b0176ad5d0345c62b48aed2551799689a28fc7b"
+source = "git+https://github.com/demeter-run/specs.git#297c95d1114353cdf5b12a13d45d93b30b8e3996"
 dependencies = [
  "bytes",
  "pbjson",
  "pbjson-types",
- "prost 0.11.9",
+ "prost 0.12.6",
  "serde",
- "tonic 0.9.2",
+ "tonic",
 ]
 
 [[package]]
@@ -454,7 +454,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
- "tonic 0.11.0",
+ "tonic",
  "tonic-reflection",
  "tracing",
  "tracing-subscriber",
@@ -1357,9 +1357,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniz_oxide"
-version = "0.7.3"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87dfd01fe195c66b572b37921ad8803d010623c0aca821bea2302239d155cdae"
+checksum = "b8a240ddb74feaf34a79a7add65a741f3167852fba007066dcac1ca548d89c08"
 dependencies = [
  "adler",
 ]
@@ -2806,34 +2806,6 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3082666a3a6433f7f511c7192923fa1fe07c69332d3c6a2e6bb040b569199d5a"
-dependencies = [
- "async-trait",
- "axum",
- "base64 0.21.7",
- "bytes",
- "futures-core",
- "futures-util",
- "h2",
- "http 0.2.12",
- "http-body 0.4.6",
- "hyper 0.14.29",
- "hyper-timeout 0.4.1",
- "percent-encoding",
- "pin-project",
- "prost 0.11.9",
- "tokio",
- "tokio-stream",
- "tower",
- "tower-layer",
- "tower-service",
- "tracing",
-]
-
-[[package]]
-name = "tonic"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76c4eb7a4e9ef9d4763600161f12f5070b92a578e1b634db88a6887844c91a13"
@@ -2869,7 +2841,7 @@ dependencies = [
  "prost-types 0.12.6",
  "tokio",
  "tokio-stream",
- "tonic 0.11.0",
+ "tonic",
 ]
 
 [[package]]
