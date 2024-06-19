@@ -36,6 +36,7 @@ pub async fn subscribe() -> Result<()> {
                     Event::NamespaceCreation(namespace) => {
                         create_namespace(k8s_cluster.clone(), namespace).await?;
                     }
+                    Event::AccountCreation(_) => todo!(),
                 };
             }
             consumer.consume_messageset(ms)?;

@@ -6,11 +6,16 @@ pub struct NamespaceCreation {
     pub name: String,
     pub slug: String,
 }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountCreation {
+    pub name: String,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Event {
     NamespaceCreation(NamespaceCreation),
+    AccountCreation(AccountCreation),
 }
 
 #[async_trait::async_trait]

@@ -9,6 +9,7 @@ use dmtri::demeter::ops::v1alpha::project_service_server::ProjectServiceServer;
 use crate::driven::cache::{project::SqliteProjectCache, SqliteCache};
 use crate::driven::kafka::KafkaEventBridge;
 
+mod account;
 mod project;
 
 pub async fn server() -> Result<()> {
