@@ -39,6 +39,7 @@ pub async fn subscribe() -> Result<()> {
                     Event::NamespaceCreation(namespace) => {
                         create_cache(project_cache.clone(), namespace).await?;
                     }
+                    Event::AccountCreation(_) => todo!(),
                 };
             }
             consumer.consume_messageset(ms)?;
