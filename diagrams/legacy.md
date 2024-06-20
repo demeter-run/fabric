@@ -1,5 +1,11 @@
 # Legacy Sequence Diagram
 
+The new Demeter decentralized ecosystem needs to have support for the legacy, and some diagrams with legacy integrations are here to describe these flows.
+
+## Account creation flow
+
+The account creation flow needs to integrate with the legacy Demeter ecosystem, therefore this Diagram describes the flow to integrate.
+
 ```mermaid
 sequenceDiagram
     actor User
@@ -8,6 +14,8 @@ sequenceDiagram
     RPC_Driver->>+Management_Domain: Call account creation function
 
     critical Legacy integrations
+
+        Management_Domain->>Management_Domain: Validate payload
 
         Management_Domain->>+Demeter_Driven: Execute legacy account creation flow
         Demeter_Driven->>+Auth0: Verify user token
@@ -22,15 +30,27 @@ sequenceDiagram
         Auth0-->>-Demeter_Driven: Return the user id
         Demeter_Driven->>+Postgres: Get user
 
-        alt User not exist
-            Postgres-->>Demeter_Driven: User not exist
-            Demeter_Driven->>+Auth0: Get user profile
-            Auth0-->-Demeter_Driven: Return user profile
-
-            %% Mapping initialize user
+        alt User already exist
+            Postgres-->>Demeter_Driven: Return user
+            Demeter_Driven-->>Management_Domain: User already exist
+            Management_Domain-->>RPC_Driver: User already exist
+            RPC_Driver-->>User: User already exist
         end
 
-        Postgres-->>-Demeter_Driven: Return user
+        Postgres-->>-Demeter_Driven: User not exist
+        Demeter_Driven->>+Auth0: Get user profile
+        Auth0-->>-Demeter_Driven: Return user auth profile
+
+        Demeter_Driven->>+Postgres: Create user
+        Postgres-->>-Demeter_Driven: Return user id
+
+        Demeter_Driven->>+Stripe: Create strip customer
+        Stripe-->>-Demeter_Driven: Return customer
+
+        Demeter_Driven->>+Postgres: Create organization
+        Postgres-->>-Demeter_Driven: Return organization id
+
+        Management_Domain->>Management_Domain: Create default project
     end
 
     Demeter_Driven-->>-Management_Domain: Legacy integration executed
