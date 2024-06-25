@@ -49,9 +49,9 @@ sequenceDiagram
 
         Legacy_Driven->>+Postgres: Create organization
         Postgres-->>-Legacy_Driven: Return organization id
-
-        Management_Domain->>Management_Domain: Create default project
     end
+    
+    Management_Domain->>Management_Domain: Create default project
 
     Legacy_Driven-->>-Management_Domain: Legacy integration executed
     Management_Domain-->>-RPC_Driver: Account created
