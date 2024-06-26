@@ -4,27 +4,30 @@ use kafka::{
     consumer::Consumer,
 };
 use std::{path::Path, sync::Arc};
+use tracing::info;
 
 use crate::{
     domain::{events::Event, management::project::create_cache},
     driven::cache::{project::SqliteProjectCache, SqliteCache},
 };
 
-pub async fn subscribe() -> Result<()> {
+pub async fn subscribe(kafka_host: &str) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new("dev.db")).await?);
     sqlite_cache.migrate().await?;
 
     let project_cache = Arc::new(SqliteProjectCache::new(sqlite_cache));
 
     let topic = "events".to_string();
-    let hosts = &["localhost:9092".into()];
+    let hosts = &[kafka_host.into()];
 
     let mut consumer = Consumer::from_hosts(hosts.to_vec())
         .with_topic(topic.clone())
-        .with_group("c1".to_string())
+        .with_group("cache".to_string())
         .with_fallback_offset(FetchOffset::Earliest)
         .with_offset_storage(Some(GroupOffsetStorage::Kafka))
         .create()?;
+
+    info!("Subscriber running");
 
     loop {
         let mss = consumer.poll()?;

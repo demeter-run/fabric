@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::{path::Path, sync::Arc};
 use tonic::transport::Server;
+use tracing::info;
 
 use dmtri::demeter::ops::v1alpha::project_service_server::ProjectServiceServer;
 
@@ -12,11 +13,11 @@ use crate::driven::kafka::KafkaEventBridge;
 mod account;
 mod project;
 
-pub async fn server() -> Result<()> {
-    let sqlite_cache = Arc::new(SqliteCache::new(Path::new("dev.db")).await?);
+pub async fn server(addr: &str, db_path: &str, kafka_host: &str) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&db_path)).await?);
     let project_cache = Arc::new(SqliteProjectCache::new(sqlite_cache));
 
-    let event_bridge = Arc::new(KafkaEventBridge::new(&["localhost:9092".into()], "events")?);
+    let event_bridge = Arc::new(KafkaEventBridge::new(&[kafka_host.into()], "events")?);
 
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(dmtri::demeter::ops::v1alpha::FILE_DESCRIPTOR_SET)
@@ -27,7 +28,9 @@ pub async fn server() -> Result<()> {
     let project_inner = project::ProjectServiceImpl::new(project_cache, event_bridge);
     let project_service = ProjectServiceServer::new(project_inner);
 
-    let address = SocketAddr::from_str("0.0.0.0:5000")?;
+    let address = SocketAddr::from_str(addr)?;
+
+    info!(address = addr, "Server running");
 
     Server::builder()
         .add_service(reflection)
