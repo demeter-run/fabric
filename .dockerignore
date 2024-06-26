@@ -1,0 +1,8 @@
+target
+.env*
+.git*
+diagrams
+test
+examples
+dev*
+
