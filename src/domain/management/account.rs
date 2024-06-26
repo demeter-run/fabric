@@ -49,6 +49,10 @@ impl From<Account> for AccountCreation {
 pub trait AccountCache: Send + Sync {
     async fn create(&self, account: &Account) -> Result<()>;
 }
+#[async_trait::async_trait]
+pub trait DrivenLegacyAccount: Send + Sync {
+    async fn create(&self, account: &Account) -> Result<()>;
+}
 
 #[cfg(test)]
 mod tests {
