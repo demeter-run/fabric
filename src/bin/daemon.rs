@@ -1,6 +1,7 @@
 use anyhow::Result;
 use dotenv::dotenv;
-use tracing::{info, Level};
+use serde::Deserialize;
+use tracing::Level;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 #[tokio::main]
@@ -17,6 +18,23 @@ async fn main() -> Result<()> {
         .with(env_filter)
         .init();
 
-    info!("daemon services running");
-    fabric::drivers::monitor::subscribe().await
+    let config = Config::new()?;
+
+    fabric::drivers::monitor::subscribe(&config.kafka_host).await
+}
+
+#[derive(Debug, Deserialize)]
+struct Config {
+    kafka_host: String,
+}
+impl Config {
+    pub fn new() -> Result<Self> {
+        let config = config::Config::builder()
+            .add_source(config::File::with_name("daemon.toml").required(false))
+            .add_source(config::Environment::with_prefix("daemon").separator("_"))
+            .build()?
+            .try_deserialize()?;
+
+        Ok(config)
+    }
 }

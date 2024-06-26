@@ -4,17 +4,18 @@ use kafka::{
     consumer::Consumer,
 };
 use std::sync::Arc;
+use tracing::info;
 
 use crate::{
     domain::{daemon::namespace::create_namespace, events::Event},
     driven::k8s::K8sCluster,
 };
 
-pub async fn subscribe() -> Result<()> {
+pub async fn subscribe(kafka_host: &str) -> Result<()> {
     let k8s_cluster = Arc::new(K8sCluster::new().await?);
 
     let topic = "events".to_string();
-    let hosts = &["localhost:9092".into()];
+    let hosts = &[kafka_host.into()];
 
     let mut consumer = Consumer::from_hosts(hosts.to_vec())
         .with_topic(topic.clone())
@@ -22,6 +23,8 @@ pub async fn subscribe() -> Result<()> {
         .with_fallback_offset(FetchOffset::Earliest)
         .with_offset_storage(Some(GroupOffsetStorage::Kafka))
         .create()?;
+
+    info!("Subscriber running");
 
     loop {
         let mss = consumer.poll()?;
