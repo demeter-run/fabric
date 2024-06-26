@@ -1,6 +1,7 @@
 use anyhow::Result;
 use dotenv::dotenv;
-use tracing::{info, Level};
+use serde::Deserialize;
+use tracing::Level;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 #[tokio::main]
@@ -17,12 +18,31 @@ async fn main() -> Result<()> {
         .with(env_filter)
         .init();
 
-    let grpc_driver = tokio::spawn(async { fabric::drivers::grpc::server().await });
+    let config = Config::new()?;
 
-    let event_driver = tokio::spawn(async { fabric::drivers::event::subscribe().await });
-
-    info!("rpc services running");
-    let _result = futures::future::join(grpc_driver, event_driver).await;
+    futures::future::try_join(
+        fabric::drivers::grpc::server(&config.addr, &config.db_path, &config.kafka_host),
+        fabric::drivers::event::subscribe(&config.kafka_host),
+    )
+    .await?;
 
     Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+struct Config {
+    addr: String,
+    db_path: String,
+    kafka_host: String,
+}
+impl Config {
+    pub fn new() -> Result<Self> {
+        let config = config::Config::builder()
+            .add_source(config::File::with_name("rpc.toml").required(false))
+            .add_source(config::Environment::with_prefix("rpc").separator("_"))
+            .build()?
+            .try_deserialize()?;
+
+        Ok(config)
+    }
 }
