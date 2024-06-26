@@ -1,3 +1,5 @@
+use std::env;
+
 use anyhow::Result;
 use dotenv::dotenv;
 use serde::Deserialize;
@@ -30,7 +32,10 @@ struct Config {
 impl Config {
     pub fn new() -> Result<Self> {
         let config = config::Config::builder()
-            .add_source(config::File::with_name("daemon.toml").required(false))
+            .add_source(
+                config::File::with_name(&env::var("DAEMON_CONFIG").unwrap_or("daemon.toml".into()))
+                    .required(false),
+            )
             .add_source(config::Environment::with_prefix("daemon").separator("_"))
             .build()?
             .try_deserialize()?;
