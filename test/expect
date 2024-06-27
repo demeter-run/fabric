@@ -1,0 +1,11 @@
+ATTEMPT=1
+MAX_ATTEMPT=12
+
+echo "Checking executation"
+while [ $ATTEMPT -lt $MAX_ATTEMPT ]; do
+    let ATTEMPT=ATTEMPT+1 
+    kubectl get pod -n demeter-rpc
+    kubectl logs -n demeter-rpc $(kubectl get pods -n demeter-rpc -o json | jq -r '.items | sort_by(.metadata.creationTimestamp) | .[0].metadata.name')
+    sleep 2 
+done
+
