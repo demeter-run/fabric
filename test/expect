@@ -1,0 +1,10 @@
+ATTEMPT=1
+MAX_ATTEMPT=12
+
+echo "Checking executation"
+while [ $ATTEMPT -lt $MAX_ATTEMPT ]; do
+    let ATTEMPT=ATTEMPT+1 
+    kubectl get pod -n demeter-rpc
+    sleep 2 
+done
+
