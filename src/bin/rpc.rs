@@ -1,3 +1,5 @@
+use std::env;
+
 use anyhow::Result;
 use dotenv::dotenv;
 use serde::Deserialize;
@@ -38,7 +40,10 @@ struct Config {
 impl Config {
     pub fn new() -> Result<Self> {
         let config = config::Config::builder()
-            .add_source(config::File::with_name("rpc.toml").required(false))
+            .add_source(
+                config::File::with_name(&env::var("RPC_CONFIG").unwrap_or("rpc.toml".into()))
+                    .required(false),
+            )
             .add_source(config::Environment::with_prefix("rpc").separator("_"))
             .build()?
             .try_deserialize()?;
