@@ -20,3 +20,41 @@ jobs:
 
       - name: Run Unit Tests 
         run: cargo test --lib 
+
+  integration:
+    services:
+     zookeeper:
+       image: confluentinc/cp-zookeeper:latest
+       options: >-
+        --env ZOOKEEPER_CLIENT_PORT=2181
+
+     kafka:
+       image: confluentinc/cp-kafka:latest
+       ports:
+         - 9092:9092
+       options: >-
+        --env KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+        --env KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Create k8s Kind Cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: "k8scluster"
+
+      - name: Build RPC 
+        run: docker build -t rpc:1.0 -f docker/dockerfile.rpc .
+
+      - name: Load Docker Image 
+        run: kind load docker-image rpc:1.0 --name k8scluster
+
+      - name: Apply main manifest
+        run: kubectl apply -f test/main.yaml
+
+      - name: Validate controller
+        run: ./test/expect
+      
