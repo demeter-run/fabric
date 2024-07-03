@@ -52,9 +52,15 @@ jobs:
       - name: Load Docker Image 
         run: kind load docker-image rpc:1.0 --name k8scluster
 
-      - name: Apply main manifest
-        run: kubectl apply -f test/main.yaml
+      - name: Build Daemon 
+        run: docker build -t daemon:1.0 -f docker/dockerfile.daemon .
 
-      - name: Validate controller
+      - name: Load Docker Image 
+        run: kind load docker-image daemon:1.0 --name k8scluster
+
+      - name: Apply main manifest
+        run: kubectl apply -f test/manifest.yaml
+
+      - name: Validate 
         run: ./test/expect
       

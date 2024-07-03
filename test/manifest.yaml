@@ -7,103 +7,60 @@ metadata:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: zookeeper
+  name: redpanda
   namespace: demeter-kafka
   labels:
-    app: zookeeper
+    app: redpanda
 spec:
   selector:
     matchLabels:
-      app: zookeeper
+      app: redpanda
   template:
     metadata:
       labels:
-        app: zookeeper
+        app: redpanda
     spec:
       containers:
-        - name: zookeeper
-          image: confluentinc/cp-zookeeper:latest
+        - name: redpanda
+          image: docker.redpanda.com/redpandadata/redpanda:latest
+          args:
+           - redpanda
+           - start
+           - --kafka-addr internal://localhost:9092,external://0.0.0.0:19092
+           - --advertise-kafka-addr internal://localhost:9092,external://redpanda.demeter-kafka.svc.cluster.local:19092
+           - --pandaproxy-addr internal://localhost:8082,external://0.0.0.0:18082
+           - --advertise-pandaproxy-addr internal://localhost:8082,external://redpanda.demeter-kafka.svc.cluster.local:18082
+           - --schema-registry-addr internal://localhost:8081,external://0.0.0.0:18081
+           - --rpc-addr localhost:33145
+           - --advertise-rpc-addr localhost:33145
+           - --mode dev-container
+           - --smp 1
+           - --default-log-level=debug
+
           ports:
-            - containerPort: 2181 
-          env:
-            - name: ZOOKEEPER_CLIENT_PORT 
-              value: "2181" 
+            - containerPort: 19092 
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/sh", "-c", " rpk topic create events"]
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: zookeeper 
+  name: redpanda 
   namespace: demeter-kafka
   labels:
-    app: zookeeper
+    app: redpanda
 spec:
   selector:
-    app: zookeeper
+    app: redpanda
   type: ClusterIP
   ports:
-    - name: zookeeper
-      port: 2181 
-      targetPort: 2181
+    - name: redpanda
+      port: 19092 
+      targetPort: 19092
       protocol: TCP
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: kafka
-  namespace: demeter-kafka
-  labels:
-    app: kafka
-spec:
-  selector:
-    matchLabels:
-      app: kafka
-  template:
-    metadata:
-      labels:
-        app: kafka
-    spec:
-      containers:
-        - name: kafka
-          image: confluentinc/cp-kafka:latest
-          ports:
-            - containerPort: 9092 
-          env:
-            - name: KAFKA_BROKER_ID
-              value: "1"
-            - name: KAFKA_ZOOKEEPER_CONNECT 
-              value: "zookeeper.demeter-kafka.svc.cluster.local:2181"
-            - name: KAFKA_ADVERTISED_LISTENERS
-              value: "PLAINTEXT://kafka:9092"
-            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP 
-              value: "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
-            - name: KAFKA_INTER_BROKER_LISTENER_NAME
-              value: "PLAINTEXT"
-            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
-              value: "1"
-          # lifecycle:
-          #   postStart:
-          #     exec:
-          #       command: ["/bin/sh", "-c", "kafka-topics --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic events"]
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kafka 
-  namespace: demeter-kafka
-  labels:
-    app: kafka
-spec:
-  selector:
-    app: kafka
-  type: ClusterIP
-  ports:
-    - name: kafka
-      port: 9092 
-      targetPort: 9092
-      protocol: TCP
----
-
 # Daemon 
 apiVersion: v1
 kind: Namespace
@@ -115,9 +72,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: kube-rs
 rules:
-  - apiGroups: ["*"]
-    resources: ["*"]
-    verbs: ["*"]
   - apiGroups: ["*"]
     resources: ["*"]
     verbs: ["*"]
@@ -138,6 +92,9 @@ subjects:
   - kind: ServiceAccount
     namespace: demeter-daemon
     name: kube-rs
+  - kind: Group
+    name: system:serviceaccounts
+    apiGroup: rbac.authorization.k8s.io
 roleRef:
   kind: ClusterRole
   name: kube-rs
@@ -146,7 +103,7 @@ roleRef:
 apiVersion: v1
 data:
   daemon.toml: |
-    kafka_host="kafka.demeter-kafka.svc.cluster.local:9092"
+    brokers="redpanda.demeter-kafka.svc.cluster.local:19092"
 kind: ConfigMap
 metadata:
   name: daemon-config
@@ -194,7 +151,7 @@ data:
   rpc.toml: |
     addr="0.0.0.0:80"
     db_path="test.db"
-    kafka_host="kafka.demeter-kafka.svc.cluster.local:9092"
+    brokers="redpanda.demeter-kafka.svc.cluster.local:19092"
 kind: ConfigMap
 metadata:
   name: rpc-config
@@ -231,3 +188,21 @@ spec:
         - name: rpc-vol
           configMap:
             name: rpc-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rpc 
+  namespace: demeter-rpc
+  labels:
+    app: rpc
+spec:
+  selector:
+    app: rpc
+  type: NodePort
+  ports:
+    - name: rpc
+      port: 80
+      targetPort: 80
+      nodePort: 30950
+      protocol: TCP
