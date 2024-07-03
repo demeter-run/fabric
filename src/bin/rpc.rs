@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
 
     futures::future::try_join(
         fabric::drivers::grpc::server(&config.addr, &config.db_path, &config.brokers),
-        fabric::drivers::event::subscribe(&config.brokers),
+        fabric::drivers::event::subscribe(&config.db_path, &config.brokers),
     )
     .await?;
 
