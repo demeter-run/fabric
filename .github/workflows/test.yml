@@ -22,20 +22,6 @@ jobs:
         run: cargo test --lib 
 
   integration:
-    services:
-     zookeeper:
-       image: confluentinc/cp-zookeeper:latest
-       options: >-
-        --env ZOOKEEPER_CLIENT_PORT=2181
-
-     kafka:
-       image: confluentinc/cp-kafka:latest
-       ports:
-         - 9092:9092
-       options: >-
-        --env KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
-        --env KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
