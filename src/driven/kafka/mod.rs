@@ -1,38 +1,39 @@
-use anyhow::{ensure, Result};
-use kafka::{
-    client::KafkaClient,
-    producer::{Producer, Record},
+use anyhow::{Error, Result};
+use rdkafka::{
+    producer::{FutureProducer, FutureRecord},
+    ClientConfig,
 };
+use std::time::Duration;
 
 use crate::domain::events::{Event, EventBridge};
 
-pub struct KafkaEventBridge {
-    hosts: Vec<String>,
+pub struct KafkaProducer {
+    producer: FutureProducer,
     topic: String,
 }
-impl KafkaEventBridge {
-    pub fn new(hosts: &[String], topic: &str) -> Result<Self> {
-        let hosts = hosts.to_vec();
-        let mut client = KafkaClient::new(hosts.to_vec());
-        client.load_metadata_all()?;
+impl KafkaProducer {
+    pub fn new(brokers: &str, topic: &str) -> Result<Self> {
+        let producer: FutureProducer = ClientConfig::new()
+            .set("bootstrap.servers", brokers)
+            .create()?;
 
-        let topic = topic.to_string();
-        ensure!(
-            client.topics().contains(&topic),
-            "topic {topic} does not exist yet",
-        );
-
-        Ok(Self { hosts, topic })
+        Ok(Self {
+            producer,
+            topic: topic.to_string(),
+        })
     }
 }
 #[async_trait::async_trait]
-impl EventBridge for KafkaEventBridge {
+impl EventBridge for KafkaProducer {
     async fn dispatch(&self, event: Event) -> Result<()> {
         let data = serde_json::to_vec(&event)?;
-        let record = Record::from_value(&self.topic, data);
-
-        let mut producer = Producer::from_hosts(self.hosts.clone()).create()?;
-        producer.send(&record)?;
+        self.producer
+            .send(
+                FutureRecord::to(&self.topic).payload(&data).key(""),
+                Duration::from_secs(0),
+            )
+            .await
+            .map_err(|err| Error::msg(err.0.to_string()))?;
 
         Ok(())
     }

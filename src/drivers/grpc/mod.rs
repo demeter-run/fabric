@@ -8,16 +8,16 @@ use tracing::info;
 use dmtri::demeter::ops::v1alpha::project_service_server::ProjectServiceServer;
 
 use crate::driven::cache::{project::SqliteProjectCache, SqliteCache};
-use crate::driven::kafka::KafkaEventBridge;
+use crate::driven::kafka::KafkaProducer;
 
 mod account;
 mod project;
 
-pub async fn server(addr: &str, db_path: &str, kafka_host: &str) -> Result<()> {
+pub async fn server(addr: &str, db_path: &str, brokers: &str) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&db_path)).await?);
     let project_cache = Arc::new(SqliteProjectCache::new(sqlite_cache));
 
-    let event_bridge = Arc::new(KafkaEventBridge::new(&[kafka_host.into()], "events")?);
+    let event_bridge = Arc::new(KafkaProducer::new(brokers, "events")?);
 
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(dmtri::demeter::ops::v1alpha::FILE_DESCRIPTOR_SET)
