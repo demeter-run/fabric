@@ -23,8 +23,8 @@ async fn main() -> Result<()> {
     let config = Config::new()?;
 
     futures::future::try_join(
-        fabric::drivers::grpc::server(&config.addr, &config.db_path, &config.kafka_host),
-        fabric::drivers::event::subscribe(&config.kafka_host),
+        fabric::drivers::grpc::server(&config.addr, &config.db_path, &config.brokers),
+        fabric::drivers::event::subscribe(&config.brokers),
     )
     .await?;
 
@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
 struct Config {
     addr: String,
     db_path: String,
-    kafka_host: String,
+    brokers: String,
 }
 impl Config {
     pub fn new() -> Result<Self> {

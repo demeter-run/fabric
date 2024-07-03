@@ -1,49 +1,44 @@
 use anyhow::Result;
-use kafka::{
-    client::{FetchOffset, GroupOffsetStorage},
-    consumer::Consumer,
+use rdkafka::{
+    consumer::{CommitMode, Consumer, StreamConsumer},
+    ClientConfig, Message,
 };
 use std::sync::Arc;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{
     domain::{daemon::namespace::create_namespace, events::Event},
     driven::k8s::K8sCluster,
 };
 
-pub async fn subscribe(kafka_host: &str) -> Result<()> {
+pub async fn subscribe(brokers: &str) -> Result<()> {
     let k8s_cluster = Arc::new(K8sCluster::new().await?);
 
-    let topic = "events".to_string();
-    let hosts = &[kafka_host.into()];
+    let topic = String::from("events");
 
-    let mut consumer = Consumer::from_hosts(hosts.to_vec())
-        .with_topic(topic.clone())
-        .with_group("clusters".to_string())
-        .with_fallback_offset(FetchOffset::Earliest)
-        .with_offset_storage(Some(GroupOffsetStorage::Kafka))
+    let consumer: StreamConsumer = ClientConfig::new()
+        .set("bootstrap.servers", brokers)
+        .set("group.id", "clusters")
         .create()?;
 
+    consumer.subscribe(&[&topic])?;
+
     info!("Subscriber running");
-
     loop {
-        let mss = consumer.poll()?;
-        if mss.is_empty() {
-            continue;
-        }
-
-        for ms in mss.iter() {
-            for m in ms.messages() {
-                let event: Event = serde_json::from_slice(m.value)?;
-                match event {
-                    Event::NamespaceCreation(namespace) => {
-                        create_namespace(k8s_cluster.clone(), namespace).await?;
-                    }
-                    Event::AccountCreation(_) => todo!(),
-                };
+        match consumer.recv().await {
+            Err(err) => error!(error = err.to_string(), "kafka subscribe error"),
+            Ok(message) => {
+                if let Some(payload) = message.payload() {
+                    let event: Event = serde_json::from_slice(payload)?;
+                    match event {
+                        Event::NamespaceCreation(namespace) => {
+                            create_namespace(k8s_cluster.clone(), namespace).await?;
+                        }
+                        Event::AccountCreation(_) => todo!(),
+                    };
+                    consumer.commit_message(&message, CommitMode::Async)?;
+                }
             }
-            consumer.consume_messageset(ms)?;
-        }
-        consumer.commit_consumed()?;
+        };
     }
 }
