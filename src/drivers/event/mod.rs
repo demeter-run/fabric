@@ -11,8 +11,8 @@ use crate::{
     driven::cache::{project::SqliteProjectCache, SqliteCache},
 };
 
-pub async fn subscribe(brokers: &str) -> Result<()> {
-    let sqlite_cache = Arc::new(SqliteCache::new(Path::new("dev.db")).await?);
+pub async fn subscribe(db_path: &str, brokers: &str) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(db_path)).await?);
     sqlite_cache.migrate().await?;
 
     let project_cache = Arc::new(SqliteProjectCache::new(sqlite_cache));

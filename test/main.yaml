@@ -1,6 +1,0 @@
-# RPC management
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: demeter-rpc 
-

@@ -1,0 +1,12 @@
+#!/bin/bash
+
+kind create cluster --name k8scluster
+
+docker build -t rpc:1.0 -f docker/dockerfile.rpc .
+kind load docker-image rpc:1.0 --name k8scluster
+
+docker build -t daemon:1.0 -f docker/dockerfile.daemon .
+kind load docker-image daemon:1.0 --name k8scluster
+
+kubectl apply -f ./test/manifest.yaml 
+./test/expect
