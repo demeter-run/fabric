@@ -8,10 +8,10 @@ Each cluster needs to send the metrics of usage of each user. Then, the main clu
 
 Each cluster will be running a usage driver to collect the usage data and send them as an event to the main cluster through the queue. In the main cluster, an event driver will be running and it will capture the event and persist in the cache db. The invoice will be triggered by another driver(billing) and it will be executed once a month, the payment gateway needs to be called to generate the invoice.
 
-- Usage
+- Usage  
   That needs to be executed in each cluster and triggered once an hour, integrating with Prometheus to collect metrics of data usage and send an event to the queue.
 
-- Billing
+- Billing  
   The billing will be executed once a month in the main cluster, getting user usage in the cache of all clusters, and integrating with a payment gateway to make the invoice.
 
 ## Rules
