@@ -20,3 +20,33 @@ jobs:
 
       - name: Run Unit Tests 
         run: cargo test --lib 
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Create k8s Kind Cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: "k8scluster"
+
+      - name: Build RPC 
+        run: docker build -t rpc:1.0 -f docker/dockerfile.rpc .
+
+      - name: Load Docker Image 
+        run: kind load docker-image rpc:1.0 --name k8scluster
+
+      - name: Build Daemon 
+        run: docker build -t daemon:1.0 -f docker/dockerfile.daemon .
+
+      - name: Load Docker Image 
+        run: kind load docker-image daemon:1.0 --name k8scluster
+
+      - name: Apply main manifest
+        run: kubectl apply -f test/manifest.yaml
+
+      - name: Validate 
+        run: ./test/expect
+      

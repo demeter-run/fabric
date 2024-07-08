@@ -22,12 +22,12 @@ async fn main() -> Result<()> {
 
     let config = Config::new()?;
 
-    fabric::drivers::monitor::subscribe(&config.kafka_host).await
+    fabric::drivers::monitor::subscribe(&config.brokers).await
 }
 
 #[derive(Debug, Deserialize)]
 struct Config {
-    kafka_host: String,
+    brokers: String,
 }
 impl Config {
     pub fn new() -> Result<Self> {
