@@ -3,7 +3,7 @@ use rand::{distributions::Alphanumeric, Rng};
 use std::sync::Arc;
 use tracing::info;
 
-use crate::domain::events::{Event, EventBridge, ProjectCreation};
+use crate::domain::events::{Event, EventBridge, ProjectCreated};
 
 pub async fn create(
     cache: Arc<dyn ProjectCache>,
@@ -14,7 +14,7 @@ pub async fn create(
         return Err(Error::msg("invalid project slug"));
     }
 
-    let namespace = Event::ProjectCreation(project.clone().into());
+    let namespace = Event::ProjectCreated(project.clone().into());
 
     event.dispatch(namespace).await?;
     info!(project = project.slug, "new project created");
@@ -22,7 +22,7 @@ pub async fn create(
     Ok(())
 }
 
-pub async fn create_cache(cache: Arc<dyn ProjectCache>, project: ProjectCreation) -> Result<()> {
+pub async fn create_cache(cache: Arc<dyn ProjectCache>, project: ProjectCreated) -> Result<()> {
     cache.create(&project.into()).await?;
 
     Ok(())
@@ -46,17 +46,17 @@ impl Project {
         Self { name, slug }
     }
 }
-impl From<ProjectCreation> for Project {
-    fn from(value: ProjectCreation) -> Self {
+impl From<ProjectCreated> for Project {
+    fn from(value: ProjectCreated) -> Self {
         Self {
             name: value.name,
             slug: value.slug,
         }
     }
 }
-impl From<Project> for ProjectCreation {
+impl From<Project> for ProjectCreated {
     fn from(value: Project) -> Self {
-        ProjectCreation {
+        ProjectCreated {
             name: value.name,
             slug: value.slug,
         }
@@ -144,7 +144,7 @@ mod tests {
         project_cache.expect_create().return_once(|_| Ok(()));
 
         let project = Project::default();
-        let project_event = ProjectCreation {
+        let project_event = ProjectCreated {
             name: project.name,
             slug: project.slug,
         };

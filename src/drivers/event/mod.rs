@@ -38,11 +38,11 @@ pub async fn subscribe(db_path: &str, brokers: &str) -> Result<()> {
                 if let Some(payload) = message.payload() {
                     let event: Event = serde_json::from_slice(payload)?;
                     match event {
-                        Event::ProjectCreation(namespace) => {
+                        Event::ProjectCreated(namespace) => {
                             create_cache(project_cache.clone(), namespace).await?;
                         }
-                        Event::AccountCreation(_) => todo!(),
-                        Event::PortCreation(port) => {
+                        Event::AccountCreated(_) => todo!(),
+                        Event::PortCreated(port) => {
                             port::create_cache(port_cache.clone(), port).await?;
                         }
                     };

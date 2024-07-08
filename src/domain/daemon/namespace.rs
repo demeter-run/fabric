@@ -4,11 +4,11 @@ use kube::{api::ObjectMeta, ResourceExt};
 use std::sync::Arc;
 use tracing::info;
 
-use crate::domain::events::ProjectCreation;
+use crate::domain::events::ProjectCreated;
 
 pub async fn create_namespace(
     cluster: Arc<dyn NamespaceCluster>,
-    project: ProjectCreation,
+    project: ProjectCreated,
 ) -> Result<()> {
     if cluster.find_by_name(&project.slug).await?.is_some() {
         return Err(Error::msg("namespace alread exist"));
@@ -23,8 +23,8 @@ pub async fn create_namespace(
     Ok(())
 }
 
-impl From<ProjectCreation> for Namespace {
-    fn from(value: ProjectCreation) -> Self {
+impl From<ProjectCreated> for Namespace {
+    fn from(value: ProjectCreated) -> Self {
         Namespace {
             metadata: ObjectMeta {
                 name: Some(value.slug),
@@ -57,7 +57,7 @@ mod tests {
         }
     }
 
-    impl Default for ProjectCreation {
+    impl Default for ProjectCreated {
         fn default() -> Self {
             Self {
                 name: "New Namespace".into(),
@@ -74,9 +74,9 @@ mod tests {
             .expect_find_by_name()
             .return_once(|_| Ok(None));
 
-        let project_creation = ProjectCreation::default();
+        let project_created = ProjectCreated::default();
 
-        let result = create_namespace(Arc::new(namespace_cluster), project_creation).await;
+        let result = create_namespace(Arc::new(namespace_cluster), project_created).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }
@@ -90,9 +90,9 @@ mod tests {
             .expect_find_by_name()
             .return_once(|_| Ok(Some(Namespace::default())));
 
-        let project_creation = ProjectCreation::default();
+        let project_created = ProjectCreated::default();
 
-        let result = create_namespace(Arc::new(namespace_cluster), project_creation).await;
+        let result = create_namespace(Arc::new(namespace_cluster), project_created).await;
         if result.is_ok() {
             unreachable!("Fail to validate when the namespace alread exists")
         }

@@ -3,16 +3,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectCreation {
+pub struct ProjectCreated {
     pub name: String,
     pub slug: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AccountCreation {
+pub struct AccountCreated {
     pub name: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PortCreation {
+pub struct PortCreated {
     pub project: String,
     pub kind: String,
     pub resource: Value,
@@ -22,9 +22,9 @@ pub struct PortCreation {
 #[serde(untagged)]
 #[allow(clippy::enum_variant_names)]
 pub enum Event {
-    ProjectCreation(ProjectCreation),
-    AccountCreation(AccountCreation),
-    PortCreation(PortCreation),
+    ProjectCreated(ProjectCreated),
+    AccountCreated(AccountCreated),
+    PortCreated(PortCreated),
 }
 
 #[async_trait::async_trait]

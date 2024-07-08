@@ -2,14 +2,14 @@ use anyhow::Result;
 use std::sync::Arc;
 use tracing::info;
 
-use crate::domain::events::{AccountCreation, Event, EventBridge};
+use crate::domain::events::{AccountCreated, Event, EventBridge};
 
 pub async fn create(
     _cache: Arc<dyn AccountCache>,
     event: Arc<dyn EventBridge>,
     account: Account,
 ) -> Result<()> {
-    let account_event = Event::AccountCreation(account.clone().into());
+    let account_event = Event::AccountCreated(account.clone().into());
 
     event.dispatch(account_event).await?;
     info!(account = account.name, "new account created");
@@ -19,7 +19,7 @@ pub async fn create(
 
 //TODO: remove later
 #[allow(dead_code)]
-pub async fn create_cache(cache: Arc<dyn AccountCache>, account: AccountCreation) -> Result<()> {
+pub async fn create_cache(cache: Arc<dyn AccountCache>, account: AccountCreated) -> Result<()> {
     cache.create(&account.into()).await?;
 
     Ok(())
@@ -34,14 +34,14 @@ impl Account {
         Self { name }
     }
 }
-impl From<AccountCreation> for Account {
-    fn from(value: AccountCreation) -> Self {
+impl From<AccountCreated> for Account {
+    fn from(value: AccountCreated) -> Self {
         Self { name: value.name }
     }
 }
-impl From<Account> for AccountCreation {
+impl From<Account> for AccountCreated {
     fn from(value: Account) -> Self {
-        AccountCreation { name: value.name }
+        AccountCreated { name: value.name }
     }
 }
 

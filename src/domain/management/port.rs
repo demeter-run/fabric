@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tracing::info;
 
-use crate::domain::events::{Event, EventBridge, PortCreation};
+use crate::domain::events::{Event, EventBridge, PortCreated};
 
 use super::project::ProjectCache;
 
@@ -16,7 +16,7 @@ pub async fn create(
         return Err(Error::msg("Invalid project"));
     }
 
-    let port_event = Event::PortCreation(port.clone().into());
+    let port_event = Event::PortCreated(port.clone().into());
 
     event.dispatch(port_event).await?;
     info!(project = port.project, "new port requested");
@@ -24,7 +24,7 @@ pub async fn create(
     Ok(())
 }
 
-pub async fn create_cache(port_cache: Arc<dyn PortCache>, port: PortCreation) -> Result<()> {
+pub async fn create_cache(port_cache: Arc<dyn PortCache>, port: PortCreated) -> Result<()> {
     port_cache.create(&port.into()).await?;
 
     Ok(())
@@ -36,17 +36,17 @@ pub struct Port {
     pub kind: String,
     pub resource: Value,
 }
-impl From<Port> for PortCreation {
+impl From<Port> for PortCreated {
     fn from(value: Port) -> Self {
-        PortCreation {
+        PortCreated {
             project: value.project,
             kind: value.kind,
             resource: value.resource,
         }
     }
 }
-impl From<PortCreation> for Port {
-    fn from(value: PortCreation) -> Self {
+impl From<PortCreated> for Port {
+    fn from(value: PortCreated) -> Self {
         Port {
             project: value.project,
             kind: value.kind,

@@ -31,11 +31,11 @@ pub async fn subscribe(brokers: &str) -> Result<()> {
                 if let Some(payload) = message.payload() {
                     let event: Event = serde_json::from_slice(payload)?;
                     match event {
-                        Event::ProjectCreation(namespace) => {
+                        Event::ProjectCreated(namespace) => {
                             create_namespace(k8s_cluster.clone(), namespace).await?;
                         }
-                        Event::AccountCreation(_) => todo!(),
-                        Event::PortCreation(_) => todo!(),
+                        Event::AccountCreated(_) => todo!(),
+                        Event::PortCreated(_) => todo!(),
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }
