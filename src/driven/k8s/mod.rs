@@ -1,8 +1,12 @@
 use anyhow::Result;
 use k8s_openapi::api::core::v1::Namespace;
-use kube::{api::PostParams, Api, Client};
+use kube::ResourceExt;
+use kube::{
+    api::{DynamicObject, PostParams},
+    discovery, Api, Client,
+};
 
-use crate::domain::daemon::namespace::NamespaceCluster;
+use crate::domain::daemon::{namespace::NamespaceCluster, port::PortCluster};
 
 pub struct K8sCluster {
     client: Client,
@@ -26,5 +30,21 @@ impl NamespaceCluster for K8sCluster {
     async fn find_by_name(&self, name: &str) -> Result<Option<Namespace>> {
         let api: Api<Namespace> = Api::all(self.client.clone());
         Ok(api.get_opt(name).await?)
+    }
+}
+
+#[async_trait::async_trait]
+impl PortCluster for K8sCluster {
+    async fn create(&self, port: &DynamicObject) -> Result<()> {
+        let apigroup = discovery::group(&self.client, "demeter.run").await?;
+        let (ar, _caps) = apigroup
+            .recommended_kind(&port.types.as_ref().unwrap().kind)
+            .unwrap();
+
+        let api: Api<DynamicObject> =
+            Api::namespaced_with(self.client.clone(), &port.namespace().unwrap(), &ar);
+
+        api.create(&PostParams::default(), port).await?;
+        Ok(())
     }
 }
