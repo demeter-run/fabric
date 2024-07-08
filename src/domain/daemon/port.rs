@@ -15,7 +15,11 @@ pub async fn create_port(cluster: Arc<dyn PortCluster>, port: PortCreated) -> Re
         .take(7)
         .map(char::from)
         .collect();
-    let name = format!("{}-{}", port.kind.clone().to_lowercase(), slug);
+    let name = format!(
+        "{}-{}",
+        port.kind.clone().to_lowercase(),
+        slug.to_lowercase()
+    );
 
     let api = ApiResource {
         kind: port.kind.clone(),
