@@ -4,17 +4,17 @@ use kube::{api::ObjectMeta, ResourceExt};
 use std::sync::Arc;
 use tracing::info;
 
-use crate::domain::events::NamespaceCreation;
+use crate::domain::events::ProjectCreation;
 
 pub async fn create_namespace(
     cluster: Arc<dyn NamespaceCluster>,
-    namespace: NamespaceCreation,
+    project: ProjectCreation,
 ) -> Result<()> {
-    if cluster.find_by_name(&namespace.slug).await?.is_some() {
+    if cluster.find_by_name(&project.slug).await?.is_some() {
         return Err(Error::msg("namespace alread exist"));
     }
 
-    let ns: Namespace = namespace.into();
+    let ns: Namespace = project.into();
     cluster.create(&ns).await?;
 
     //TODO: create event to update cache
@@ -23,8 +23,8 @@ pub async fn create_namespace(
     Ok(())
 }
 
-impl From<NamespaceCreation> for Namespace {
-    fn from(value: NamespaceCreation) -> Self {
+impl From<ProjectCreation> for Namespace {
+    fn from(value: ProjectCreation) -> Self {
         Namespace {
             metadata: ObjectMeta {
                 name: Some(value.slug),
@@ -57,7 +57,7 @@ mod tests {
         }
     }
 
-    impl Default for NamespaceCreation {
+    impl Default for ProjectCreation {
         fn default() -> Self {
             Self {
                 name: "New Namespace".into(),
@@ -74,9 +74,9 @@ mod tests {
             .expect_find_by_name()
             .return_once(|_| Ok(None));
 
-        let namespace_creation = NamespaceCreation::default();
+        let project_creation = ProjectCreation::default();
 
-        let result = create_namespace(Arc::new(namespace_cluster), namespace_creation).await;
+        let result = create_namespace(Arc::new(namespace_cluster), project_creation).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }
@@ -90,9 +90,9 @@ mod tests {
             .expect_find_by_name()
             .return_once(|_| Ok(Some(Namespace::default())));
 
-        let namespace_creation = NamespaceCreation::default();
+        let project_creation = ProjectCreation::default();
 
-        let result = create_namespace(Arc::new(namespace_cluster), namespace_creation).await;
+        let result = create_namespace(Arc::new(namespace_cluster), project_creation).await;
         if result.is_ok() {
             unreachable!("Fail to validate when the namespace alread exists")
         }

@@ -44,6 +44,13 @@ impl ProjectCache for SqliteProjectCache {
             return Ok(None);
         }
 
-        Ok(None)
+        let result = result.unwrap();
+
+        let project = Project {
+            slug: result.slug,
+            name: result.name,
+        };
+
+        Ok(Some(project))
     }
 }

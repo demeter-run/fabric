@@ -1,8 +1,9 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NamespaceCreation {
+pub struct ProjectCreation {
     pub name: String,
     pub slug: String,
 }
@@ -10,12 +11,20 @@ pub struct NamespaceCreation {
 pub struct AccountCreation {
     pub name: String,
 }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortCreation {
+    pub project: String,
+    pub kind: String,
+    pub resource: Value,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
+#[allow(clippy::enum_variant_names)]
 pub enum Event {
-    NamespaceCreation(NamespaceCreation),
+    ProjectCreation(ProjectCreation),
     AccountCreation(AccountCreation),
+    PortCreation(PortCreation),
 }
 
 #[async_trait::async_trait]
