@@ -2,7 +2,7 @@
 
 ## Context
 
-Currently, when a user creates a new account, an organization and a project are created by default. The organization will be used to link all projects and payment settings.
+In the current Demeter platform, it is necessary to create an organization to link projects and users.
 
 ## Decision
 
