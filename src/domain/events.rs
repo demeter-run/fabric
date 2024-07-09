@@ -1,6 +1,5 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectCreated {
@@ -13,9 +12,10 @@ pub struct AccountCreated {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortCreated {
+    pub id: String,
     pub project: String,
     pub kind: String,
-    pub resource: Value,
+    pub data: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

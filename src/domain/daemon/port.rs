@@ -3,24 +3,12 @@ use kube::{
     api::{ApiResource, DynamicObject, ObjectMeta},
     ResourceExt,
 };
-use rand::{distributions::Alphanumeric, Rng};
 use std::sync::Arc;
 use tracing::info;
 
 use crate::domain::events::PortCreated;
 
 pub async fn create_port(cluster: Arc<dyn PortCluster>, port: PortCreated) -> Result<()> {
-    let slug: String = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(7)
-        .map(char::from)
-        .collect();
-    let name = format!(
-        "{}-{}",
-        port.kind.clone().to_lowercase(),
-        slug.to_lowercase()
-    );
-
     let api = ApiResource {
         kind: port.kind.clone(),
         group: "demeter.run".into(),
@@ -29,13 +17,13 @@ pub async fn create_port(cluster: Arc<dyn PortCluster>, port: PortCreated) -> Re
         api_version: "demeter.run/v1alpha1".into(),
     };
 
-    let mut obj = DynamicObject::new(&name, &api);
+    let mut obj = DynamicObject::new(&port.id, &api);
     obj.metadata = ObjectMeta {
-        name: Some(name),
+        name: Some(port.id),
         namespace: Some(port.project),
         ..Default::default()
     };
-    obj.data = port.resource;
+    obj.data = serde_json::from_str(&port.data)?;
 
     cluster.create(&obj).await?;
 
@@ -53,6 +41,7 @@ pub trait PortCluster: Send + Sync {
 #[cfg(test)]
 mod tests {
     use mockall::mock;
+    use uuid::Uuid;
 
     use crate::domain::management::port::Port;
 
@@ -70,9 +59,10 @@ mod tests {
     impl Default for PortCreated {
         fn default() -> Self {
             Self {
+                id: Uuid::new_v4().to_string(),
                 kind: "KupoPort".into(),
                 project: "prj-xxxxxxx".into(),
-                resource:  "{\"spec\":{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}}".into()
+                data:  "{\"spec\":{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}}".into()
             }
         }
     }

@@ -1,7 +1,7 @@
 use anyhow::{Error, Result};
-use serde_json::Value;
 use std::sync::Arc;
 use tracing::info;
+use uuid::Uuid;
 
 use crate::domain::events::{Event, EventBridge, PortCreated};
 
@@ -32,25 +32,40 @@ pub async fn create_cache(port_cache: Arc<dyn PortCache>, port: PortCreated) -> 
 
 #[derive(Debug, Clone)]
 pub struct Port {
+    pub id: String,
     pub project: String,
     pub kind: String,
-    pub resource: Value,
+    pub data: String,
+}
+impl Port {
+    pub fn new(project: &str, kind: &str, data: &str) -> Self {
+        let id = Uuid::new_v4().to_string();
+
+        Self {
+            id,
+            project: project.into(),
+            kind: kind.into(),
+            data: data.into(),
+        }
+    }
 }
 impl From<Port> for PortCreated {
     fn from(value: Port) -> Self {
         PortCreated {
+            id: value.id,
             project: value.project,
             kind: value.kind,
-            resource: value.resource,
+            data: value.data,
         }
     }
 }
 impl From<PortCreated> for Port {
     fn from(value: PortCreated) -> Self {
         Port {
+            id: value.id,
             project: value.project,
             kind: value.kind,
-            resource: value.resource,
+            data: value.data,
         }
     }
 }
@@ -98,9 +113,10 @@ mod tests {
     impl Default for Port {
         fn default() -> Self {
             Self {
+                id: Uuid::new_v4().to_string(),
                 project: "prj-test".into(),
                 kind: "CardanoNode".into(),
-                resource: Default::default(),
+                data: Default::default(),
             }
         }
     }

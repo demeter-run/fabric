@@ -28,11 +28,7 @@ impl proto::port_service_server::PortService for PortServiceImpl {
     ) -> Result<tonic::Response<proto::CreatePortResponse>, tonic::Status> {
         let req = request.into_inner();
 
-        let port = Port {
-            kind: req.kind,
-            project: req.project,
-            resource: serde_json::from_str(&req.resource).unwrap(),
-        };
+        let port = Port::new(&req.project, &req.kind, &req.data);
         let result =
             management::port::create(self.project_cache.clone(), self.event.clone(), port.clone())
                 .await;
@@ -41,7 +37,10 @@ impl proto::port_service_server::PortService for PortServiceImpl {
             return Err(Status::failed_precondition(err.to_string()));
         }
 
-        let message = proto::CreatePortResponse { kind: port.kind };
+        let message = proto::CreatePortResponse {
+            id: port.id,
+            kind: port.kind,
+        };
         Ok(tonic::Response::new(message))
     }
 }
