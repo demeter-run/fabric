@@ -41,7 +41,6 @@ pub trait PortCluster: Send + Sync {
 #[cfg(test)]
 mod tests {
     use mockall::mock;
-    use uuid::Uuid;
 
     use crate::domain::management::port::Port;
 
@@ -53,17 +52,6 @@ mod tests {
         #[async_trait::async_trait]
         impl PortCluster for FakePortCluster {
             async fn create(&self, obj: &DynamicObject) -> Result<()>;
-        }
-    }
-
-    impl Default for PortCreated {
-        fn default() -> Self {
-            Self {
-                id: Uuid::new_v4().to_string(),
-                kind: "KupoPort".into(),
-                project: "prj-xxxxxxx".into(),
-                data:  "{\"spec\":{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}}".into()
-            }
         }
     }
 

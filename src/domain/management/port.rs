@@ -116,7 +116,7 @@ mod tests {
                 id: Uuid::new_v4().to_string(),
                 project: "prj-test".into(),
                 kind: "CardanoNode".into(),
-                data: Default::default(),
+                data: "{\"spec\":{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}}".into(),
             }
         }
     }
