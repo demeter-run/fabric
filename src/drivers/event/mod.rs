@@ -41,7 +41,7 @@ pub async fn subscribe(db_path: &str, brokers: &str) -> Result<()> {
                         Event::ProjectCreated(namespace) => {
                             create_cache(project_cache.clone(), namespace).await?;
                         }
-                        Event::AccountCreated(_) => todo!(),
+                        Event::UserCreated(_) => todo!(),
                         Event::PortCreated(port) => {
                             port::create_cache(port_cache.clone(), port).await?;
                         }

@@ -11,9 +11,9 @@ use dmtri::demeter::ops::v1alpha::project_service_server::ProjectServiceServer;
 use crate::driven::cache::{project::SqliteProjectCache, SqliteCache};
 use crate::driven::kafka::KafkaProducer;
 
-mod account;
 mod port;
 mod project;
+mod user;
 
 pub async fn server(addr: &str, db_path: &str, brokers: &str) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&db_path)).await?);
