@@ -12,4 +12,4 @@ The organization will be deprecated but the fabric will have support for it in l
 
 - Payments
 
-Strip integration will happen just when the user wants to upgrade the plan(tier), so the user will be redirected to a screen to set the payment and the strip will be linked to the project. In fabric, the Strip integration will be into the payment driven where in the future new payment methods can be offered.
+Stripe integration will happen just when the user wants to upgrade the plan(tier), so the user will be redirected to a screen to set the payment and the stripe will be linked to the project. In fabric, the Stripe integration will be into the payment driven where in the future new payment methods can be offered.
