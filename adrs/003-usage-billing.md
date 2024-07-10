@@ -2,7 +2,7 @@
 
 ## Context
 
-Each cluster needs to send the metrics of usage of each user. Then, the main cluster will aggregate the data and make the invoice, integrating it with the payment gateway.
+Each cluster needs to send the usage metrics of each user. Then, the main cluster will aggregate the data and make the invoice, integrating it with the payment gateway.
 
 ## Decision
 
