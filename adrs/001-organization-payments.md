@@ -8,7 +8,7 @@ In the current Demeter platform, it is necessary to create an organization to li
 
 - Organization
 
-The organization will be degraded but the fabric will have support for it in legacy driven just for compatibility.
+The organization will be deprecated but the fabric will have support for it in legacy driven just for compatibility.
 
 - Payments
 
