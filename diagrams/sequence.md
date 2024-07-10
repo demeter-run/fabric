@@ -6,7 +6,7 @@ These diagrams show the flow of the processes into the architecture and how the 
 
 ### RPC Driver
 
-The user will first authenticate in OAuth and get an Access token. Then, the user will request the fabric to create the user or return the existing user.
+The user will first authenticate in Auth0 and get an Access token. Then, the user will request the fabric to create the user or return the existing user.
 
 ```mermaid
 sequenceDiagram
