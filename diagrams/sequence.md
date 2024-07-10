@@ -12,8 +12,8 @@ The user will first authenticate in Auth0 and get an Access token. Then, the use
 sequenceDiagram
     actor User
 
-    User->>+OAuth: Login/Signup in oauth
-    OAuth->>-User: Access Token
+    User->>+Auth0: Login/Signup in oauth
+    Auth0->>-User: Access Token
 
     User->>+RPC: Send command to create user
     RPC->>+Management_Domain: Create user
