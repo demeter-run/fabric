@@ -1,4 +1,5 @@
 use anyhow::Result;
+use dmtri::demeter::ops::v1alpha::port_service_server::PortServiceServer;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::{path::Path, sync::Arc};
@@ -11,6 +12,7 @@ use crate::driven::cache::{project::SqliteProjectCache, SqliteCache};
 use crate::driven::kafka::KafkaProducer;
 
 mod account;
+mod port;
 mod project;
 
 pub async fn server(addr: &str, db_path: &str, brokers: &str) -> Result<()> {
@@ -25,8 +27,12 @@ pub async fn server(addr: &str, db_path: &str, brokers: &str) -> Result<()> {
         .build()
         .unwrap();
 
-    let project_inner = project::ProjectServiceImpl::new(project_cache, event_bridge);
+    let project_inner =
+        project::ProjectServiceImpl::new(project_cache.clone(), event_bridge.clone());
     let project_service = ProjectServiceServer::new(project_inner);
+
+    let port_inner = port::PortServiceImpl::new(project_cache.clone(), event_bridge.clone());
+    let port_service = PortServiceServer::new(port_inner);
 
     let address = SocketAddr::from_str(addr)?;
 
@@ -35,6 +41,7 @@ pub async fn server(addr: &str, db_path: &str, brokers: &str) -> Result<()> {
     Server::builder()
         .add_service(reflection)
         .add_service(project_service)
+        .add_service(port_service)
         .serve(address)
         .await?;
 

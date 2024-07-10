@@ -2,3 +2,11 @@ CREATE TABLE IF NOT EXISTS projects (
   slug TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS ports (
+  id TEXT PRIMARY KEY,
+  project TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  data TEXT NOT NULL,
+  FOREIGN KEY(project) REFERENCES projects(slug)
+);

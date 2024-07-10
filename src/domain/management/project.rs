@@ -3,7 +3,7 @@ use rand::{distributions::Alphanumeric, Rng};
 use std::sync::Arc;
 use tracing::info;
 
-use crate::domain::events::{Event, EventBridge, NamespaceCreation};
+use crate::domain::events::{Event, EventBridge, ProjectCreated};
 
 pub async fn create(
     cache: Arc<dyn ProjectCache>,
@@ -14,7 +14,7 @@ pub async fn create(
         return Err(Error::msg("invalid project slug"));
     }
 
-    let namespace = Event::NamespaceCreation(project.clone().into());
+    let namespace = Event::ProjectCreated(project.clone().into());
 
     event.dispatch(namespace).await?;
     info!(project = project.slug, "new project created");
@@ -22,11 +22,8 @@ pub async fn create(
     Ok(())
 }
 
-pub async fn create_cache(
-    cache: Arc<dyn ProjectCache>,
-    namespace: NamespaceCreation,
-) -> Result<()> {
-    cache.create(&namespace.into()).await?;
+pub async fn create_cache(cache: Arc<dyn ProjectCache>, project: ProjectCreated) -> Result<()> {
+    cache.create(&project.into()).await?;
 
     Ok(())
 }
@@ -49,17 +46,17 @@ impl Project {
         Self { name, slug }
     }
 }
-impl From<NamespaceCreation> for Project {
-    fn from(value: NamespaceCreation) -> Self {
+impl From<ProjectCreated> for Project {
+    fn from(value: ProjectCreated) -> Self {
         Self {
             name: value.name,
             slug: value.slug,
         }
     }
 }
-impl From<Project> for NamespaceCreation {
+impl From<Project> for ProjectCreated {
     fn from(value: Project) -> Self {
-        NamespaceCreation {
+        ProjectCreated {
             name: value.name,
             slug: value.slug,
         }
@@ -147,12 +144,12 @@ mod tests {
         project_cache.expect_create().return_once(|_| Ok(()));
 
         let project = Project::default();
-        let namespace = NamespaceCreation {
+        let project_event = ProjectCreated {
             name: project.name,
             slug: project.slug,
         };
 
-        let result = create_cache(Arc::new(project_cache), namespace).await;
+        let result = create_cache(Arc::new(project_cache), project_event).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }

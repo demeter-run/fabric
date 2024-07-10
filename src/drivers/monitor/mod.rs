@@ -7,7 +7,10 @@ use std::sync::Arc;
 use tracing::{error, info};
 
 use crate::{
-    domain::{daemon::namespace::create_namespace, events::Event},
+    domain::{
+        daemon::{namespace::create_namespace, port},
+        events::Event,
+    },
     driven::k8s::K8sCluster,
 };
 
@@ -31,10 +34,13 @@ pub async fn subscribe(brokers: &str) -> Result<()> {
                 if let Some(payload) = message.payload() {
                     let event: Event = serde_json::from_slice(payload)?;
                     match event {
-                        Event::NamespaceCreation(namespace) => {
+                        Event::ProjectCreated(namespace) => {
                             create_namespace(k8s_cluster.clone(), namespace).await?;
                         }
-                        Event::AccountCreation(_) => todo!(),
+                        Event::AccountCreated(_) => todo!(),
+                        Event::PortCreated(port) => {
+                            port::create_port(k8s_cluster.clone(), port).await?;
+                        }
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }

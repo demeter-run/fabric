@@ -7,15 +7,19 @@ use std::{path::Path, sync::Arc};
 use tracing::{error, info};
 
 use crate::{
-    domain::{events::Event, management::project::create_cache},
-    driven::cache::{project::SqliteProjectCache, SqliteCache},
+    domain::{
+        events::Event,
+        management::{port, project::create_cache},
+    },
+    driven::cache::{port::SqlitePortCache, project::SqliteProjectCache, SqliteCache},
 };
 
 pub async fn subscribe(db_path: &str, brokers: &str) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(db_path)).await?);
     sqlite_cache.migrate().await?;
 
-    let project_cache = Arc::new(SqliteProjectCache::new(sqlite_cache));
+    let project_cache = Arc::new(SqliteProjectCache::new(sqlite_cache.clone()));
+    let port_cache = Arc::new(SqlitePortCache::new(sqlite_cache.clone()));
 
     let topic = String::from("events");
 
@@ -34,10 +38,13 @@ pub async fn subscribe(db_path: &str, brokers: &str) -> Result<()> {
                 if let Some(payload) = message.payload() {
                     let event: Event = serde_json::from_slice(payload)?;
                     match event {
-                        Event::NamespaceCreation(namespace) => {
+                        Event::ProjectCreated(namespace) => {
                             create_cache(project_cache.clone(), namespace).await?;
                         }
-                        Event::AccountCreation(_) => todo!(),
+                        Event::AccountCreated(_) => todo!(),
+                        Event::PortCreated(port) => {
+                            port::create_cache(port_cache.clone(), port).await?;
+                        }
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }
