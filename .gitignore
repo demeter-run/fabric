@@ -4,3 +4,5 @@ dev.db*
 rpc.toml
 daemon.toml
 grpcurl*
+test/.terraform*
+test/local.tfstate*
