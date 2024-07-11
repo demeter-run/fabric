@@ -4,3 +4,4 @@ dev.db*
 rpc.toml
 daemon.toml
 grpcurl*
+config.toml

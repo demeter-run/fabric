@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                SELECT id, email, auth_provider, auth_provider_id\n                FROM users WHERE auth_provider_id = $1;\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "email",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "auth_provider",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "auth_provider_id",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "127e6b12137e638062be0641dd2cecb72906706050357cef77290a623ca24037"
+}

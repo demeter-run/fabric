@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use anyhow::{bail, Result};
 use std::sync::Arc;
 use tracing::{error, info};
 use uuid::Uuid;
@@ -16,7 +16,7 @@ pub async fn create(
     let verify_result = auth.verify(&token).await;
     if let Err(err) = verify_result {
         error!(error = err.to_string(), "invalid access token");
-        return Err(Error::msg("invalid access token"));
+        bail!("invalid access token");
     }
 
     let auth_provider_id = verify_result.unwrap();
@@ -24,10 +24,14 @@ pub async fn create(
         return Ok(user);
     }
 
-    let email = auth.get_profile(&auth_provider_id).await?;
+    let email_result = auth.get_profile(&token).await;
+    if let Err(err) = email_result {
+        error!(error = err.to_string(), "error to get user info");
+        bail!("invalid access token");
+    }
+    let email = email_result.unwrap();
 
     let user = User::new(email, auth_provider_id);
-
     let user_event = Event::UserCreated(user.clone().into());
 
     event.dispatch(user_event).await?;
@@ -36,13 +40,11 @@ pub async fn create(
     Ok(user)
 }
 
-//TODO: remove later
-#[allow(dead_code)]
 pub async fn create_cache(cache: Arc<dyn UserCache>, user: UserCreated) -> Result<()> {
-    let user_exists = cache
+    if let Some(user) = cache
         .get_by_auth_provider_id(&user.auth_provider_id)
-        .await?;
-    if user_exists.is_some() {
+        .await?
+    {
         info!(user = user.id, "user already exists");
         return Ok(());
     }
@@ -101,7 +103,7 @@ pub trait UserCache: Send + Sync {
 #[async_trait::async_trait]
 pub trait AuthProvider: Send + Sync {
     async fn verify(&self, token: &str) -> Result<String>;
-    async fn get_profile(&self, id: &str) -> Result<String>;
+    async fn get_profile(&self, token: &str) -> Result<String>;
 }
 
 #[cfg(test)]
@@ -126,7 +128,7 @@ mod tests {
         #[async_trait::async_trait]
         impl AuthProvider for FakeAuthProvider {
             async fn verify(&self, token: &str) -> Result<String>;
-            async fn get_profile(&self, id: &str) -> Result<String>;
+            async fn get_profile(&self, token: &str) -> Result<String>;
         }
     }
 
@@ -210,7 +212,7 @@ mod tests {
         let mut auth_provider = MockFakeAuthProvider::new();
         auth_provider
             .expect_verify()
-            .return_once(|_| Err(Error::msg("invalid token")));
+            .return_once(|_| bail!("invalid token"));
 
         let user_cache = MockFakeUserCache::new();
         let event_bridge = MockFakeEventBridge::new();

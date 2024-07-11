@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use anyhow::{bail, Result};
 use rand::{distributions::Alphanumeric, Rng};
 use std::sync::Arc;
 use tracing::info;
@@ -11,7 +11,7 @@ pub async fn create(
     project: Project,
 ) -> Result<()> {
     if cache.find_by_slug(&project.slug).await?.is_some() {
-        return Err(Error::msg("invalid project slug"));
+        bail!("invalid project slug")
     }
 
     let namespace = Event::ProjectCreated(project.clone().into());
