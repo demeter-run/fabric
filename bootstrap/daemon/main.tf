@@ -16,6 +16,11 @@ variable "broker_urls" {
   description = "Comma separated values of the queue broker urls."
 }
 
+variable "replicas" {
+  type    = number
+  default = 1
+}
+
 variable "tolerations" {
   type = list(object({
     effect   = string
