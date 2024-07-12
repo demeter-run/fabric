@@ -4,7 +4,8 @@ use tonic::{async_trait, Status};
 
 use crate::domain::{
     events::EventBridge,
-    management::{self, port::Port, project::ProjectCache},
+    ports::{self, Port},
+    projects::ProjectCache,
 };
 
 pub struct PortServiceImpl {
@@ -30,7 +31,7 @@ impl proto::port_service_server::PortService for PortServiceImpl {
 
         let port = Port::new(&req.project, &req.kind, &req.data);
         let result =
-            management::port::create(self.project_cache.clone(), self.event.clone(), port.clone())
+            ports::create::create(self.project_cache.clone(), self.event.clone(), port.clone())
                 .await;
 
         if let Err(err) = result {

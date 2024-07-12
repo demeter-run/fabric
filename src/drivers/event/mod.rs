@@ -7,10 +7,7 @@ use std::{path::Path, sync::Arc};
 use tracing::{error, info};
 
 use crate::{
-    domain::{
-        events::Event,
-        management::{port, project::create_cache, user},
-    },
+    domain::{events::Event, ports, projects, users},
     driven::cache::{
         port::SqlitePortCache, project::SqliteProjectCache, user::SqliteUserCache, SqliteCache,
     },
@@ -42,13 +39,13 @@ pub async fn subscribe(config: EventConfig) -> Result<()> {
                     let event: Event = serde_json::from_slice(payload)?;
                     match event {
                         Event::ProjectCreated(namespace) => {
-                            create_cache(project_cache.clone(), namespace).await?
+                            projects::create::create_cache(project_cache.clone(), namespace).await?
                         }
                         Event::UserCreated(user) => {
-                            user::create_cache(user_cache.clone(), user).await?
+                            users::create::create_cache(user_cache.clone(), user).await?
                         }
                         Event::PortCreated(port) => {
-                            port::create_cache(port_cache.clone(), port).await?
+                            ports::create::create_cache(port_cache.clone(), port).await?
                         }
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;

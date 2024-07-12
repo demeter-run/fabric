@@ -7,10 +7,7 @@ use std::sync::Arc;
 use tracing::{error, info};
 
 use crate::{
-    domain::{
-        daemon::{namespace::create_namespace, port},
-        events::Event,
-    },
+    domain::{events::Event, ports, projects},
     driven::k8s::K8sCluster,
 };
 
@@ -35,10 +32,11 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
                     let event: Event = serde_json::from_slice(payload)?;
                     match event {
                         Event::ProjectCreated(namespace) => {
-                            create_namespace(k8s_cluster.clone(), namespace).await?;
+                            projects::create::create_resource(k8s_cluster.clone(), namespace)
+                                .await?;
                         }
                         Event::PortCreated(port) => {
-                            port::create_port(k8s_cluster.clone(), port).await?;
+                            ports::create::create_resource(k8s_cluster.clone(), port).await?;
                         }
                         _ => {
                             info!("skip event")

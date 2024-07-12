@@ -1,11 +1,10 @@
 use anyhow::{bail, Result};
 use std::sync::Arc;
 use tracing::{error, info};
-use uuid::Uuid;
 
-use crate::domain::events::{Event, EventBridge, UserCreated};
+use crate::domain::events::{Event, EventBridge};
 
-const AUTH_PROVIDER: &str = "auth0";
+use super::{AuthProvider, User, UserCache};
 
 pub async fn create(
     cache: Arc<dyn UserCache>,
@@ -32,7 +31,7 @@ pub async fn create(
     let email = email_result.unwrap();
 
     let user = User::new(email, auth_provider_id);
-    let user_event = Event::UserCreated(user.clone().into());
+    let user_event = Event::UserCreated(user.clone());
 
     event.dispatch(user_event).await?;
     info!(user = user.id, "new user created");
@@ -40,7 +39,7 @@ pub async fn create(
     Ok(user)
 }
 
-pub async fn create_cache(cache: Arc<dyn UserCache>, user: UserCreated) -> Result<()> {
+pub async fn create_cache(cache: Arc<dyn UserCache>, user: User) -> Result<()> {
     if let Some(user) = cache
         .get_by_auth_provider_id(&user.auth_provider_id)
         .await?
@@ -49,66 +48,17 @@ pub async fn create_cache(cache: Arc<dyn UserCache>, user: UserCreated) -> Resul
         return Ok(());
     }
 
-    cache.create(&user.into()).await?;
+    cache.create(&user).await?;
 
     Ok(())
-}
-
-#[derive(Debug, Clone)]
-pub struct User {
-    pub id: String,
-    pub email: String,
-    pub auth_provider: String,
-    pub auth_provider_id: String,
-}
-impl User {
-    pub fn new(email: String, auth_provider_id: String) -> Self {
-        let id = Uuid::new_v4().to_string();
-
-        Self {
-            id,
-            email,
-            auth_provider: AUTH_PROVIDER.into(),
-            auth_provider_id,
-        }
-    }
-}
-impl From<User> for UserCreated {
-    fn from(value: User) -> Self {
-        UserCreated {
-            id: value.id,
-            email: value.email,
-            auth_provider: value.auth_provider,
-            auth_provider_id: value.auth_provider_id,
-        }
-    }
-}
-impl From<UserCreated> for User {
-    fn from(value: UserCreated) -> Self {
-        User {
-            id: value.id,
-            email: value.email,
-            auth_provider: value.auth_provider,
-            auth_provider_id: value.auth_provider_id,
-        }
-    }
-}
-
-#[async_trait::async_trait]
-pub trait UserCache: Send + Sync {
-    async fn create(&self, user: &User) -> Result<()>;
-    async fn get_by_auth_provider_id(&self, id: &str) -> Result<Option<User>>;
-}
-
-#[async_trait::async_trait]
-pub trait AuthProvider: Send + Sync {
-    async fn verify(&self, token: &str) -> Result<String>;
-    async fn get_profile(&self, token: &str) -> Result<String>;
 }
 
 #[cfg(test)]
 mod tests {
     use mockall::mock;
+    use uuid::Uuid;
+
+    use crate::domain::users::AUTH_PROVIDER;
 
     use super::*;
 
@@ -239,7 +189,7 @@ mod tests {
 
         let user = User::default();
 
-        let result = create_cache(Arc::new(user_cache), user.into()).await;
+        let result = create_cache(Arc::new(user_cache), user).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }
@@ -253,7 +203,7 @@ mod tests {
 
         let user = User::default();
 
-        let result = create_cache(Arc::new(user_cache), user.into()).await;
+        let result = create_cache(Arc::new(user_cache), user).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }

@@ -3,7 +3,7 @@ use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet};
 use jsonwebtoken::{decode, decode_header, DecodingKey, Validation};
 use serde::Deserialize;
 
-use crate::domain::management::user;
+use crate::domain::users::AuthProvider;
 
 pub struct Auth0Provider {
     client: reqwest::Client,
@@ -20,7 +20,7 @@ impl Auth0Provider {
 }
 
 #[async_trait::async_trait]
-impl user::AuthProvider for Auth0Provider {
+impl AuthProvider for Auth0Provider {
     async fn verify(&self, token: &str) -> Result<String> {
         let jwks_request = self
             .client
