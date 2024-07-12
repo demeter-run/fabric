@@ -153,6 +153,9 @@ data:
     addr="0.0.0.0:80"
     db_path="test.db"
     brokers="redpanda.demeter-kafka.svc.cluster.local:19092"
+
+    [auth]
+    url="https://us.auth0.com"
 kind: ConfigMap
 metadata:
   name: rpc-config
