@@ -4,7 +4,7 @@ use rdkafka::{
     ClientConfig, Message,
 };
 use std::{path::Path, sync::Arc};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::{
     domain::{
@@ -38,8 +38,15 @@ pub async fn subscribe(config: EventConfig) -> Result<()> {
         match consumer.recv().await {
             Err(err) => error!(error = err.to_string(), "kafka subscribe error"),
             Ok(message) => {
+                let Some(key) = message.key() else {
+                    warn!("event with empety key");
+                    consumer.commit_message(&message, CommitMode::Async)?;
+                    continue;
+                };
+                let key = String::from_utf8(key.to_vec())?;
+
                 if let Some(payload) = message.payload() {
-                    let event: Event = serde_json::from_slice(payload)?;
+                    let event = Event::from_key(&key, payload)?;
                     match event {
                         Event::ProjectCreated(namespace) => {
                             create_cache(project_cache.clone(), namespace).await?

@@ -27,9 +27,11 @@ impl KafkaProducer {
 impl EventBridge for KafkaProducer {
     async fn dispatch(&self, event: Event) -> Result<()> {
         let data = serde_json::to_vec(&event)?;
+        let key = event.key();
+
         self.producer
             .send(
-                FutureRecord::to(&self.topic).payload(&data).key(""),
+                FutureRecord::to(&self.topic).payload(&data).key(&key),
                 Duration::from_secs(0),
             )
             .await
