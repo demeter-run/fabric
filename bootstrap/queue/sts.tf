@@ -5,7 +5,7 @@ locals {
     "--kafka-addr",
     "internal://${var.instance_name}-0:${local.kafka_internal_port},external://0.0.0.0:${local.kafka_external_port}",
     "--advertise-kafka-addr",
-    "internal://${var.instance_name}:${local.kafka_internal_port},external://${var.instance_name}:${local.kafka_external_port}",
+    "internal://${var.instance_name}:${local.kafka_internal_port},external://${var.external_dns}:${var.external_port}",
     "--pandaproxy-addr",
     "internal://${var.instance_name}-0:${local.pandaproxy_internal_port},external://0.0.0.0:${local.pandaproxy_external_port}",
     "--advertise-pandaproxy-addr",
@@ -83,28 +83,6 @@ resource "kubernetes_stateful_set_v1" "queue_main" {
               memory = var.resources.requests.memory
             }
           }
-
-          # lifecycle {
-          #   post_start {
-          #     exec {
-          #       # command = [
-          #       #   "rpk",
-          #       #   "-X",
-          #       #   "brokers=${var.instance_name}:${local.kafka_external_port}",
-          #       #   "topic",
-          #       #   "create",
-          #       #   "events"
-          #       # ]
-          #
-          #       command = [
-          #         "sh", "-c", <<-EOT
-          #         sleep 1
-          #         rpk -X brokers=fabric-queue-0:9092 topic create events
-          #         EOT
-          #       ]
-          #     }
-          #   }
-          # }
         }
 
         dynamic "toleration" {

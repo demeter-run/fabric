@@ -46,6 +46,7 @@ resource "kubernetes_ingress_v1" "fabric-rpc-ingress" {
     namespace = var.namespace
     annotations = {
       "cert-manager.io/cluster-issuer" = "letsencrypt"
+      "nginx.ingress.kubernetes.io/backend-protocol" : "GRPC"
     }
   }
 
@@ -70,7 +71,8 @@ resource "kubernetes_ingress_v1" "fabric-rpc-ingress" {
       }
     }
     tls {
-      hosts = ["rpc.${var.dns_zone}"]
+      hosts       = ["rpc.${var.dns_zone}"]
+      secret_name = "rpc-tls"
     }
   }
 }
