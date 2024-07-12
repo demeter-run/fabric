@@ -73,6 +73,11 @@ resource "kubernetes_deployment_v1" "fabric_queue_console" {
             }
           }
 
+          port {
+            name           = "console"
+            container_port = 8080
+          }
+
         }
 
         volume {
