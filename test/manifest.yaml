@@ -104,6 +104,7 @@ apiVersion: v1
 data:
   daemon.toml: |
     brokers="redpanda.demeter-kafka.svc.cluster.local:19092"
+    consumer_name="demeter-daemon"
 kind: ConfigMap
 metadata:
   name: daemon-config
