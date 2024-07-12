@@ -4,12 +4,15 @@ Two binaries need to be executed, `rpc` which will allow external requests to cr
 
 ## rpc
 
-It's possible to create a toml file as config and set the file path in the env `RPC_CONFIG`, but it's possible to set the config using the prefix `RPC_`
+It's possible to create a toml file as config and set the file path in the env `RPC_CONFIG`, but it's possible to set the config using the prefix `RPC_`. The auth url is the endpoint to integrate with auth0.
 
 ```
 addr="0.0.0.0:5000"
 db_path="dev.db"
 brokers="localhost:19092"
+
+[auth]
+url=""
 ```
 
 ## daemon
