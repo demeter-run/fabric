@@ -2,6 +2,7 @@ use std::env;
 
 use anyhow::Result;
 use dotenv::dotenv;
+use fabric::drivers::monitor::MonitorConfig;
 use serde::Deserialize;
 use tracing::Level;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -22,12 +23,13 @@ async fn main() -> Result<()> {
 
     let config = Config::new()?;
 
-    fabric::drivers::monitor::subscribe(&config.brokers).await
+    fabric::drivers::monitor::subscribe(config.into()).await
 }
 
 #[derive(Debug, Deserialize)]
 struct Config {
     brokers: String,
+    consumer_name: String,
 }
 impl Config {
     pub fn new() -> Result<Self> {
@@ -41,5 +43,14 @@ impl Config {
             .try_deserialize()?;
 
         Ok(config)
+    }
+}
+
+impl From<Config> for MonitorConfig {
+    fn from(value: Config) -> Self {
+        Self {
+            brokers: value.brokers,
+            consumer_name: value.consumer_name,
+        }
     }
 }

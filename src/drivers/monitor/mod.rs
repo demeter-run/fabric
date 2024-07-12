@@ -14,14 +14,14 @@ use crate::{
     driven::k8s::K8sCluster,
 };
 
-pub async fn subscribe(brokers: &str) -> Result<()> {
+pub async fn subscribe(config: MonitorConfig) -> Result<()> {
     let k8s_cluster = Arc::new(K8sCluster::new().await?);
 
     let topic = String::from("events");
 
     let consumer: StreamConsumer = ClientConfig::new()
-        .set("bootstrap.servers", brokers)
-        .set("group.id", "clusters")
+        .set("bootstrap.servers", &config.brokers)
+        .set("group.id", &config.consumer_name)
         .create()?;
 
     consumer.subscribe(&[&topic])?;
@@ -49,4 +49,9 @@ pub async fn subscribe(brokers: &str) -> Result<()> {
             }
         };
     }
+}
+
+pub struct MonitorConfig {
+    pub brokers: String,
+    pub consumer_name: String,
 }
