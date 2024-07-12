@@ -35,12 +35,18 @@ If there are updates in the schemas, execute the command below to update the sql
 cargo sqlx prepare
 ```
 
-### Queue dependence
+### Dependences
 
-Start the dependences with the command below
+The system is connected using the kafka protocol, so it's necessary to set up a Kafka instance. There is an example using redpanda and docker in the examples folder. To start it's necessary to run the command below.
 
 ```sh
 docker compose up -d
+```
+
+The fabric is using a default topic which is called `events`. After the redpanda is running, the docker will expose port 8080 to access the console, it's necessary to open the console and create the topic.
+
+```
+http://localhost:8080
 ```
 
 ### Run binaries
