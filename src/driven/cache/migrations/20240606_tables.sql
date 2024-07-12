@@ -17,3 +17,9 @@ CREATE TABLE IF NOT EXISTS users (
   auth_provider TEXT NOT NULL,
   auth_provider_id TEXT NOT NULL UNIQUE
 );
+
+CREATE TABLE IF NOT EXISTS projects_users (
+  user_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  PRIMARY KEY (user_id, project_id)
+)

@@ -14,6 +14,7 @@ use crate::driven::cache::user::SqliteUserCache;
 use crate::driven::cache::{project::SqliteProjectCache, SqliteCache};
 use crate::driven::kafka::KafkaProducer;
 
+//mod middlewares;
 mod port;
 mod project;
 mod user;
