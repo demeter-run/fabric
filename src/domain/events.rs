@@ -7,8 +7,11 @@ pub struct ProjectCreated {
     pub slug: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AccountCreated {
-    pub name: String,
+pub struct UserCreated {
+    pub id: String,
+    pub email: String,
+    pub auth_provider: String,
+    pub auth_provider_id: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PortCreated {
@@ -23,7 +26,7 @@ pub struct PortCreated {
 #[allow(clippy::enum_variant_names)]
 pub enum Event {
     ProjectCreated(ProjectCreated),
-    AccountCreated(AccountCreated),
+    UserCreated(UserCreated),
     PortCreated(PortCreated),
 }
 

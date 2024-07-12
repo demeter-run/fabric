@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use anyhow::{bail, Result};
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{api::ObjectMeta, ResourceExt};
 use std::sync::Arc;
@@ -11,7 +11,7 @@ pub async fn create_namespace(
     project: ProjectCreated,
 ) -> Result<()> {
     if cluster.find_by_name(&project.slug).await?.is_some() {
-        return Err(Error::msg("namespace alread exist"));
+        bail!("namespace alread exist")
     }
 
     let ns: Namespace = project.into();

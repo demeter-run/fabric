@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use anyhow::{bail, Result};
 use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
@@ -13,7 +13,7 @@ pub async fn create(
     port: Port,
 ) -> Result<()> {
     if project_cache.find_by_slug(&port.project).await?.is_none() {
-        return Err(Error::msg("Invalid project"));
+        bail!("Invalid project")
     }
 
     let port_event = Event::PortCreated(port.clone().into());

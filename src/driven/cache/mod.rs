@@ -3,6 +3,7 @@ use std::path::Path;
 
 pub mod port;
 pub mod project;
+pub mod user;
 
 pub struct SqliteCache {
     db: sqlx::sqlite::SqlitePool,

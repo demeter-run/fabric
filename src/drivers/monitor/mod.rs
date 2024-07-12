@@ -37,9 +37,11 @@ pub async fn subscribe(brokers: &str) -> Result<()> {
                         Event::ProjectCreated(namespace) => {
                             create_namespace(k8s_cluster.clone(), namespace).await?;
                         }
-                        Event::AccountCreated(_) => todo!(),
                         Event::PortCreated(port) => {
                             port::create_port(k8s_cluster.clone(), port).await?;
+                        }
+                        _ => {
+                            info!("skip event")
                         }
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;
