@@ -5,3 +5,5 @@ rpc.toml
 daemon.toml
 grpcurl*
 config.toml
+test/.terraform*
+test/local.tfstate*
