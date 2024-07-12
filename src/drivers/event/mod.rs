@@ -39,7 +39,7 @@ pub async fn subscribe(config: EventConfig) -> Result<()> {
             Err(err) => error!(error = err.to_string(), "kafka subscribe error"),
             Ok(message) => {
                 let Some(key) = message.key() else {
-                    warn!("event with empety key");
+                    warn!("event with empty key");
                     consumer.commit_message(&message, CommitMode::Async)?;
                     continue;
                 };
