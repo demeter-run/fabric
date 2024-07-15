@@ -1,9 +1,9 @@
 use anyhow::Result;
 use rdkafka::{
     consumer::{CommitMode, Consumer, StreamConsumer},
-    ClientConfig, Message,
+    ClientConfig,
 };
-use std::sync::Arc;
+use std::{borrow::Borrow, sync::Arc};
 use tracing::{error, info};
 
 use crate::{
@@ -27,9 +27,8 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
     loop {
         match consumer.recv().await {
             Err(err) => error!(error = err.to_string(), "kafka subscribe error"),
-            Ok(message) => {
-                if let Some(payload) = message.payload() {
-                    let event: Event = serde_json::from_slice(payload)?;
+            Ok(message) => match message.borrow().try_into() {
+                Ok(event) => {
                     match event {
                         Event::ProjectCreated(namespace) => {
                             projects::create::create_resource(k8s_cluster.clone(), namespace)
@@ -44,7 +43,11 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }
-            }
+                Err(err) => {
+                    error!(error = err.to_string(), "fail to convert message to event");
+                    consumer.commit_message(&message, CommitMode::Async)?;
+                }
+            },
         };
     }
 }
