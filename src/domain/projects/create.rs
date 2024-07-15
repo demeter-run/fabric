@@ -1,5 +1,4 @@
 use anyhow::{bail, Result};
-use k8s_openapi::api::core::v1::Namespace;
 use kube::ResourceExt;
 use std::sync::Arc;
 use tracing::info;
@@ -36,17 +35,18 @@ pub async fn create_resource(cluster: Arc<dyn ProjectCluster>, project: Project)
         bail!("namespace alread exist")
     }
 
-    let ns: Namespace = project.into();
-    cluster.create(&ns).await?;
+    let namespace = project.into();
+    cluster.create(&namespace).await?;
 
     //TODO: create event to update cache
-    info!(namespace = ns.name_any(), "new namespace created");
+    info!(namespace = namespace.name_any(), "new namespace created");
 
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use k8s_openapi::api::core::v1::Namespace;
     use mockall::mock;
 
     use super::*;
