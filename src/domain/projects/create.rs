@@ -1,9 +1,11 @@
 use anyhow::{bail, Result};
-use rand::{distributions::Alphanumeric, Rng};
+use kube::ResourceExt;
 use std::sync::Arc;
 use tracing::info;
 
-use crate::domain::events::{Event, EventBridge, ProjectCreated};
+use crate::domain::events::{Event, EventBridge};
+
+use super::{Project, ProjectCache, ProjectCluster};
 
 pub async fn create(
     cache: Arc<dyn ProjectCache>,
@@ -14,63 +16,37 @@ pub async fn create(
         bail!("invalid project slug")
     }
 
-    let namespace = Event::ProjectCreated(project.clone().into());
+    let project_event = Event::ProjectCreated(project.clone());
 
-    event.dispatch(namespace).await?;
+    event.dispatch(project_event).await?;
     info!(project = project.slug, "new project created");
 
     Ok(())
 }
 
-pub async fn create_cache(cache: Arc<dyn ProjectCache>, project: ProjectCreated) -> Result<()> {
-    cache.create(&project.into()).await?;
+pub async fn create_cache(cache: Arc<dyn ProjectCache>, project: Project) -> Result<()> {
+    cache.create(&project).await?;
 
     Ok(())
 }
 
-#[derive(Debug, Clone)]
-pub struct Project {
-    pub name: String,
-    pub slug: String,
-}
-impl Project {
-    pub fn new(name: String) -> Self {
-        let slug: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(7)
-            .map(char::from)
-            .collect();
-
-        let slug = format!("prj-{}", slug.to_lowercase());
-
-        Self { name, slug }
+pub async fn create_resource(cluster: Arc<dyn ProjectCluster>, project: Project) -> Result<()> {
+    if cluster.find_by_name(&project.slug).await?.is_some() {
+        bail!("namespace alread exist")
     }
-}
-impl From<ProjectCreated> for Project {
-    fn from(value: ProjectCreated) -> Self {
-        Self {
-            name: value.name,
-            slug: value.slug,
-        }
-    }
-}
-impl From<Project> for ProjectCreated {
-    fn from(value: Project) -> Self {
-        ProjectCreated {
-            name: value.name,
-            slug: value.slug,
-        }
-    }
-}
 
-#[async_trait::async_trait]
-pub trait ProjectCache: Send + Sync {
-    async fn create(&self, project: &Project) -> Result<()>;
-    async fn find_by_slug(&self, slug: &str) -> Result<Option<Project>>;
+    let namespace = project.into();
+    cluster.create(&namespace).await?;
+
+    //TODO: create event to update cache
+    info!(namespace = namespace.name_any(), "new namespace created");
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use k8s_openapi::api::core::v1::Namespace;
     use mockall::mock;
 
     use super::*;
@@ -91,6 +67,16 @@ mod tests {
         #[async_trait::async_trait]
         impl EventBridge for FakeEventBridge {
             async fn dispatch(&self, event: Event) -> Result<()>;
+        }
+    }
+
+    mock! {
+        pub FakeProjectCluster { }
+
+        #[async_trait::async_trait]
+        impl ProjectCluster for FakeProjectCluster {
+            async fn create(&self, namespace: &Namespace) -> Result<()>;
+            async fn find_by_name(&self, name: &str) -> Result<Option<Namespace>>;
         }
     }
 
@@ -144,14 +130,41 @@ mod tests {
         project_cache.expect_create().return_once(|_| Ok(()));
 
         let project = Project::default();
-        let project_event = ProjectCreated {
-            name: project.name,
-            slug: project.slug,
-        };
 
-        let result = create_cache(Arc::new(project_cache), project_event).await;
+        let result = create_cache(Arc::new(project_cache), project).await;
         if let Err(err) = result {
             unreachable!("{err}")
+        }
+    }
+    #[tokio::test]
+    async fn it_should_create_project_resource() {
+        let mut project_cluster = MockFakeProjectCluster::new();
+        project_cluster.expect_create().return_once(|_| Ok(()));
+        project_cluster
+            .expect_find_by_name()
+            .return_once(|_| Ok(None));
+
+        let project = Project::default();
+
+        let result = create_resource(Arc::new(project_cluster), project).await;
+        if let Err(err) = result {
+            unreachable!("{err}")
+        }
+    }
+
+    #[tokio::test]
+    async fn it_should_fail_when_project_resource_exists() {
+        let mut project_cluster = MockFakeProjectCluster::new();
+        project_cluster.expect_create().return_once(|_| Ok(()));
+        project_cluster
+            .expect_find_by_name()
+            .return_once(|_| Ok(Some(Namespace::default())));
+
+        let project = Project::default();
+
+        let result = create_resource(Arc::new(project_cluster), project).await;
+        if result.is_ok() {
+            unreachable!("Fail to validate when the namespace alread exists")
         }
     }
 }

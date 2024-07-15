@@ -1,27 +1,24 @@
 use anyhow::Result;
 use rdkafka::{
     consumer::{CommitMode, Consumer, StreamConsumer},
-    ClientConfig, Message,
+    ClientConfig,
 };
-use std::sync::Arc;
+use std::{borrow::Borrow, sync::Arc};
 use tracing::{error, info};
 
 use crate::{
-    domain::{
-        daemon::{namespace::create_namespace, port},
-        events::Event,
-    },
+    domain::{events::Event, ports, projects},
     driven::k8s::K8sCluster,
 };
 
-pub async fn subscribe(brokers: &str) -> Result<()> {
+pub async fn subscribe(config: MonitorConfig) -> Result<()> {
     let k8s_cluster = Arc::new(K8sCluster::new().await?);
 
     let topic = String::from("events");
 
     let consumer: StreamConsumer = ClientConfig::new()
-        .set("bootstrap.servers", brokers)
-        .set("group.id", "clusters")
+        .set("bootstrap.servers", &config.brokers)
+        .set("group.id", &config.consumer_name)
         .create()?;
 
     consumer.subscribe(&[&topic])?;
@@ -30,15 +27,15 @@ pub async fn subscribe(brokers: &str) -> Result<()> {
     loop {
         match consumer.recv().await {
             Err(err) => error!(error = err.to_string(), "kafka subscribe error"),
-            Ok(message) => {
-                if let Some(payload) = message.payload() {
-                    let event: Event = serde_json::from_slice(payload)?;
+            Ok(message) => match message.borrow().try_into() {
+                Ok(event) => {
                     match event {
                         Event::ProjectCreated(namespace) => {
-                            create_namespace(k8s_cluster.clone(), namespace).await?;
+                            projects::create::create_resource(k8s_cluster.clone(), namespace)
+                                .await?;
                         }
                         Event::PortCreated(port) => {
-                            port::create_port(k8s_cluster.clone(), port).await?;
+                            ports::create::create_resource(k8s_cluster.clone(), port).await?;
                         }
                         _ => {
                             info!("skip event")
@@ -46,7 +43,16 @@ pub async fn subscribe(brokers: &str) -> Result<()> {
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }
-            }
+                Err(err) => {
+                    error!(error = err.to_string(), "fail to convert message to event");
+                    consumer.commit_message(&message, CommitMode::Async)?;
+                }
+            },
         };
     }
+}
+
+pub struct MonitorConfig {
+    pub brokers: String,
+    pub consumer_name: String,
 }

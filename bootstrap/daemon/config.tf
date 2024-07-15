@@ -8,7 +8,8 @@ resource "kubernetes_config_map_v1" "fabric_daemon_config" {
     "daemon.toml" = "${templatefile(
       "${path.module}/daemon.toml.tftpl",
       {
-        broker_urls = var.broker_urls
+        broker_urls   = var.broker_urls
+        consumer_name = var.consumer_name
       }
     )}"
   }

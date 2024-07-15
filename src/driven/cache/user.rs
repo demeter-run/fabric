@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::domain::management::user::{User, UserCache};
+use crate::domain::users::{User, UserCache};
 
 use super::SqliteCache;
 

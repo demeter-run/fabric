@@ -1,16 +1,13 @@
 use anyhow::Result;
 use rdkafka::{
     consumer::{CommitMode, Consumer, StreamConsumer},
-    ClientConfig, Message,
+    ClientConfig,
 };
-use std::{path::Path, sync::Arc};
+use std::{borrow::Borrow, path::Path, sync::Arc};
 use tracing::{error, info};
 
 use crate::{
-    domain::{
-        events::Event,
-        management::{port, project::create_cache, user},
-    },
+    domain::{events::Event, ports, projects, users},
     driven::cache::{
         port::SqlitePortCache, project::SqliteProjectCache, user::SqliteUserCache, SqliteCache,
     },
@@ -37,23 +34,26 @@ pub async fn subscribe(config: EventConfig) -> Result<()> {
     loop {
         match consumer.recv().await {
             Err(err) => error!(error = err.to_string(), "kafka subscribe error"),
-            Ok(message) => {
-                if let Some(payload) = message.payload() {
-                    let event: Event = serde_json::from_slice(payload)?;
+            Ok(message) => match message.borrow().try_into() {
+                Ok(event) => {
                     match event {
                         Event::ProjectCreated(namespace) => {
-                            create_cache(project_cache.clone(), namespace).await?
+                            projects::create::create_cache(project_cache.clone(), namespace).await?
                         }
                         Event::UserCreated(user) => {
-                            user::create_cache(user_cache.clone(), user).await?
+                            users::create::create_cache(user_cache.clone(), user).await?
                         }
                         Event::PortCreated(port) => {
-                            port::create_cache(port_cache.clone(), port).await?
+                            ports::create::create_cache(port_cache.clone(), port).await?
                         }
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }
-            }
+                Err(err) => {
+                    error!(error = err.to_string(), "fail to convert message to event");
+                    consumer.commit_message(&message, CommitMode::Async)?;
+                }
+            },
         };
     }
 }

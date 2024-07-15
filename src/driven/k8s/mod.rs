@@ -6,7 +6,8 @@ use kube::{
     discovery, Api, Client,
 };
 
-use crate::domain::daemon::{namespace::NamespaceCluster, port::PortCluster};
+use crate::domain::ports::PortCluster;
+use crate::domain::projects::ProjectCluster;
 
 pub struct K8sCluster {
     client: Client,
@@ -20,7 +21,7 @@ impl K8sCluster {
 }
 
 #[async_trait::async_trait]
-impl NamespaceCluster for K8sCluster {
+impl ProjectCluster for K8sCluster {
     async fn create(&self, namespace: &Namespace) -> Result<()> {
         let api: Api<Namespace> = Api::all(self.client.clone());
         api.create(&PostParams::default(), namespace).await?;

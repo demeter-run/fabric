@@ -17,6 +17,15 @@ variable "instance_name" {
   type = string
 }
 
+variable "external_dns" {
+  type = string
+}
+
+variable "external_port" {
+  type    = string
+  default = 9092
+}
+
 variable "topology_zone" {
   type    = string
   default = null
