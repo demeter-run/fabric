@@ -1,7 +1,7 @@
-use anyhow::{bail, Error, Result};
+use anyhow::Result;
 use rdkafka::{
     consumer::{CommitMode, Consumer, StreamConsumer},
-    ClientConfig, Message,
+    ClientConfig,
 };
 use std::{borrow::Borrow, path::Path, sync::Arc};
 use tracing::{error, info};
@@ -55,25 +55,6 @@ pub async fn subscribe(config: EventConfig) -> Result<()> {
                 }
             },
         };
-    }
-}
-
-impl TryFrom<&rdkafka::message::BorrowedMessage<'_>> for Event {
-    type Error = Error;
-
-    fn try_from(
-        value: &rdkafka::message::BorrowedMessage<'_>,
-    ) -> std::result::Result<Self, Self::Error> {
-        let Some(key) = value.key() else {
-            bail!("event with empty key")
-        };
-        let key = String::from_utf8(key.to_vec())?;
-
-        let Some(payload) = value.payload() else {
-            bail!("event with empty payload")
-        };
-        let event = Event::from_key(&key, payload)?;
-        Ok(event)
     }
 }
 
