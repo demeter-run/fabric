@@ -33,4 +33,5 @@ done
 
 if [ $ATTEMPT -eq $MAX_ATTEMPT ]; then
     echo "Error: Namespace $NAMESPACE not found after $MAX_ATTEMPT attempts."
+    exit 1
 fi
