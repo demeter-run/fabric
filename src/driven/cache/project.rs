@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::domain::management::project::{Project, ProjectCache};
+use crate::domain::projects::{Project, ProjectCache};
 
 use super::SqliteCache;
 

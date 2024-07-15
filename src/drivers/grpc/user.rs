@@ -4,10 +4,7 @@ use tonic::{async_trait, Status};
 
 use crate::domain::{
     events::EventBridge,
-    management::{
-        self,
-        user::{AuthProvider, UserCache},
-    },
+    users::{self, AuthProvider, UserCache},
 };
 
 pub struct UserServiceImpl {
@@ -36,7 +33,7 @@ impl proto::user_service_server::UserService for UserServiceImpl {
     ) -> Result<tonic::Response<proto::CreateUserResponse>, tonic::Status> {
         let req = request.into_inner();
 
-        let result = management::user::create(
+        let result = users::create::create(
             self.cache.clone(),
             self.auth.clone(),
             self.event.clone(),

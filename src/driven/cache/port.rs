@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::domain::management::port::{Port, PortCache};
+use crate::domain::ports::{Port, PortCache};
 
 use super::SqliteCache;
 

@@ -4,10 +4,7 @@ use tonic::{async_trait, Status};
 
 use crate::domain::{
     events::EventBridge,
-    management::{
-        self,
-        project::{Project, ProjectCache},
-    },
+    projects::{self, Project, ProjectCache},
 };
 
 pub struct ProjectServiceImpl {
@@ -31,8 +28,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let project = Project::new(req.name);
         let result =
-            management::project::create(self.cache.clone(), self.event.clone(), project.clone())
-                .await;
+            projects::create::create(self.cache.clone(), self.event.clone(), project.clone()).await;
 
         if let Err(err) = result {
             return Err(Status::failed_precondition(err.to_string()));
