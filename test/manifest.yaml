@@ -155,7 +155,7 @@ data:
     brokers="redpanda.demeter-kafka.svc.cluster.local:19092"
 
     [auth]
-    url="https://us.auth0.com"
+    url="https://dev-dflg0ssi.us.auth0.com"
 kind: ConfigMap
 metadata:
   name: rpc-config
