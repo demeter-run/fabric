@@ -7,10 +7,8 @@ use std::{borrow::Borrow, path::Path, sync::Arc};
 use tracing::{error, info};
 
 use crate::{
-    domain::{events::Event, ports, projects, users},
-    driven::cache::{
-        port::SqlitePortCache, project::SqliteProjectCache, user::SqliteUserCache, SqliteCache,
-    },
+    domain::{events::Event, ports, projects},
+    driven::cache::{port::SqlitePortCache, project::SqliteProjectCache, SqliteCache},
 };
 
 pub async fn subscribe(config: EventConfig) -> Result<()> {
@@ -19,7 +17,6 @@ pub async fn subscribe(config: EventConfig) -> Result<()> {
 
     let project_cache = Arc::new(SqliteProjectCache::new(sqlite_cache.clone()));
     let port_cache = Arc::new(SqlitePortCache::new(sqlite_cache.clone()));
-    let user_cache = Arc::new(SqliteUserCache::new(sqlite_cache.clone()));
 
     let topic = String::from("events");
 
@@ -39,9 +36,6 @@ pub async fn subscribe(config: EventConfig) -> Result<()> {
                     match event {
                         Event::ProjectCreated(namespace) => {
                             projects::create::create_cache(project_cache.clone(), namespace).await?
-                        }
-                        Event::UserCreated(user) => {
-                            users::create::create_cache(user_cache.clone(), user).await?
                         }
                         Event::PortCreated(port) => {
                             ports::create::create_cache(port_cache.clone(), port).await?

@@ -11,15 +11,9 @@ CREATE TABLE IF NOT EXISTS ports (
   FOREIGN KEY(project) REFERENCES projects(slug)
 );
 
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY NOT NULL,
-  email TEXT NOT NULL,
-  auth_provider TEXT NOT NULL,
-  auth_provider_id TEXT NOT NULL UNIQUE
-);
-
 CREATE TABLE IF NOT EXISTS projects_users (
   user_id TEXT NOT NULL,
   project_id TEXT NOT NULL,
-  PRIMARY KEY (user_id, project_id)
+  PRIMARY KEY (user_id, project_id),
+  FOREIGN KEY(project_id) REFERENCES projects(slug)
 )

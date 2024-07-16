@@ -5,11 +5,11 @@ use serde::Deserialize;
 
 use crate::domain::users::AuthProvider;
 
-pub struct Auth0Provider {
+pub struct AuthProviderImpl {
     client: reqwest::Client,
     url: String,
 }
-impl Auth0Provider {
+impl AuthProviderImpl {
     pub fn new(url: &str) -> Self {
         let client = reqwest::Client::new();
         Self {
@@ -19,8 +19,13 @@ impl Auth0Provider {
     }
 }
 
+#[derive(Deserialize)]
+struct Claims {
+    sub: String,
+}
+
 #[async_trait::async_trait]
-impl AuthProvider for Auth0Provider {
+impl AuthProvider for AuthProviderImpl {
     async fn verify(&self, token: &str) -> Result<String> {
         let jwks_request = self
             .client
@@ -55,30 +60,4 @@ impl AuthProvider for Auth0Provider {
 
         Ok(decoded_token.claims.sub)
     }
-    async fn get_profile(&self, token: &str) -> Result<String> {
-        let profile_request = self
-            .client
-            .get(format!("{}/userinfo", self.url))
-            .header("Authorization", format!("Bearer {token}"))
-            .build()?;
-
-        let profile_response = self
-            .client
-            .execute(profile_request)
-            .await?
-            .error_for_status()?;
-
-        let profile = profile_response.json::<UserInfo>().await?;
-
-        Ok(profile.email)
-    }
-}
-
-#[derive(Deserialize)]
-struct Claims {
-    sub: String,
-}
-#[derive(Deserialize)]
-struct UserInfo {
-    email: String,
 }
