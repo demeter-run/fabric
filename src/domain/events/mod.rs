@@ -1,14 +1,34 @@
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 
-use super::{ports::Port, projects::Project};
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectCreatedEvent {
+    pub id: String,
+    pub name: String,
+    pub namespace: String,
+    pub created_by: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortCreatedEventProject {
+    pub id: String,
+    pub namespace: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortCreatedEvent {
+    pub id: String,
+    pub project: PortCreatedEventProject,
+    pub kind: String,
+    pub data: String,
+    pub created_by: String,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 #[allow(clippy::enum_variant_names)]
 pub enum Event {
-    ProjectCreated(Project),
-    PortCreated(Port),
+    ProjectCreated(ProjectCreatedEvent),
+    PortCreated(PortCreatedEvent),
 }
 impl Event {
     pub fn key(&self) -> String {

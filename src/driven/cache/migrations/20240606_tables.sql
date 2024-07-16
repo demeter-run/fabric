@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS ports (
   project_id TEXT NOT NULL,
   kind TEXT NOT NULL,
   data TEXT NOT NULL,
+  created_by TEXT NOT NULL,
   FOREIGN KEY(project_id) REFERENCES projects(id)
 );
 

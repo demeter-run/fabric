@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::domain::projects::{Project, ProjectCache};
+use crate::domain::projects::{Project, ProjectCache, ProjectUser};
 
 use super::SqliteCache;
 
@@ -71,5 +71,34 @@ impl ProjectCache for SqliteProjectCache {
         };
 
         Ok(Some(project))
+    }
+    async fn find_user_permission(
+        &self,
+        user_id: &str,
+        project_id: &str,
+    ) -> Result<Option<ProjectUser>> {
+        let result = sqlx::query!(
+            r#"
+                SELECT user_id, project_id 
+                FROM projects_users WHERE user_id = $1 and project_id = $2;
+            "#,
+            user_id,
+            project_id
+        )
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        if result.is_none() {
+            return Ok(None);
+        }
+
+        let result = result.unwrap();
+
+        let project_user = ProjectUser {
+            user_id: result.user_id,
+            project_id: result.project_id,
+        };
+
+        Ok(Some(project_user))
     }
 }

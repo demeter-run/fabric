@@ -5,9 +5,11 @@ use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::events::ProjectCreatedEvent;
+
 pub mod create;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Project {
     pub id: String,
     pub name: String,
@@ -33,8 +35,28 @@ impl Project {
         }
     }
 }
-impl From<Project> for Namespace {
+impl From<Project> for ProjectCreatedEvent {
     fn from(value: Project) -> Self {
+        Self {
+            id: value.id,
+            namespace: value.namespace,
+            name: value.name,
+            created_by: value.created_by,
+        }
+    }
+}
+impl From<ProjectCreatedEvent> for Project {
+    fn from(value: ProjectCreatedEvent) -> Self {
+        Self {
+            id: value.id,
+            namespace: value.namespace,
+            name: value.name,
+            created_by: value.created_by,
+        }
+    }
+}
+impl From<ProjectCreatedEvent> for Namespace {
+    fn from(value: ProjectCreatedEvent) -> Self {
         Namespace {
             metadata: ObjectMeta {
                 name: Some(value.namespace),
@@ -45,10 +67,21 @@ impl From<Project> for Namespace {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectUser {
+    pub user_id: String,
+    pub project_id: String,
+}
+
 #[async_trait::async_trait]
 pub trait ProjectCache: Send + Sync {
     async fn create(&self, project: &Project) -> Result<()>;
     async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
+    async fn find_user_permission(
+        &self,
+        user_id: &str,
+        project_id: &str,
+    ) -> Result<Option<ProjectUser>>;
 }
 
 #[async_trait::async_trait]

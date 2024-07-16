@@ -3,7 +3,7 @@ use kube::ResourceExt;
 use std::sync::Arc;
 use tracing::info;
 
-use crate::domain::events::{Event, EventBridge};
+use crate::domain::events::{Event, EventBridge, ProjectCreatedEvent};
 
 use super::{Project, ProjectCache, ProjectCluster};
 
@@ -16,7 +16,7 @@ pub async fn create(
         bail!("invalid project namespace")
     }
 
-    let project_event = Event::ProjectCreated(project.clone());
+    let project_event = Event::ProjectCreated(project.clone().into());
 
     event.dispatch(project_event).await?;
     info!(project = project.namespace, "new project created");
@@ -24,13 +24,19 @@ pub async fn create(
     Ok(())
 }
 
-pub async fn create_cache(cache: Arc<dyn ProjectCache>, project: Project) -> Result<()> {
-    cache.create(&project).await?;
+pub async fn create_cache(
+    cache: Arc<dyn ProjectCache>,
+    project: ProjectCreatedEvent,
+) -> Result<()> {
+    cache.create(&project.into()).await?;
 
     Ok(())
 }
 
-pub async fn create_resource(cluster: Arc<dyn ProjectCluster>, project: Project) -> Result<()> {
+pub async fn create_resource(
+    cluster: Arc<dyn ProjectCluster>,
+    project: ProjectCreatedEvent,
+) -> Result<()> {
     if cluster.find_by_name(&project.namespace).await?.is_some() {
         bail!("namespace alread exist")
     }
@@ -51,6 +57,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
+    use crate::domain::projects::ProjectUser;
 
     mock! {
         pub FakeProjectCache { }
@@ -59,6 +66,7 @@ mod tests {
         impl ProjectCache for FakeProjectCache {
             async fn create(&self, project: &Project) -> Result<()>;
             async fn find_by_id(&self, namespace: &str) -> Result<Option<Project>>;
+            async fn find_user_permission(&self,user_id: &str,project_id: &str) -> Result<Option<ProjectUser>>;
         }
     }
 
@@ -87,6 +95,15 @@ mod tests {
                 id: Uuid::new_v4().to_string(),
                 name: "New Project".into(),
                 namespace: "sonic-vegas".into(),
+                created_by: "user id".into(),
+            }
+        }
+    }
+    impl Default for ProjectUser {
+        fn default() -> Self {
+            Self {
+                user_id: "user id".into(),
+                project_id: Uuid::new_v4().to_string(),
             }
         }
     }
@@ -131,7 +148,7 @@ mod tests {
 
         let project = Project::default();
 
-        let result = create_cache(Arc::new(project_cache), project).await;
+        let result = create_cache(Arc::new(project_cache), project.into()).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }
@@ -146,7 +163,7 @@ mod tests {
 
         let project = Project::default();
 
-        let result = create_resource(Arc::new(project_cluster), project).await;
+        let result = create_resource(Arc::new(project_cluster), project.into()).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }
@@ -162,7 +179,7 @@ mod tests {
 
         let project = Project::default();
 
-        let result = create_resource(Arc::new(project_cluster), project).await;
+        let result = create_resource(Arc::new(project_cluster), project.into()).await;
         if result.is_ok() {
             unreachable!("Fail to validate when the namespace alread exists")
         }

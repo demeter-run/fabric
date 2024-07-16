@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::domain::{
-    events::{Event, EventBridge},
+    events::{Event, EventBridge, PortCreatedEvent},
     projects::ProjectCache,
 };
 
@@ -18,11 +18,19 @@ pub async fn create(
     event: Arc<dyn EventBridge>,
     port: Port,
 ) -> Result<()> {
-    if project_cache.find_by_id(&port.project_id).await?.is_none() {
-        bail!("Invalid project")
+    if project_cache
+        .find_user_permission(&port.created_by, &port.project_id)
+        .await?
+        .is_none()
+    {
+        bail!("User doesnt have permission to create port in this project")
     }
 
-    let port_event = Event::PortCreated(port.clone());
+    let Some(project) = project_cache.find_by_id(&port.project_id).await? else {
+        bail!("project doesnt exist")
+    };
+
+    let port_event = Event::PortCreated(port.to_event(&project));
 
     event.dispatch(port_event).await?;
     info!(project = port.project_id, "new port requested");
@@ -30,13 +38,13 @@ pub async fn create(
     Ok(())
 }
 
-pub async fn create_cache(port_cache: Arc<dyn PortCache>, port: Port) -> Result<()> {
-    port_cache.create(&port).await?;
+pub async fn create_cache(port_cache: Arc<dyn PortCache>, port: PortCreatedEvent) -> Result<()> {
+    port_cache.create(&port.into()).await?;
 
     Ok(())
 }
 
-pub async fn create_resource(cluster: Arc<dyn PortCluster>, port: Port) -> Result<()> {
+pub async fn create_resource(cluster: Arc<dyn PortCluster>, port: PortCreatedEvent) -> Result<()> {
     let api = ApiResource {
         kind: port.kind.clone(),
         group: "demeter.run".into(),
@@ -48,7 +56,7 @@ pub async fn create_resource(cluster: Arc<dyn PortCluster>, port: Port) -> Resul
     let mut obj = DynamicObject::new(&port.id, &api);
     obj.metadata = ObjectMeta {
         name: Some(port.id),
-        namespace: Some(port.project_id),
+        namespace: Some(port.project.namespace),
         ..Default::default()
     };
     obj.data = serde_json::from_str(&port.data)?;
@@ -67,7 +75,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::domain::projects::Project;
+    use crate::domain::projects::{Project, ProjectUser};
 
     mock! {
         pub FakeProjectCache { }
@@ -76,6 +84,7 @@ mod tests {
         impl ProjectCache for FakeProjectCache {
             async fn create(&self, project: &Project) -> Result<()>;
             async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
+            async fn find_user_permission(&self,user_id: &str,project_id: &str) -> Result<Option<ProjectUser>>;
         }
     }
 
@@ -113,6 +122,7 @@ mod tests {
                 project_id: Uuid::new_v4().to_string(),
                 kind: "CardanoNode".into(),
                 data: "{\"spec\":{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}}".into(),
+                created_by: "user id".into(),
             }
         }
     }
@@ -120,6 +130,9 @@ mod tests {
     #[tokio::test]
     async fn it_should_create_port() {
         let mut project_cache = MockFakeProjectCache::new();
+        project_cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
         project_cache
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
@@ -134,10 +147,28 @@ mod tests {
             unreachable!("{err}")
         }
     }
-
     #[tokio::test]
-    async fn it_should_fail_when_project_not_exist() {
+    async fn it_should_fail_when_user_doesnt_have_permission() {
         let mut project_cache = MockFakeProjectCache::new();
+        project_cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(None));
+
+        let event_bridge = MockFakeEventBridge::new();
+
+        let port = Port::default();
+
+        let result = create(Arc::new(project_cache), Arc::new(event_bridge), port).await;
+        if result.is_ok() {
+            unreachable!("Fail to validate when the project doesnt exist")
+        }
+    }
+    #[tokio::test]
+    async fn it_should_fail_when_project_doesnt_exist() {
+        let mut project_cache = MockFakeProjectCache::new();
+        project_cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
         project_cache.expect_find_by_id().return_once(|_| Ok(None));
 
         let event_bridge = MockFakeEventBridge::new();
@@ -157,7 +188,7 @@ mod tests {
 
         let port = Port::default();
 
-        let result = create_cache(Arc::new(port_cache), port).await;
+        let result = create_cache(Arc::new(port_cache), port.to_event(Default::default())).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }
@@ -170,7 +201,8 @@ mod tests {
 
         let port = Port::default();
 
-        let result = create_resource(Arc::new(port_cluster), port).await;
+        let result =
+            create_resource(Arc::new(port_cluster), port.to_event(Default::default())).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }

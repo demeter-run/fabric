@@ -35,7 +35,7 @@ impl AuthProvider for Auth0Provider {
         let header = decode_header(token)?;
 
         let Some(kid) = header.kid else {
-            bail!("token doesn't have a `kid` header field");
+            bail!("token doesnt have a `kid` header field");
         };
         let Some(jwk) = self.jwks.find(&kid) else {
             bail!("no matching jwk found for the given kid");
