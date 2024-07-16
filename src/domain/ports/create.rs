@@ -187,8 +187,9 @@ mod tests {
         port_cache.expect_create().return_once(|_| Ok(()));
 
         let port = Port::default();
+        let project = Project::default();
 
-        let result = create_cache(Arc::new(port_cache), port.to_event(Default::default())).await;
+        let result = create_cache(Arc::new(port_cache), port.to_event(&project)).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }
@@ -200,9 +201,9 @@ mod tests {
         port_cluster.expect_create().return_once(|_| Ok(()));
 
         let port = Port::default();
+        let project = Project::default();
 
-        let result =
-            create_resource(Arc::new(port_cluster), port.to_event(Default::default())).await;
+        let result = create_resource(Arc::new(port_cluster), port.to_event(&project)).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }
