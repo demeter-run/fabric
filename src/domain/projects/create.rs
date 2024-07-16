@@ -12,14 +12,14 @@ pub async fn create(
     event: Arc<dyn EventBridge>,
     project: Project,
 ) -> Result<()> {
-    if cache.find_by_slug(&project.slug).await?.is_some() {
-        bail!("invalid project slug")
+    if cache.find_by_id(&project.namespace).await?.is_some() {
+        bail!("invalid project namespace")
     }
 
     let project_event = Event::ProjectCreated(project.clone());
 
     event.dispatch(project_event).await?;
-    info!(project = project.slug, "new project created");
+    info!(project = project.namespace, "new project created");
 
     Ok(())
 }
@@ -31,7 +31,7 @@ pub async fn create_cache(cache: Arc<dyn ProjectCache>, project: Project) -> Res
 }
 
 pub async fn create_resource(cluster: Arc<dyn ProjectCluster>, project: Project) -> Result<()> {
-    if cluster.find_by_name(&project.slug).await?.is_some() {
+    if cluster.find_by_name(&project.namespace).await?.is_some() {
         bail!("namespace alread exist")
     }
 
@@ -48,6 +48,7 @@ pub async fn create_resource(cluster: Arc<dyn ProjectCluster>, project: Project)
 mod tests {
     use k8s_openapi::api::core::v1::Namespace;
     use mockall::mock;
+    use uuid::Uuid;
 
     use super::*;
 
@@ -57,7 +58,7 @@ mod tests {
         #[async_trait::async_trait]
         impl ProjectCache for FakeProjectCache {
             async fn create(&self, project: &Project) -> Result<()>;
-            async fn find_by_slug(&self, slug: &str) -> Result<Option<Project>>;
+            async fn find_by_id(&self, namespace: &str) -> Result<Option<Project>>;
         }
     }
 
@@ -83,8 +84,9 @@ mod tests {
     impl Default for Project {
         fn default() -> Self {
             Self {
+                id: Uuid::new_v4().to_string(),
                 name: "New Project".into(),
-                slug: "sonic-vegas".into(),
+                namespace: "sonic-vegas".into(),
             }
         }
     }
@@ -92,9 +94,7 @@ mod tests {
     #[tokio::test]
     async fn it_should_create_project() {
         let mut project_cache = MockFakeProjectCache::new();
-        project_cache
-            .expect_find_by_slug()
-            .return_once(|_| Ok(None));
+        project_cache.expect_find_by_id().return_once(|_| Ok(None));
 
         let mut event_bridge = MockFakeEventBridge::new();
         event_bridge.expect_dispatch().return_once(|_| Ok(()));
@@ -108,10 +108,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_should_fail_when_project_slug_exist() {
+    async fn it_should_fail_when_project_namespace_exist() {
         let mut project_cache = MockFakeProjectCache::new();
         project_cache
-            .expect_find_by_slug()
+            .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
 
         let event_bridge = MockFakeEventBridge::new();
@@ -120,7 +120,7 @@ mod tests {
 
         let result = create(Arc::new(project_cache), Arc::new(event_bridge), project).await;
         if result.is_ok() {
-            unreachable!("Fail to validate when the slug is duplicated")
+            unreachable!("Fail to validate when the namespace is duplicated")
         }
     }
 

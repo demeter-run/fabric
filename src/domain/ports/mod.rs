@@ -8,17 +8,17 @@ pub mod create;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Port {
     pub id: String,
-    pub project: String,
+    pub project_id: String,
     pub kind: String,
     pub data: String,
 }
 impl Port {
-    pub fn new(project: &str, kind: &str, data: &str) -> Self {
+    pub fn new(project_id: &str, kind: &str, data: &str) -> Self {
         let id = Uuid::new_v4().to_string();
 
         Self {
             id,
-            project: project.into(),
+            project_id: project_id.into(),
             kind: kind.into(),
             data: data.into(),
         }

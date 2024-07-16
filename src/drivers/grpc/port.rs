@@ -29,7 +29,7 @@ impl proto::port_service_server::PortService for PortServiceImpl {
     ) -> Result<tonic::Response<proto::CreatePortResponse>, tonic::Status> {
         let req = request.into_inner();
 
-        let port = Port::new(&req.project, &req.kind, &req.data);
+        let port = Port::new(&req.project_id, &req.kind, &req.data);
         let result =
             ports::create::create(self.project_cache.clone(), self.event.clone(), port.clone())
                 .await;

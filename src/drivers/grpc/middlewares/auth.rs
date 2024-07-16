@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use regex::Regex;
 
-use crate::domain::users::AuthProvider;
+use crate::domain::users::{AuthProvider, Credential};
 
 #[derive(Clone)]
 pub struct AuthenticatorImpl {
@@ -45,7 +45,9 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
             return Err(tonic::Status::unauthenticated("invalid authentication"));
         };
 
-        request.extensions_mut().insert(user_id);
+        let credential = Credential { id: user_id };
+
+        request.extensions_mut().insert(credential);
 
         Ok(request)
     }

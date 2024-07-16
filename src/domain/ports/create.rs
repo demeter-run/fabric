@@ -18,14 +18,14 @@ pub async fn create(
     event: Arc<dyn EventBridge>,
     port: Port,
 ) -> Result<()> {
-    if project_cache.find_by_slug(&port.project).await?.is_none() {
+    if project_cache.find_by_id(&port.project_id).await?.is_none() {
         bail!("Invalid project")
     }
 
     let port_event = Event::PortCreated(port.clone());
 
     event.dispatch(port_event).await?;
-    info!(project = port.project, "new port requested");
+    info!(project = port.project_id, "new port requested");
 
     Ok(())
 }
@@ -48,7 +48,7 @@ pub async fn create_resource(cluster: Arc<dyn PortCluster>, port: Port) -> Resul
     let mut obj = DynamicObject::new(&port.id, &api);
     obj.metadata = ObjectMeta {
         name: Some(port.id),
-        namespace: Some(port.project),
+        namespace: Some(port.project_id),
         ..Default::default()
     };
     obj.data = serde_json::from_str(&port.data)?;
@@ -75,7 +75,7 @@ mod tests {
         #[async_trait::async_trait]
         impl ProjectCache for FakeProjectCache {
             async fn create(&self, project: &Project) -> Result<()>;
-            async fn find_by_slug(&self, slug: &str) -> Result<Option<Project>>;
+            async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
         }
     }
 
@@ -110,7 +110,7 @@ mod tests {
         fn default() -> Self {
             Self {
                 id: Uuid::new_v4().to_string(),
-                project: "prj-test".into(),
+                project_id: Uuid::new_v4().to_string(),
                 kind: "CardanoNode".into(),
                 data: "{\"spec\":{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}}".into(),
             }
@@ -121,7 +121,7 @@ mod tests {
     async fn it_should_create_port() {
         let mut project_cache = MockFakeProjectCache::new();
         project_cache
-            .expect_find_by_slug()
+            .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
 
         let mut event_bridge = MockFakeEventBridge::new();
@@ -138,9 +138,7 @@ mod tests {
     #[tokio::test]
     async fn it_should_fail_when_project_not_exist() {
         let mut project_cache = MockFakeProjectCache::new();
-        project_cache
-            .expect_find_by_slug()
-            .return_once(|_| Ok(None));
+        project_cache.expect_find_by_id().return_once(|_| Ok(None));
 
         let event_bridge = MockFakeEventBridge::new();
 

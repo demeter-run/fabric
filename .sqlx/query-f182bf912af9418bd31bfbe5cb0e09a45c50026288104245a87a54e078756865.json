@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                SELECT id, namespace, name, created_by \n                FROM projects WHERE id = $1;\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "namespace",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_by",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f182bf912af9418bd31bfbe5cb0e09a45c50026288104245a87a54e078756865"
+}
