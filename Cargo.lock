@@ -526,6 +526,7 @@ dependencies = [
  "protoc-wkt",
  "rand",
  "rdkafka",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

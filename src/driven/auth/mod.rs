@@ -5,17 +5,22 @@ use serde::Deserialize;
 
 use crate::domain::users::AuthProvider;
 
-pub struct AuthProviderImpl {
-    client: reqwest::Client,
-    url: String,
+pub struct Auth0Provider {
+    jwks: JwkSet,
 }
-impl AuthProviderImpl {
-    pub fn new(url: &str) -> Self {
+impl Auth0Provider {
+    pub async fn try_new(url: &str) -> Result<Self> {
         let client = reqwest::Client::new();
-        Self {
-            client,
-            url: url.into(),
-        }
+        let jwks_request = client
+            .get(format!("{}/.well-known/jwks.json", url))
+            .build()?;
+
+        let jwks_response = client.execute(jwks_request).await?;
+        let jwks = jwks_response.json().await?;
+
+        let auth_provider = Self { jwks };
+
+        Ok(auth_provider)
     }
 }
 
@@ -25,22 +30,14 @@ struct Claims {
 }
 
 #[async_trait::async_trait]
-impl AuthProvider for AuthProviderImpl {
-    async fn verify(&self, token: &str) -> Result<String> {
-        let jwks_request = self
-            .client
-            .get(format!("{}/.well-known/jwks.json", self.url))
-            .build()?;
-
-        let jwks_response = self.client.execute(jwks_request).await?;
-        let jwks: JwkSet = jwks_response.json().await?;
-
+impl AuthProvider for Auth0Provider {
+    fn verify(&self, token: &str) -> Result<String> {
         let header = decode_header(token)?;
 
         let Some(kid) = header.kid else {
             bail!("token doesn't have a `kid` header field");
         };
-        let Some(jwk) = jwks.find(&kid) else {
+        let Some(jwk) = self.jwks.find(&kid) else {
             bail!("no matching jwk found for the given kid");
         };
 

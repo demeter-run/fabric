@@ -1,5 +1,6 @@
 use anyhow::Result;
 use dmtri::demeter::ops::v1alpha::port_service_server::PortServiceServer;
+use middlewares::auth::AuthenticatorImpl;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::{path::Path, sync::Arc};
@@ -8,11 +9,11 @@ use tracing::info;
 
 use dmtri::demeter::ops::v1alpha::project_service_server::ProjectServiceServer;
 
-use crate::driven::auth::AuthProviderImpl;
+use crate::driven::auth::Auth0Provider;
 use crate::driven::cache::{project::SqliteProjectCache, SqliteCache};
 use crate::driven::kafka::KafkaProducer;
 
-//mod middlewares;
+mod middlewares;
 mod port;
 mod project;
 
@@ -22,7 +23,7 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
 
     let event_bridge = Arc::new(KafkaProducer::new(&config.brokers, "events")?);
 
-    let auth_provider = Arc::new(AuthProviderImpl::new(&config.auth_url));
+    let auth_provider = Arc::new(Auth0Provider::try_new(&config.auth_url).await?);
 
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(dmtri::demeter::ops::v1alpha::FILE_DESCRIPTOR_SET)
@@ -30,12 +31,14 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         .build()
         .unwrap();
 
+    let auth = AuthenticatorImpl::new(auth_provider.clone());
+
     let project_inner =
         project::ProjectServiceImpl::new(project_cache.clone(), event_bridge.clone());
-    let project_service = ProjectServiceServer::new(project_inner);
+    let project_service = ProjectServiceServer::with_interceptor(project_inner, auth.clone());
 
     let port_inner = port::PortServiceImpl::new(project_cache.clone(), event_bridge.clone());
-    let port_service = PortServiceServer::new(port_inner);
+    let port_service = PortServiceServer::with_interceptor(port_inner, auth.clone());
 
     let address = SocketAddr::from_str(&config.addr)?;
 
