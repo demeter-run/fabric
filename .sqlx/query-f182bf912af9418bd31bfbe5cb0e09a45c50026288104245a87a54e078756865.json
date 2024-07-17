@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n                SELECT id, email, auth_provider, auth_provider_id\n                FROM users WHERE auth_provider_id = $1;\n            ",
+  "query": "\n                SELECT id, namespace, name, created_by \n                FROM projects WHERE id = $1;\n            ",
   "describe": {
     "columns": [
       {
@@ -9,17 +9,17 @@
         "type_info": "Text"
       },
       {
-        "name": "email",
+        "name": "namespace",
         "ordinal": 1,
         "type_info": "Text"
       },
       {
-        "name": "auth_provider",
+        "name": "name",
         "ordinal": 2,
         "type_info": "Text"
       },
       {
-        "name": "auth_provider_id",
+        "name": "created_by",
         "ordinal": 3,
         "type_info": "Text"
       }
@@ -34,5 +34,5 @@
       false
     ]
   },
-  "hash": "127e6b12137e638062be0641dd2cecb72906706050357cef77290a623ca24037"
+  "hash": "f182bf912af9418bd31bfbe5cb0e09a45c50026288104245a87a54e078756865"
 }

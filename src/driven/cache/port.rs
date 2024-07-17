@@ -18,13 +18,14 @@ impl PortCache for SqlitePortCache {
     async fn create(&self, port: &Port) -> Result<()> {
         sqlx::query!(
             r#"
-                INSERT INTO ports (id, project, kind, data)
-                VALUES ($1, $2, $3, $4)
+                INSERT INTO ports (id, project_id, kind, data, created_by)
+                VALUES ($1, $2, $3, $4, $5)
             "#,
             port.id,
-            port.project,
+            port.project_id,
             port.kind,
-            port.data
+            port.data,
+            port.created_by
         )
         .execute(&self.sqlite.db)
         .await?;

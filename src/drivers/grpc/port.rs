@@ -6,6 +6,7 @@ use crate::domain::{
     events::EventBridge,
     ports::{self, Port},
     projects::ProjectCache,
+    users::Credential,
 };
 
 pub struct PortServiceImpl {
@@ -27,9 +28,14 @@ impl proto::port_service_server::PortService for PortServiceImpl {
         &self,
         request: tonic::Request<proto::CreatePortRequest>,
     ) -> Result<tonic::Response<proto::CreatePortResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::permission_denied("invalid credential")),
+        };
+
         let req = request.into_inner();
 
-        let port = Port::new(&req.project, &req.kind, &req.data);
+        let port = Port::new(&req.project_id, &req.kind, &req.data, &credential.id);
         let result =
             ports::create::create(self.project_cache.clone(), self.event.clone(), port.clone())
                 .await;

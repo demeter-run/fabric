@@ -37,9 +37,6 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
                         Event::PortCreated(port) => {
                             ports::create::create_resource(k8s_cluster.clone(), port).await?;
                         }
-                        _ => {
-                            info!("skip event")
-                        }
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }

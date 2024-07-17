@@ -5,6 +5,7 @@ use tonic::{async_trait, Status};
 use crate::domain::{
     events::EventBridge,
     projects::{self, Project, ProjectCache},
+    users::Credential,
 };
 
 pub struct ProjectServiceImpl {
@@ -24,9 +25,14 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         &self,
         request: tonic::Request<proto::CreateProjectRequest>,
     ) -> Result<tonic::Response<proto::CreateProjectResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::permission_denied("invalid credential")),
+        };
+
         let req = request.into_inner();
 
-        let project = Project::new(req.name);
+        let project = Project::new(req.name, credential.id);
         let result =
             projects::create::create(self.cache.clone(), self.event.clone(), project.clone()).await;
 
@@ -35,8 +41,9 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         }
 
         let message = proto::CreateProjectResponse {
+            id: project.id,
             name: project.name,
-            namespace: project.slug,
+            namespace: project.namespace,
         };
         Ok(tonic::Response::new(message))
     }

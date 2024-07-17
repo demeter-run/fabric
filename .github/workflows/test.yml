@@ -48,5 +48,7 @@ jobs:
         run: kubectl apply -f test/manifest.yaml
 
       - name: Validate 
+        env:
+          TEST_CREDENTIAL: ${{ secrets.TEST_CREDENTIAL }}
         run: ./test/expect
       
