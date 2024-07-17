@@ -67,8 +67,7 @@ jobs:
           # done
           
           echo "$TEST_CREDENTIAL"
-          TOKEN_RESPONSE=$(curl --verbose --request POST --url https://dev-dflg0ssi.us.auth0.com/oauth/token --header 'content-type: application/json' --data '{"client_id":"f6y19wTU92tkVAasM5VubeEOsDSES56X","client_secret":"patRt3znUO-1rjuNbt5Vrm6_xITzrqtMYbKcou1-kMwnYb6mwZ5
-aaSSerP-YJkOe","audience":"demeter-api","grant_type":"client_credentials"}')
+          TOKEN_RESPONSE=$(curl --verbose --request POST --url https://dev-dflg0ssi.us.auth0.com/oauth/token --header 'content-type: application/json' --data '{"client_id":"f6y19wTU92tkVAasM5VubeEOsDSES56X","client_secret":"patRt3znUO-1rjuNbt5Vrm6_xITzrqtMYbKcou1-kMwnYb6mwZ5aaSSerP-YJkOe","audience":"demeter-api","grant_type":"client_credentials"}')
           echo "$TOKEN_RESPONSE"
           TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
           echo "$TOKEN"
