@@ -14,8 +14,13 @@ while true; do
     fi
 done
 
-TOKEN=$(curl --request POST --url https://dev-dflg0ssi.us.auth0.com/oauth/token --header 'content-type: application/json' --data "$TEST_CREDENTIAL" | jq -r '.access_token')
-echo $TOKEN
+echo "$TEST_CREDENTIAL"
+TOKEN_RESPONSE=$(curl --verbose --request POST --url https://dev-dflg0ssi.us.auth0.com/oauth/token --header 'content-type: application/json' --data "$TEST_CREDENTIAL")
+echo "$TOKEN_RESPONSE"
+
+TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
+echo "$TOKEN"
+
 
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
 NAMESPACE=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"name": "New Namespace"}' "$NODE_IP":30950 demeter.ops.v1alpha.ProjectService.CreateProject | jq -r '.namespace')
