@@ -49,6 +49,6 @@ jobs:
 
       - name: Validate 
         env:
-          TEST_CREDENTIAL: ${{ secrets.TEST_CREDENTIAL }}
+          TEST_CREDENTIAL: ${{ vars.TEST_CREDENTIAL }}
         run: ./test/expect
       
