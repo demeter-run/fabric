@@ -17,22 +17,14 @@ variable "instance_name" {
   type = string
 }
 
-variable "external_dns" {
-  type = string
-}
-
-variable "external_port" {
+variable "image_repository" {
   type    = string
-  default = 9092
+  default = "docker.redpanda.com/redpandadata/redpanda"
 }
 
-variable "topology_zone" {
+variable "image_tag" {
   type    = string
-  default = null
-}
-
-variable "image" {
-  type = string
+  default = "v23.3.18"
 }
 
 variable "console_image" {
@@ -42,76 +34,18 @@ variable "console_image" {
 
 variable "resources" {
   type = object({
-    limits = object({
-      cpu    = optional(string)
-      memory = string
-    })
-    requests = object({
-      cpu    = string
-      memory = string
-    })
+    cpu     = number
+    memory  = string
+    storage = string
   })
   default = {
-    requests = {
-      cpu    = "100m"
-      memory = "1G"
-    }
-    limits = {
-      cpu    = "4"
-      memory = "1G"
-    }
+    cpu     = 1
+    memory  = "2.5Gi"
+    storage = "20Gi"
   }
 }
 
-variable "console_resources" {
-  type = object({
-    limits = object({
-      cpu    = optional(string)
-      memory = string
-    })
-    requests = object({
-      cpu    = string
-      memory = string
-    })
-  })
-  default = {
-    requests = {
-      cpu    = "100m"
-      memory = "500Mi"
-    }
-    limits = {
-      cpu    = "500m"
-      memory = "500Mi"
-    }
-  }
-}
-
-variable "tolerations" {
-  type = list(object({
-    effect   = string
-    key      = string
-    operator = string
-    value    = string
-  }))
-  default = [
-    {
-      effect   = "NoSchedule"
-      key      = "demeter.run/compute-profile"
-      operator = "Equal"
-      value    = "general-purpose"
-    },
-    {
-      effect   = "NoSchedule"
-      key      = "demeter.run/compute-arch"
-      operator = "Equal"
-      value    = "x86"
-    },
-    {
-      effect   = "NoSchedule"
-      key      = "demeter.run/availability-sla"
-      operator = "Equal"
-      value    = "consistent"
-    }
-
-  ]
+variable "replicas" {
+  type    = number
+  default = 3
 }

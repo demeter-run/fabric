@@ -1,0 +1,61 @@
+tolerations:
+  - effect: "NoSchedule"
+    key: "demeter.run/compute-profile"
+    operator: "Equal"
+    value: "general-purpose"
+  - effect: "NoSchedule"
+    key: "demeter.run/compute-arch"
+    operator: "Equal"
+    value: "x86"
+  - effect: "NoSchedule"
+    key: "demeter.run/availability-sla"
+    operator: "Equal"
+    value: "consistent"
+
+# -- Authentication settings.
+# https://docs.redpanda.com/docs/manage/kubernetes/security/sasl-kubernetes/
+auth:
+  sasl:
+    enabled: false
+
+# -- TLS settings.
+# https://docs.redpanda.com/docs/manage/kubernetes/security/kubernetes-tls/
+tls:
+  enabled: true
+  certs:
+    default:
+      caEnabled: true
+    external:
+      caEnabled: true
+
+# -- External access settings.
+# https://docs.redpanda.com/docs/manage/kubernetes/networking/networking-and-connectivity/
+external:
+  service:
+    enabled: true
+  enabled: true
+  type: NodePort
+
+# -- Log-level settings.
+logging:
+  logLevel: info
+  usageStats:
+    enabled: false
+
+# -- Monitoring.
+monitoring:
+  enabled: true
+  scrapeInterval: 60s
+
+# -- Persistence settings.
+# https://docs.redpanda.com/docs/manage/kubernetes/configure-storage/
+storage:
+  persistentVolume:
+    enabled: true
+
+statefulset:
+  replicas: 3
+  updateStrategy:
+    type: RollingUpdate
+  budget:
+    maxUnavailable: 1
