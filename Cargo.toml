@@ -29,6 +29,7 @@ rdkafka = "0.36.2"
 uuid = { version = "1.10.0", features = ["v4"] }
 reqwest = { version = "0.12.5", features = ["json", "rustls-tls-webpki-roots"] }
 jsonwebtoken = "9.3.0"
+regex = "1.10.5"
 
 [dev-dependencies]
 mockall = "0.12.1"
