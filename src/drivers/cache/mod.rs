@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-pub async fn subscribe(config: EventConfig) -> Result<()> {
+pub async fn subscribe(config: CacheConfig) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     sqlite_cache.migrate().await?;
 
@@ -54,7 +54,7 @@ pub async fn subscribe(config: EventConfig) -> Result<()> {
     }
 }
 
-pub struct EventConfig {
+pub struct CacheConfig {
     pub db_path: String,
     pub brokers: String,
 }
