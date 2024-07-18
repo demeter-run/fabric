@@ -42,7 +42,7 @@ pub async fn create_cache(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectCreate
     Ok(())
 }
 
-pub async fn apply_cluster(
+pub async fn apply_manifest(
     cluster: Arc<dyn ProjectDrivenCluster>,
     evt: ProjectCreated,
 ) -> Result<()> {
@@ -245,7 +245,7 @@ mod tests {
 
         let project = ProjectCreated::default();
 
-        let result = apply_cluster(Arc::new(cluster), project).await;
+        let result = apply_manifest(Arc::new(cluster), project).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }
@@ -261,7 +261,7 @@ mod tests {
 
         let project = ProjectCreated::default();
 
-        let result = apply_cluster(Arc::new(cluster), project).await;
+        let result = apply_manifest(Arc::new(cluster), project).await;
         if result.is_ok() {
             unreachable!("Fail to validate when the namespace alread exists")
         }

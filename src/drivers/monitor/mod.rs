@@ -31,10 +31,10 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
                 Ok(event) => {
                     match event {
                         Event::ProjectCreated(evt) => {
-                            project::apply_cluster(cluster.clone(), evt).await?;
+                            project::apply_manifest(cluster.clone(), evt).await?;
                         }
                         Event::ResourceCreated(evt) => {
-                            resource::apply_cluster(cluster.clone(), evt).await?
+                            resource::apply_manifest(cluster.clone(), evt).await?
                         }
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;

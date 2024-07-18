@@ -44,7 +44,7 @@ pub async fn create_cache(cache: Arc<dyn ResourceDrivenCache>, evt: ResourceCrea
     Ok(())
 }
 
-pub async fn apply_cluster(
+pub async fn apply_manifest(
     cluster: Arc<dyn ResourceDrivenCluster>,
     evt: ResourceCreated,
 ) -> Result<()> {
@@ -238,13 +238,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_should_apply_cluster() {
+    async fn it_should_apply_manifest() {
         let mut cluster = MockFakeResourceDrivenCluster::new();
         cluster.expect_create().return_once(|_| Ok(()));
 
         let evt = ResourceCreated::default();
 
-        let result = apply_cluster(Arc::new(cluster), evt).await;
+        let result = apply_manifest(Arc::new(cluster), evt).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }
