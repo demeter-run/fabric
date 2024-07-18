@@ -7,12 +7,12 @@ use std::{borrow::Borrow, sync::Arc};
 use tracing::{error, info};
 
 use crate::{
-    domain::{events::Event, ports, projects},
+    domain::{event::Event, project, resource},
     driven::k8s::K8sCluster,
 };
 
 pub async fn subscribe(config: MonitorConfig) -> Result<()> {
-    let k8s_cluster = Arc::new(K8sCluster::new().await?);
+    let cluster = Arc::new(K8sCluster::new().await?);
 
     let topic = String::from("events");
 
@@ -30,12 +30,11 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
             Ok(message) => match message.borrow().try_into() {
                 Ok(event) => {
                     match event {
-                        Event::ProjectCreated(namespace) => {
-                            projects::create::create_resource(k8s_cluster.clone(), namespace)
-                                .await?;
+                        Event::ProjectCreated(evt) => {
+                            project::apply_cluster(cluster.clone(), evt).await?;
                         }
-                        Event::PortCreated(port) => {
-                            ports::create::create_resource(k8s_cluster.clone(), port).await?;
+                        Event::ResourceCreated(evt) => {
+                            resource::apply_cluster(cluster.clone(), evt).await?
                         }
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;

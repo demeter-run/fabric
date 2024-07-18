@@ -1,55 +1,50 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::domain::projects::{Project, ProjectCache, ProjectUser};
+use crate::domain::project::{ProjectCache, ProjectDrivenCache};
 
 use super::SqliteCache;
 
-pub struct SqliteProjectCache {
+pub struct SqliteProjectDrivenCache {
     sqlite: Arc<SqliteCache>,
 }
-impl SqliteProjectCache {
+impl SqliteProjectDrivenCache {
     pub fn new(sqlite: Arc<SqliteCache>) -> Self {
         Self { sqlite }
     }
 }
 #[async_trait::async_trait]
-impl ProjectCache for SqliteProjectCache {
-    async fn create(&self, project: &Project) -> Result<()> {
-        let mut tx = self.sqlite.db.begin().await?;
-
-        sqlx::query!(
-            r#"
-                INSERT INTO projects (id, namespace, name, created_by)
-                VALUES ($1, $2, $3, $4)
-            "#,
-            project.id,
-            project.namespace,
-            project.name,
-            project.created_by,
-        )
-        .execute(&mut *tx)
-        .await?;
-
-        sqlx::query!(
-            r#"
-                INSERT INTO projects_users (project_id, user_id)
-                VALUES ($1, $2)
-            "#,
-            project.id,
-            project.created_by,
-        )
-        .execute(&mut *tx)
-        .await?;
-
-        tx.commit().await?;
-
-        Ok(())
-    }
-    async fn find_by_id(&self, id: &str) -> Result<Option<Project>> {
+impl ProjectDrivenCache for SqliteProjectDrivenCache {
+    async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>> {
         let result = sqlx::query!(
             r#"
-                SELECT id, namespace, name, created_by 
+                SELECT id, namespace, name, owner 
+                FROM projects WHERE id = $1;
+            "#,
+            namespace
+        )
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        if result.is_none() {
+            return Ok(None);
+        }
+
+        let result = result.unwrap();
+
+        let project = ProjectCache {
+            id: result.id,
+            namespace: result.namespace,
+            name: result.name,
+            owner: result.owner,
+        };
+
+        Ok(Some(project))
+    }
+    async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>> {
+        let result = sqlx::query!(
+            r#"
+                SELECT id, namespace, name, owner 
                 FROM projects WHERE id = $1;
             "#,
             id
@@ -63,42 +58,45 @@ impl ProjectCache for SqliteProjectCache {
 
         let result = result.unwrap();
 
-        let project = Project {
+        let project = ProjectCache {
             id: result.id,
             namespace: result.namespace,
             name: result.name,
-            created_by: result.created_by,
+            owner: result.owner,
         };
 
         Ok(Some(project))
     }
-    async fn find_user_permission(
-        &self,
-        user_id: &str,
-        project_id: &str,
-    ) -> Result<Option<ProjectUser>> {
-        let result = sqlx::query!(
+
+    async fn create(&self, project: &ProjectCache) -> Result<()> {
+        let mut tx = self.sqlite.db.begin().await?;
+
+        sqlx::query!(
             r#"
-                SELECT user_id, project_id 
-                FROM projects_users WHERE user_id = $1 and project_id = $2;
+                INSERT INTO projects (id, namespace, name, owner)
+                VALUES ($1, $2, $3, $4)
             "#,
-            user_id,
-            project_id
+            project.id,
+            project.namespace,
+            project.name,
+            project.owner,
         )
-        .fetch_optional(&self.sqlite.db)
+        .execute(&mut *tx)
         .await?;
 
-        if result.is_none() {
-            return Ok(None);
-        }
+        sqlx::query!(
+            r#"
+                INSERT INTO projects_users (project_id, user_id)
+                VALUES ($1, $2)
+            "#,
+            project.id,
+            project.owner,
+        )
+        .execute(&mut *tx)
+        .await?;
 
-        let result = result.unwrap();
+        tx.commit().await?;
 
-        let project_user = ProjectUser {
-            user_id: result.user_id,
-            project_id: result.project_id,
-        };
-
-        Ok(Some(project_user))
+        Ok(())
     }
 }

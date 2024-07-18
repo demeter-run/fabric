@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n                SELECT id, namespace, name, created_by \n                FROM projects WHERE id = $1;\n            ",
+  "query": "\n                SELECT id, namespace, name, owner \n                FROM projects WHERE id = $1;\n            ",
   "describe": {
     "columns": [
       {
@@ -19,7 +19,7 @@
         "type_info": "Text"
       },
       {
-        "name": "created_by",
+        "name": "owner",
         "ordinal": 3,
         "type_info": "Text"
       }
@@ -34,5 +34,5 @@
       false
     ]
   },
-  "hash": "f182bf912af9418bd31bfbe5cb0e09a45c50026288104245a87a54e078756865"
+  "hash": "7d18dd6749851ae3baa5c666279b66df4bda82a19e03d6852235598da2402c92"
 }

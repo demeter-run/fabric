@@ -3,18 +3,18 @@ use std::sync::Arc;
 use tonic::{async_trait, Status};
 
 use crate::domain::{
-    events::EventBridge,
-    projects::{self, Project, ProjectCache},
-    users::Credential,
+    auth::Credential,
+    event::EventDrivenBridge,
+    project::{self, CreateProjectCmd, ProjectDrivenCache},
 };
 
 pub struct ProjectServiceImpl {
-    pub cache: Arc<dyn ProjectCache>,
-    pub event: Arc<dyn EventBridge>,
+    pub cache: Arc<dyn ProjectDrivenCache>,
+    pub event: Arc<dyn EventDrivenBridge>,
 }
 
 impl ProjectServiceImpl {
-    pub fn new(cache: Arc<dyn ProjectCache>, event: Arc<dyn EventBridge>) -> Self {
+    pub fn new(cache: Arc<dyn ProjectDrivenCache>, event: Arc<dyn EventDrivenBridge>) -> Self {
         Self { cache, event }
     }
 }
@@ -32,19 +32,19 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let req = request.into_inner();
 
-        let project = Project::new(req.name, credential.id);
-        let result =
-            projects::create::create(self.cache.clone(), self.event.clone(), project.clone()).await;
+        let cmd = CreateProjectCmd::new(credential, req.name);
 
+        let result = project::create(self.cache.clone(), self.event.clone(), cmd.clone()).await;
         if let Err(err) = result {
             return Err(Status::failed_precondition(err.to_string()));
         }
 
         let message = proto::CreateProjectResponse {
-            id: project.id,
-            name: project.name,
-            namespace: project.namespace,
+            id: cmd.id,
+            name: cmd.name,
+            namespace: cmd.namespace,
         };
+
         Ok(tonic::Response::new(message))
     }
 }

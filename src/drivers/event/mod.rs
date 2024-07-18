@@ -7,16 +7,18 @@ use std::{borrow::Borrow, path::Path, sync::Arc};
 use tracing::{error, info};
 
 use crate::{
-    domain::{events::Event, ports, projects},
-    driven::cache::{port::SqlitePortCache, project::SqliteProjectCache, SqliteCache},
+    domain::{event::Event, project, resource},
+    driven::cache::{
+        project::SqliteProjectDrivenCache, resource::SqliteResourceCache, SqliteCache,
+    },
 };
 
 pub async fn subscribe(config: EventConfig) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     sqlite_cache.migrate().await?;
 
-    let project_cache = Arc::new(SqliteProjectCache::new(sqlite_cache.clone()));
-    let port_cache = Arc::new(SqlitePortCache::new(sqlite_cache.clone()));
+    let project_cache = Arc::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+    let resource_cache = Arc::new(SqliteResourceCache::new(sqlite_cache.clone()));
 
     let topic = String::from("events");
 
@@ -34,11 +36,11 @@ pub async fn subscribe(config: EventConfig) -> Result<()> {
             Ok(message) => match message.borrow().try_into() {
                 Ok(event) => {
                     match event {
-                        Event::ProjectCreated(namespace) => {
-                            projects::create::create_cache(project_cache.clone(), namespace).await?
+                        Event::ProjectCreated(evt) => {
+                            project::create_cache(project_cache.clone(), evt).await?;
                         }
-                        Event::PortCreated(port) => {
-                            ports::create::create_cache(port_cache.clone(), port).await?
+                        Event::ResourceCreated(evt) => {
+                            resource::create_cache(resource_cache.clone(), evt).await?
                         }
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dmtri::demeter::ops::v1alpha::port_service_server::PortServiceServer;
+use dmtri::demeter::ops::v1alpha::resource_service_server::ResourceServiceServer;
 use middlewares::auth::AuthenticatorImpl;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -10,20 +10,19 @@ use tracing::info;
 use dmtri::demeter::ops::v1alpha::project_service_server::ProjectServiceServer;
 
 use crate::driven::auth::Auth0Provider;
-use crate::driven::cache::{project::SqliteProjectCache, SqliteCache};
+use crate::driven::cache::project::SqliteProjectDrivenCache;
+use crate::driven::cache::SqliteCache;
 use crate::driven::kafka::KafkaProducer;
 
 mod middlewares;
-mod port;
 mod project;
+mod resource;
 
 pub async fn server(config: GrpcConfig) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
-    let project_cache = Arc::new(SqliteProjectCache::new(sqlite_cache.clone()));
+    let project_cache = Arc::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
 
     let event_bridge = Arc::new(KafkaProducer::new(&config.brokers, "events")?);
-
-    let auth_provider = Arc::new(Auth0Provider::try_new(&config.auth_url).await?);
 
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(dmtri::demeter::ops::v1alpha::FILE_DESCRIPTOR_SET)
@@ -31,14 +30,15 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         .build()
         .unwrap();
 
-    let auth = AuthenticatorImpl::new(auth_provider.clone());
+    let auth = AuthenticatorImpl::new(Arc::new(Auth0Provider::try_new(&config.auth_url).await?));
 
     let project_inner =
         project::ProjectServiceImpl::new(project_cache.clone(), event_bridge.clone());
     let project_service = ProjectServiceServer::with_interceptor(project_inner, auth.clone());
 
-    let port_inner = port::PortServiceImpl::new(project_cache.clone(), event_bridge.clone());
-    let port_service = PortServiceServer::with_interceptor(port_inner, auth.clone());
+    let resource_inner =
+        resource::ResourceServiceImpl::new(project_cache.clone(), event_bridge.clone());
+    let resource_service = ResourceServiceServer::with_interceptor(resource_inner, auth.clone());
 
     let address = SocketAddr::from_str(&config.addr)?;
 
@@ -47,7 +47,7 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
     Server::builder()
         .add_service(reflection)
         .add_service(project_service)
-        .add_service(port_service)
+        .add_service(resource_service)
         .serve(address)
         .await?;
 

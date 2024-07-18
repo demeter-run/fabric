@@ -3,8 +3,6 @@ use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet};
 use jsonwebtoken::{decode, decode_header, DecodingKey, Validation};
 use serde::Deserialize;
 
-use crate::domain::users::AuthProvider;
-
 pub struct Auth0Provider {
     jwks: JwkSet,
 }
@@ -22,16 +20,8 @@ impl Auth0Provider {
 
         Ok(auth_provider)
     }
-}
 
-#[derive(Deserialize)]
-struct Claims {
-    sub: String,
-}
-
-#[async_trait::async_trait]
-impl AuthProvider for Auth0Provider {
-    fn verify(&self, token: &str) -> Result<String> {
+    pub fn verify(&self, token: &str) -> Result<String> {
         let header = decode_header(token)?;
 
         let Some(kid) = header.kid else {
@@ -57,4 +47,9 @@ impl AuthProvider for Auth0Provider {
 
         Ok(decoded_token.claims.sub)
     }
+}
+
+#[derive(Deserialize)]
+struct Claims {
+    sub: String,
 }

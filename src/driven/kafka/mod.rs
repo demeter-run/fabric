@@ -5,7 +5,7 @@ use rdkafka::{
 };
 use std::time::Duration;
 
-use crate::domain::events::{Event, EventBridge};
+use crate::domain::event::{Event, EventDrivenBridge};
 
 pub struct KafkaProducer {
     producer: FutureProducer,
@@ -24,7 +24,7 @@ impl KafkaProducer {
     }
 }
 #[async_trait::async_trait]
-impl EventBridge for KafkaProducer {
+impl EventDrivenBridge for KafkaProducer {
     async fn dispatch(&self, event: Event) -> Result<()> {
         let data = serde_json::to_vec(&event)?;
         let key = event.key();
