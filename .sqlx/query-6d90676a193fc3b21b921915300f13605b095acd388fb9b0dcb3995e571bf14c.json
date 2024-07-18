@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n                SELECT id, namespace, name, owner \n                FROM projects WHERE id = $1;\n            ",
+  "query": "\n                SELECT id, namespace, name, owner \n                FROM project WHERE id = $1;\n            ",
   "describe": {
     "columns": [
       {
@@ -34,5 +34,5 @@
       false
     ]
   },
-  "hash": "7d18dd6749851ae3baa5c666279b66df4bda82a19e03d6852235598da2402c92"
+  "hash": "6d90676a193fc3b21b921915300f13605b095acd388fb9b0dcb3995e571bf14c"
 }

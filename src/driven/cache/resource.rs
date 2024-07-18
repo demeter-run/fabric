@@ -18,7 +18,7 @@ impl ResourceDrivenCache for SqliteResourceCache {
     async fn create(&self, resource: &ResourceCache) -> Result<()> {
         sqlx::query!(
             r#"
-                INSERT INTO resources (id, project_id, kind, data)
+                INSERT INTO resource (id, project_id, kind, data)
                 VALUES ($1, $2, $3, $4)
             "#,
             resource.id,

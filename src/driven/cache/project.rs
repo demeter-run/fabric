@@ -19,7 +19,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         let result = sqlx::query!(
             r#"
                 SELECT id, namespace, name, owner 
-                FROM projects WHERE id = $1;
+                FROM project WHERE id = $1;
             "#,
             namespace
         )
@@ -45,7 +45,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         let result = sqlx::query!(
             r#"
                 SELECT id, namespace, name, owner 
-                FROM projects WHERE id = $1;
+                FROM project WHERE id = $1;
             "#,
             id
         )
@@ -73,7 +73,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         sqlx::query!(
             r#"
-                INSERT INTO projects (id, namespace, name, owner)
+                INSERT INTO project (id, namespace, name, owner)
                 VALUES ($1, $2, $3, $4)
             "#,
             project.id,
@@ -86,7 +86,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         sqlx::query!(
             r#"
-                INSERT INTO projects_users (project_id, user_id)
+                INSERT INTO project_user (project_id, user_id)
                 VALUES ($1, $2)
             "#,
             project.id,

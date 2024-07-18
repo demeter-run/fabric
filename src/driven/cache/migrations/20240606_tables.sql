@@ -1,21 +1,30 @@
-CREATE TABLE IF NOT EXISTS projects (
+CREATE TABLE IF NOT EXISTS project (
   id TEXT PRIMARY KEY NOT NULL,
   namespace TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   owner TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS resources (
+CREATE TABLE IF NOT EXISTS resource (
   id TEXT PRIMARY KEY NOT NULL,
   project_id TEXT NOT NULL,
   kind TEXT NOT NULL,
   data TEXT NOT NULL,
-  FOREIGN KEY(project_id) REFERENCES projects(id)
+  FOREIGN KEY(project_id) REFERENCES project(id)
 );
 
-CREATE TABLE IF NOT EXISTS projects_users (
+CREATE TABLE IF NOT EXISTS project_user (
   user_id TEXT NOT NULL,
   project_id TEXT NOT NULL,
   PRIMARY KEY (user_id, project_id),
-  FOREIGN KEY(project_id) REFERENCES projects(id)
-)
+  FOREIGN KEY(project_id) REFERENCES project(id)
+);
+
+CREATE TABLE IF NOT EXISTS project_key (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  digest BLOB NOT NULL,
+  salt BLOB NOT NULL,
+  FOREIGN KEY(project_id) REFERENCES project(id)
+);
