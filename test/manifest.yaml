@@ -103,8 +103,9 @@ roleRef:
 apiVersion: v1
 data:
   daemon.toml: |
-    brokers="redpanda.demeter-kafka.svc.cluster.local:19092"
-    consumer_name="demeter-daemon"
+    [kafka]
+    "bootstrap.servers" = "redpanda.demeter-kafka.svc.cluster.local:19092"
+    "group.id"= "demeter-daemon"
 kind: ConfigMap
 metadata:
   name: daemon-config
@@ -152,7 +153,13 @@ data:
   rpc.toml: |
     addr="0.0.0.0:80"
     db_path="test.db"
-    brokers="redpanda.demeter-kafka.svc.cluster.local:19092"
+
+    [kafka_producer]
+    "bootstrap.servers" = "redpanda.demeter-kafka.svc.cluster.local:19092"
+
+    [kafka_consumer]
+    "bootstrap.servers" = "redpanda.demeter-kafka.svc.cluster.local:19092"
+    "group.id"= "rpc"
 
     [auth]
     url="https://dev-dflg0ssi.us.auth0.com"

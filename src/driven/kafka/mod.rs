@@ -3,7 +3,7 @@ use rdkafka::{
     producer::{FutureProducer, FutureRecord},
     ClientConfig, Message,
 };
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use crate::domain::events::{Event, EventBridge};
 
@@ -12,10 +12,14 @@ pub struct KafkaProducer {
     topic: String,
 }
 impl KafkaProducer {
-    pub fn new(brokers: &str, topic: &str) -> Result<Self> {
-        let producer: FutureProducer = ClientConfig::new()
-            .set("bootstrap.servers", brokers)
-            .create()?;
+    pub fn new(topic: &str, properties: &HashMap<String, String>) -> Result<Self> {
+        let producer: FutureProducer = {
+            let mut client_config = ClientConfig::new();
+            for (k, v) in properties.iter() {
+                client_config.set(k, v);
+            }
+            client_config.create()?
+        };
 
         Ok(Self {
             producer,

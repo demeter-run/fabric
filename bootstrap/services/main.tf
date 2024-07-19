@@ -12,33 +12,6 @@ variable "dns_zone" {
   default = "demeter.run"
 }
 
-resource "kubernetes_service_v1" "fabric-queue-load-balancer" {
-  metadata {
-    namespace = var.namespace
-    name      = "fabric-queue-load-balancer"
-    annotations = {
-      "beta.kubernetes.io/aws-load-balancer-nlb-target-type" = "instance"
-      "service.beta.kubernetes.io/aws-load-balancer-scheme"  = "internet-facing"
-      "service.beta.kubernetes.io/aws-load-balancer-type"    = "external"
-    }
-  }
-
-  spec {
-    type                = "LoadBalancer"
-    load_balancer_class = "service.k8s.aws/nlb"
-
-    port {
-      protocol    = "TCP"
-      port        = 9092
-      target_port = 19092
-    }
-
-    selector = {
-      "role" = "fabric-queue-leader"
-    }
-  }
-}
-
 resource "kubernetes_ingress_v1" "fabric-rpc-ingress" {
   wait_for_load_balancer = true
   metadata {
