@@ -2,7 +2,7 @@
 "bootstrap.servers" = "${broker_urls}"
 "group.id"= "${consumer_name}"
 
-"security.protocol" = "SASL_PLAINTEXT"
+"security.protocol" = "SASL_SSL"
 "sasl.mechanisms" = "SCRAM-SHA-256"
 "sasl.username" = "${kafka_username}"
 "sasl.password" = "${kafka_password}"
