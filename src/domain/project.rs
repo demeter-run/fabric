@@ -10,7 +10,7 @@ use rand::{
 };
 use rdkafka::message::ToBytes;
 use std::sync::Arc;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use uuid::Uuid;
 
 use super::{
@@ -120,12 +120,12 @@ pub async fn verify_secret(
     key: &str,
 ) -> Result<ProjectSecretCache> {
     let (hrp, key) = bech32::decode(key).map_err(|error| {
-        warn!(?error, "invalid bech32");
+        error!(?error, "invalid bech32");
         Error::msg("invalid bech32")
     })?;
 
     if !hrp.to_string().eq("dmtr_apikey") {
-        warn!(?hrp, "invalid bech32 hrp");
+        error!(?hrp, "invalid bech32 hrp");
         bail!("invalid project secret")
     }
 
