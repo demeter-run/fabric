@@ -14,7 +14,7 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use super::{
-    auth::Credential,
+    auth::{Credential, UserId},
     event::{EventDrivenBridge, ProjectCreated, ProjectSecretCreated},
 };
 
@@ -23,17 +23,17 @@ pub async fn create(
     event: Arc<dyn EventDrivenBridge>,
     cmd: CreateProjectCmd,
 ) -> Result<()> {
+    let user_id = assert_permission(cmd.credential)?;
+
     if cache.find_by_namespace(&cmd.namespace).await?.is_some() {
         bail!("invalid project namespace")
     }
-
-    let owner = String::new();
 
     let evt = ProjectCreated {
         id: cmd.id,
         namespace: cmd.namespace.clone(),
         name: cmd.name,
-        owner,
+        owner: user_id,
     };
 
     event.dispatch(evt.into()).await?;
@@ -77,7 +77,7 @@ pub async fn create_secret(
     event: Arc<dyn EventDrivenBridge>,
     cmd: CreateProjectSecretCmd,
 ) -> Result<String> {
-    // TODO validate credential
+    assert_permission(cmd.credential)?;
 
     let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
         bail!("project doesnt exist")
@@ -113,7 +113,6 @@ pub async fn create_secret_cache(
 
     Ok(())
 }
-
 pub async fn verify_secret(
     cache: Arc<dyn ProjectDrivenCache>,
     project_id: &str,
@@ -146,6 +145,13 @@ pub async fn verify_secret(
     };
 
     Ok(secret)
+}
+
+fn assert_permission(credential: Credential) -> Result<UserId> {
+    match credential {
+        Credential::Auth0(user_id) => Ok(user_id),
+        Credential::ApiKey(_) => bail!("rpc doesnt support api-key"),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -211,6 +217,7 @@ impl CreateProjectSecretCmd {
     }
 }
 
+#[derive(Debug)]
 pub struct ProjectSecretCache {
     pub id: String,
     pub project_id: String,
@@ -315,6 +322,42 @@ mod tests {
         }
     }
 
+    const KEY: &str = "dmtr_apikey12e8hvc63gfp8jutwv3t4z6jy2gr8lswa";
+    const PHC: &str = "$argon2id$v=19$m=19456,t=2,p=1$L3YdRbmEOXUg66MZF9McXQ$h4LohO/+Zvo6xRhcomO7KuIjrM9pAlHeQU9ZwEYMwnM";
+    const INVALID_KEY: &str = "dmtr_apikey1xe6xzcjxv9nhycnz2ffnq6m02y7nat9e";
+    const INVALID_HRP_KEY: &str = "mykey1x9zk7c60wfj8xv6929ykynmnwseehq78";
+
+    impl Default for CreateProjectSecretCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                name: "Key 1".into(),
+            }
+        }
+    }
+    impl Default for ProjectSecretCache {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                name: "Key 1".into(),
+                phc: PHC.into(),
+            }
+        }
+    }
+    impl Default for ProjectSecretCreated {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                name: "Key 1".into(),
+                phc: PHC.into(),
+            }
+        }
+    }
+
     #[tokio::test]
     async fn it_should_create_project() {
         let mut cache = MockFakeProjectDrivenCache::new();
@@ -330,9 +373,8 @@ mod tests {
             unreachable!("{err}")
         }
     }
-
     #[tokio::test]
-    async fn it_should_fail_when_project_namespace_exists() {
+    async fn it_should_fail_create_project_when_namespace_exists() {
         let mut cache = MockFakeProjectDrivenCache::new();
         cache
             .expect_find_by_namespace()
@@ -344,24 +386,153 @@ mod tests {
 
         let result = create(Arc::new(cache), Arc::new(event), cmd).await;
         if result.is_ok() {
-            unreachable!("Fail to validate when the namespace is duplicated")
+            unreachable!("Fail to validate create project when the namespace already exists")
         }
     }
+    #[tokio::test]
+    async fn it_should_fail_create_project_when_invalid_permission() {
+        let cache = MockFakeProjectDrivenCache::new();
+        let event = MockFakeEventDrivenBridge::new();
 
+        let cmd = CreateProjectCmd {
+            credential: Credential::ApiKey("xxxx".into()),
+            ..Default::default()
+        };
+
+        let result = create(Arc::new(cache), Arc::new(event), cmd).await;
+        if result.is_ok() {
+            unreachable!("Fail to validate create project when invalid permission")
+        }
+    }
     #[tokio::test]
     async fn it_should_create_project_cache() {
         let mut cache = MockFakeProjectDrivenCache::new();
         cache.expect_create().return_once(|_| Ok(()));
 
-        let project = ProjectCreated::default();
+        let evt = ProjectCreated::default();
 
-        let result = create_cache(Arc::new(cache), project).await;
+        let result = create_cache(Arc::new(cache), evt).await;
+        if let Err(err) = result {
+            unreachable!("{err}")
+        }
+    }
+
+    #[tokio::test]
+    async fn it_should_create_project_secret() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(ProjectCache::default())));
+
+        let mut event = MockFakeEventDrivenBridge::new();
+        event.expect_dispatch().return_once(|_| Ok(()));
+
+        let cmd = CreateProjectSecretCmd::default();
+
+        let result = create_secret(Arc::new(cache), Arc::new(event), cmd).await;
         if let Err(err) = result {
             unreachable!("{err}")
         }
     }
     #[tokio::test]
-    async fn it_should_apply_project_cluster() {
+    async fn it_should_fail_create_project_secret_when_project_doesnt_exists() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache.expect_find_by_id().return_once(|_| Ok(None));
+
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = CreateProjectSecretCmd::default();
+
+        let result = create_secret(Arc::new(cache), Arc::new(event), cmd).await;
+        if result.is_ok() {
+            unreachable!("Fail to validate create secret when project doesnt exist")
+        }
+    }
+    #[tokio::test]
+    async fn it_should_fail_create_project_secret_when_invalid_permission() {
+        let cache = MockFakeProjectDrivenCache::new();
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = CreateProjectSecretCmd {
+            credential: Credential::ApiKey("xxxx".into()),
+            ..Default::default()
+        };
+
+        let result = create_secret(Arc::new(cache), Arc::new(event), cmd).await;
+        if result.is_ok() {
+            unreachable!("Fail to validate create secret when invalid permission")
+        }
+    }
+    #[tokio::test]
+    async fn it_should_create_project_secret_cache() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache.expect_create_secret().return_once(|_| Ok(()));
+
+        let evt = ProjectSecretCreated::default();
+
+        let result = create_secret_cache(Arc::new(cache), evt).await;
+        if let Err(err) = result {
+            unreachable!("{err}")
+        }
+    }
+
+    #[tokio::test]
+    async fn it_should_verify_secret() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_secret_by_project_id()
+            .return_once(|_| Ok(vec![ProjectSecretCache::default()]));
+
+        let result = verify_secret(Arc::new(cache), Default::default(), KEY).await;
+        if let Err(err) = result {
+            unreachable!("{err}")
+        }
+    }
+    #[tokio::test]
+    async fn it_should_fail_verify_secret_when_invalid_key() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_secret_by_project_id()
+            .return_once(|_| Ok(vec![ProjectSecretCache::default()]));
+
+        let result = verify_secret(Arc::new(cache), Default::default(), INVALID_KEY).await;
+        if result.is_ok() {
+            unreachable!("Fail to validate verify secret when invalid key");
+        }
+    }
+    #[tokio::test]
+    async fn it_should_fail_verify_secret_when_invalid_bech32() {
+        let cache = MockFakeProjectDrivenCache::new();
+
+        let result = verify_secret(Arc::new(cache), Default::default(), "invalid bech32").await;
+        if result.is_ok() {
+            unreachable!("Fail to validate verify secret when invalid bech32");
+        }
+    }
+    #[tokio::test]
+    async fn it_should_fail_verify_secret_when_invalid_bech32_hrp() {
+        let cache = MockFakeProjectDrivenCache::new();
+
+        let result = verify_secret(Arc::new(cache), Default::default(), INVALID_HRP_KEY).await;
+        if result.is_ok() {
+            unreachable!("Fail to validate verify secret when invalid bech32 hrp");
+        }
+    }
+    #[tokio::test]
+    async fn it_should_fail_verify_secret_when_there_arent_secrets_storaged() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_secret_by_project_id()
+            .return_once(|_| Ok(vec![]));
+
+        let result = verify_secret(Arc::new(cache), Default::default(), KEY).await;
+        if result.is_ok() {
+            unreachable!("Fail to validate verify secret when there arent secrets storaged");
+        }
+    }
+
+    #[tokio::test]
+    async fn it_should_apply_manifest() {
         let mut cluster = MockFakeProjectDrivenCluster::new();
         cluster.expect_create().return_once(|_| Ok(()));
         cluster.expect_find_by_name().return_once(|_| Ok(None));
@@ -373,9 +544,8 @@ mod tests {
             unreachable!("{err}")
         }
     }
-
     #[tokio::test]
-    async fn it_should_fail_when_project_resource_exists() {
+    async fn it_should_fail_apply_manifest_when_resource_exists() {
         let mut cluster = MockFakeProjectDrivenCluster::new();
         cluster.expect_create().return_once(|_| Ok(()));
         cluster
@@ -386,7 +556,7 @@ mod tests {
 
         let result = apply_manifest(Arc::new(cluster), project).await;
         if result.is_ok() {
-            unreachable!("Fail to validate when the namespace alread exists")
+            unreachable!("Fail to validate apply manifest when resource exists");
         }
     }
 }
