@@ -5,7 +5,14 @@ resource "helm_release" "redpanda" {
   version          = "5.7.35"
   create_namespace = false
   namespace        = var.namespace
-  values           = [templatefile("${path.module}/values.yml.tftpl", { users = var.users })]
+  values = [templatefile(
+    "${path.module}/values.yml.tftpl",
+    {
+      users          = var.users,
+      admin_username = var.admin_username,
+      admin_password = var.admin_password
+    }
+  )]
 
   set {
     name  = "nameOverride"

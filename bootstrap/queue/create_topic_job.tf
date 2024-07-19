@@ -1,8 +1,5 @@
 locals {
   create_topic_job_name = "fabric-queue-create-topic"
-  brokers = join(",", [
-    for i in range(1, var.replicas) : "redpanda-${i}.${var.external_domain}:31092"
-  ])
 }
 
 resource "kubernetes_job_v1" "fabric_queue_create_topic" {
@@ -29,16 +26,30 @@ resource "kubernetes_job_v1" "fabric_queue_create_topic" {
           image = "docker.redpanda.com/redpandadata/redpanda:v23.3.18"
           command = [
             "rpk",
-            "-X",
-            "brokers=${local.brokers}",
-            "topic",
-            "create",
-            "events",
-            "-r", "3",
+            "-X", "sasl.mechanism=SCRAM-SHA-256",
+            "-X", "user=${var.admin_username}",
+            "-X", "pass=${var.admin_password}",
+            "topic", "create", "events",
+            "-r", "${var.replicas}",
             "-c", "cleanup.policy=compact",
             "-c", "retention.ms=-1",
           ]
           image_pull_policy = "Always"
+
+          volume_mount {
+            name       = "redpanda-default-cert"
+            mount_path = "/etc/tls/certs/default"
+          }
+
+          volume_mount {
+            name       = "redpanda-external-cert"
+            mount_path = "/etc/tls/certs/external"
+          }
+
+          volume_mount {
+            name       = "config"
+            mount_path = "/etc/redpanda"
+          }
 
           resources {
             limits = {
@@ -49,6 +60,27 @@ resource "kubernetes_job_v1" "fabric_queue_create_topic" {
               cpu    = "500m"
               memory = "512Mi"
             }
+          }
+        }
+
+        volume {
+          name = "redpanda-default-cert"
+          secret {
+            secret_name = "redpanda-default-cert"
+          }
+        }
+
+        volume {
+          name = "redpanda-external-cert"
+          secret {
+            secret_name = "redpanda-external-cert"
+          }
+        }
+
+        volume {
+          name = "config"
+          config_map {
+            name = "redpanda"
           }
         }
 

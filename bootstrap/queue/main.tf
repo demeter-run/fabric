@@ -6,6 +6,14 @@ variable "instance_name" {
   type = string
 }
 
+variable "admin_username" {
+  type = string
+}
+
+variable "admin_password" {
+  type = string
+}
+
 variable "users" {
   type = list(object({
     name     = string
