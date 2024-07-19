@@ -25,7 +25,7 @@ k8s-openapi = { version = "0.22.0", features = ["latest"] }
 kube = { version = "0.92.0", features = ["client"] }
 protoc-wkt = "1.0.0"
 config = { version = "0.14.0", features = ["toml"] }
-rdkafka = "0.36.2"
+rdkafka = { version = "0.36.2", features = ["sasl"] }
 uuid = { version = "1.10.0", features = ["v4"] }
 reqwest = { version = "0.12.5", features = ["json", "rustls-tls-webpki-roots"] }
 jsonwebtoken = "9.3.0"

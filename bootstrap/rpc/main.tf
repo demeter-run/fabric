@@ -16,6 +16,18 @@ variable "broker_urls" {
   description = "Comma separated values of the queue broker urls."
 }
 
+variable "consumer_name" {
+  type = string
+}
+
+variable "kafka_username" {
+  type = string
+}
+
+variable "kafka_password" {
+  type = string
+}
+
 variable "replicas" {
   type    = number
   default = 1

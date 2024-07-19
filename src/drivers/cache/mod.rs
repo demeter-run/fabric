@@ -3,7 +3,7 @@ use rdkafka::{
     consumer::{CommitMode, Consumer, StreamConsumer},
     ClientConfig,
 };
-use std::{borrow::Borrow, path::Path, sync::Arc};
+use std::{borrow::Borrow, collections::HashMap, path::Path, sync::Arc};
 use tracing::{error, info};
 
 use crate::{
@@ -22,11 +22,11 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
 
     let topic = String::from("events");
 
-    let consumer: StreamConsumer = ClientConfig::new()
-        .set("bootstrap.servers", &config.brokers)
-        .set("group.id", "cache")
-        .create()?;
-
+    let mut client_config = ClientConfig::new();
+    for (k, v) in config.kafka.iter() {
+        client_config.set(k, v);
+    }
+    let consumer: StreamConsumer = client_config.create()?;
     consumer.subscribe(&[&topic])?;
 
     info!("Subscriber running");
@@ -59,5 +59,5 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
 
 pub struct CacheConfig {
     pub db_path: String,
-    pub brokers: String,
+    pub kafka: HashMap<String, String>,
 }
