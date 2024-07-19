@@ -1,15 +1,16 @@
 use anyhow::{bail, Error, Result};
-use argon2::Argon2;
+use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use bech32::{Bech32m, Hrp};
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{api::ObjectMeta, ResourceExt};
 use rand::{
     distributions::{Alphanumeric, DistString},
+    rngs::OsRng,
     Rng,
 };
 use rdkafka::message::ToBytes;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use super::{
@@ -83,12 +84,10 @@ pub async fn create_secret(
     };
 
     let key = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
-    let salt = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
-
-    let mut digest = vec![0; 16];
+    let salt_string = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
-    argon2
-        .hash_password_into(key.to_bytes(), salt.to_bytes(), &mut digest)
+    let password_hash = argon2
+        .hash_password(key.to_bytes(), salt_string.as_salt())
         .map_err(|err| Error::msg(err.to_string()))?;
 
     let hrp = Hrp::parse("dmtr_apikey")?;
@@ -98,8 +97,7 @@ pub async fn create_secret(
         id: cmd.id,
         project_id: project.id,
         name: cmd.name,
-        salt: salt.to_bytes().into(),
-        digest,
+        phc: password_hash.to_string(),
     };
 
     event.dispatch(evt.into()).await?;
@@ -114,6 +112,41 @@ pub async fn create_secret_cache(
     cache.create_secret(&evt.into()).await?;
 
     Ok(())
+}
+
+pub async fn verify_secret(
+    cache: Arc<dyn ProjectDrivenCache>,
+    project_id: &str,
+    key: &str,
+) -> Result<ProjectSecretCache> {
+    let (hrp, key) = bech32::decode(key).map_err(|error| {
+        warn!(?error, "invalid bech32");
+        Error::msg("invalid bech32")
+    })?;
+
+    if !hrp.to_string().eq("dmtr_apikey") {
+        warn!(?hrp, "invalid bech32 hrp");
+        bail!("invalid project secret")
+    }
+
+    let secrets = cache.find_secret_by_project_id(project_id).await?;
+
+    let argon2 = Argon2::default();
+    let secret = secrets.into_iter().find(|secret| {
+        dbg!("-->");
+        let Ok(password_hash) = PasswordHash::new(&secret.phc) else {
+            error!(project_id, secret_id = secret.id, "error to decode phc");
+            return false;
+        };
+
+        argon2.verify_password(&key, &password_hash).is_ok()
+    });
+
+    let Some(secret) = secret else {
+        bail!("invalid project secret");
+    };
+
+    Ok(secret)
 }
 
 #[derive(Debug, Clone)]
@@ -183,8 +216,7 @@ pub struct ProjectSecretCache {
     pub id: String,
     pub project_id: String,
     pub name: String,
-    pub digest: Vec<u8>,
-    pub salt: Vec<u8>,
+    pub phc: String,
 }
 impl From<ProjectSecretCreated> for ProjectSecretCache {
     fn from(value: ProjectSecretCreated) -> Self {
@@ -192,8 +224,7 @@ impl From<ProjectSecretCreated> for ProjectSecretCache {
             id: value.id,
             project_id: value.project_id,
             name: value.name,
-            digest: value.digest,
-            salt: value.salt,
+            phc: value.phc,
         }
     }
 }
@@ -204,6 +235,7 @@ pub trait ProjectDrivenCache: Send + Sync {
     async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
     async fn create(&self, project: &ProjectCache) -> Result<()>;
     async fn create_secret(&self, secret: &ProjectSecretCache) -> Result<()>;
+    async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecretCache>>;
 }
 
 #[async_trait::async_trait]
@@ -230,6 +262,7 @@ mod tests {
             async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
             async fn create(&self, project: &ProjectCache) -> Result<()>;
             async fn create_secret(&self, secret: &ProjectSecretCache) -> Result<()>;
+            async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecretCache>>;
         }
     }
 

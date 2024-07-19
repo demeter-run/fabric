@@ -140,6 +140,7 @@ mod tests {
             async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
             async fn create(&self, project: &ProjectCache) -> Result<()>;
             async fn create_secret(&self, secret: &ProjectSecretCache) -> Result<()>;
+            async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecretCache>>;
         }
     }
 

@@ -30,7 +30,10 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         .build()
         .unwrap();
 
-    let auth = AuthenticatorImpl::new(Arc::new(Auth0Provider::try_new(&config.auth_url).await?));
+    let auth = AuthenticatorImpl::new(
+        Arc::new(Auth0Provider::try_new(&config.auth_url).await?),
+        project_cache.clone(),
+    );
 
     let project_inner =
         project::ProjectServiceImpl::new(project_cache.clone(), event_bridge.clone());

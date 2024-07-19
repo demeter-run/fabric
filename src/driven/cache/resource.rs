@@ -1,4 +1,5 @@
 use anyhow::Result;
+use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
 use crate::domain::resource::{ResourceCache, ResourceDrivenCache};
@@ -30,5 +31,16 @@ impl ResourceDrivenCache for SqliteResourceCache {
         .await?;
 
         Ok(())
+    }
+}
+
+impl FromRow<'_, SqliteRow> for ResourceCache {
+    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            project_id: row.try_get("project_id")?,
+            kind: row.try_get("kind")?,
+            data: row.try_get("data")?,
+        })
     }
 }

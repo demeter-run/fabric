@@ -26,7 +26,7 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
     info!("Subscriber running");
     loop {
         match consumer.recv().await {
-            Err(err) => error!(error = err.to_string(), "kafka subscribe error"),
+            Err(error) => error!(?error, "kafka subscribe error"),
             Ok(message) => match message.borrow().try_into() {
                 Ok(event) => {
                     match event {
@@ -42,8 +42,8 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }
-                Err(err) => {
-                    error!(error = err.to_string(), "fail to convert message to event");
+                Err(error) => {
+                    error!(?error, "fail to convert message to event");
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }
             },
