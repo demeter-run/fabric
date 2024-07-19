@@ -16,12 +16,18 @@ tolerations:
 # https://docs.redpanda.com/docs/manage/kubernetes/security/sasl-kubernetes/
 auth:
   sasl:
-    enabled: false
+    enabled: true
+    secretRef: redpanda-superusers
+    users:
+      %{ for user in users }
+      - name: ${user.name}
+        password: ${user.password}
+      %{ endfor }
 
 # -- TLS settings.
 # https://docs.redpanda.com/docs/manage/kubernetes/security/kubernetes-tls/
 tls:
-  enabled: true
+  enabled: false
   certs:
     default:
       caEnabled: true
@@ -30,11 +36,18 @@ tls:
 
 # -- External access settings.
 # https://docs.redpanda.com/docs/manage/kubernetes/networking/networking-and-connectivity/
+# external:
+#   service:
+#     enabled: true
+#   enabled: true
+#   type: NodePort
+
 external:
-  service:
-    enabled: true
   enabled: true
-  type: NodePort
+  domain: stg-fabric-queue.demeter.run
+  type: LoadBalancer
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
 
 # -- Log-level settings.
 logging:
@@ -52,9 +65,9 @@ monitoring:
 storage:
   persistentVolume:
     enabled: true
+    storageClass: "gp3"
 
 statefulset:
-  replicas: 3
   updateStrategy:
     type: RollingUpdate
   budget:

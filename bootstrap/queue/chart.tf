@@ -1,10 +1,11 @@
 resource "helm_release" "redpanda" {
   name             = "redpanda"
   repository       = "https://charts.redpanda.com"
-  chart            = "redpanda/redpanda"
+  chart            = "redpanda"
+  version          = "5.7.35"
   create_namespace = false
   namespace        = var.namespace
-  values           = [file("${path.module}/values.yaml")]
+  values           = [templatefile("${path.module}/values.yaml.tftpl", { users = var.users })]
 
   set {
     name  = "nameOverride"
@@ -34,5 +35,10 @@ resource "helm_release" "redpanda" {
   set {
     name  = "statefulset.replicas"
     value = var.replicas
+  }
+
+  set {
+    name  = "external.domain"
+    value = var.external_domain
   }
 }

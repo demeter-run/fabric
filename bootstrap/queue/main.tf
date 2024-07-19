@@ -17,6 +17,17 @@ variable "instance_name" {
   type = string
 }
 
+variable "users" {
+  type = list(object({
+    name     = string
+    password = string
+  }))
+}
+
+variable "external_domain" {
+  type = string
+}
+
 variable "image_repository" {
   type    = string
   default = "docker.redpanda.com/redpandadata/redpanda"
