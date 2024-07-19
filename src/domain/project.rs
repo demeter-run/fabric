@@ -133,7 +133,6 @@ pub async fn verify_secret(
 
     let argon2 = Argon2::default();
     let secret = secrets.into_iter().find(|secret| {
-        dbg!("-->");
         let Ok(password_hash) = PasswordHash::new(&secret.phc) else {
             error!(project_id, secret_id = secret.id, "error to decode phc");
             return false;
