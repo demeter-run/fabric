@@ -1,3 +1,22 @@
 addr="0.0.0.0:${port}"
 db_path="${db_path}"
 brokers="${broker_urls}"
+
+[auth]
+url = "https://txpipe.us.auth0.com"
+
+[kafka_producer]
+"bootstrap.servers" = "${broker_urls}"
+"security.protocol" = "SASL_PLAINTEXT"
+"sasl.mechanisms" = "SCRAM-SHA-256"
+"sasl.username" = "${kafka_username}"
+"sasl.password" = "${kafka_password}"
+
+[kafka_consumer]
+"bootstrap.servers" = "${broker_urls}"
+"group.id"= "${consumer_name}"
+"auto.offset.reset" = "earliest"
+"security.protocol" = "SASL_PLAINTEXT"
+"sasl.mechanisms" = "SCRAM-SHA-256"
+"sasl.username" = "${kafka_username}"
+"sasl.password" = "${kafka_password}"

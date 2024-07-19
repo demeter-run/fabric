@@ -1,6 +1,7 @@
 use anyhow::Result;
 use dmtri::demeter::ops::v1alpha::port_service_server::PortServiceServer;
 use middlewares::auth::AuthenticatorImpl;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::{path::Path, sync::Arc};
@@ -21,7 +22,7 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     let project_cache = Arc::new(SqliteProjectCache::new(sqlite_cache.clone()));
 
-    let event_bridge = Arc::new(KafkaProducer::new(&config.brokers, "events")?);
+    let event_bridge = Arc::new(KafkaProducer::new("events", &config.kafka)?);
 
     let auth_provider = Arc::new(Auth0Provider::try_new(&config.auth_url).await?);
 
@@ -57,6 +58,6 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
 pub struct GrpcConfig {
     pub addr: String,
     pub db_path: String,
-    pub brokers: String,
     pub auth_url: String,
+    pub kafka: HashMap<String, String>,
 }

@@ -1,4 +1,4 @@
-use std::env;
+use std::{collections::HashMap, env};
 
 use anyhow::Result;
 use dotenv::dotenv;
@@ -28,8 +28,7 @@ async fn main() -> Result<()> {
 
 #[derive(Debug, Deserialize)]
 struct Config {
-    brokers: String,
-    consumer_name: String,
+    kafka: HashMap<String, String>,
 }
 impl Config {
     pub fn new() -> Result<Self> {
@@ -48,9 +47,6 @@ impl Config {
 
 impl From<Config> for MonitorConfig {
     fn from(value: Config) -> Self {
-        Self {
-            brokers: value.brokers,
-            consumer_name: value.consumer_name,
-        }
+        Self { kafka: value.kafka }
     }
 }
