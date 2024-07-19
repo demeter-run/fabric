@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS project_user (
   FOREIGN KEY(project_id) REFERENCES project(id)
 );
 
-CREATE TABLE IF NOT EXISTS project_key (
+CREATE TABLE IF NOT EXISTS project_secret (
   id TEXT PRIMARY KEY NOT NULL,
   project_id TEXT NOT NULL,
   name TEXT NOT NULL,

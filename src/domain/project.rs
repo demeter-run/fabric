@@ -1,15 +1,20 @@
-use std::sync::Arc;
-
-use anyhow::{bail, Result};
+use anyhow::{bail, Error, Result};
+use argon2::Argon2;
+use bech32::{Bech32m, Hrp};
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{api::ObjectMeta, ResourceExt};
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{
+    distributions::{Alphanumeric, DistString},
+    Rng,
+};
+use rdkafka::message::ToBytes;
+use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
 
 use super::{
     auth::Credential,
-    event::{EventDrivenBridge, ProjectCreated},
+    event::{EventDrivenBridge, ProjectCreated, ProjectSecretCreated},
 };
 
 pub async fn create(
@@ -66,6 +71,51 @@ pub async fn apply_manifest(
     Ok(())
 }
 
+pub async fn create_secret(
+    cache: Arc<dyn ProjectDrivenCache>,
+    event: Arc<dyn EventDrivenBridge>,
+    cmd: CreateProjectSecretCmd,
+) -> Result<String> {
+    // TODO validate credential
+
+    let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
+        bail!("project doesnt exist")
+    };
+
+    let key = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
+    let salt = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+
+    let mut digest = vec![0; 16];
+    let argon2 = Argon2::default();
+    argon2
+        .hash_password_into(key.to_bytes(), salt.to_bytes(), &mut digest)
+        .map_err(|err| Error::msg(err.to_string()))?;
+
+    let hrp = Hrp::parse("dmtr_apikey")?;
+    let key = bech32::encode::<Bech32m>(hrp, key.to_bytes())?;
+
+    let evt = ProjectSecretCreated {
+        id: cmd.id,
+        project_id: project.id,
+        name: cmd.name,
+        salt: salt.to_bytes().into(),
+        digest,
+    };
+
+    event.dispatch(evt.into()).await?;
+    info!("new project secret created");
+
+    Ok(key)
+}
+pub async fn create_secret_cache(
+    cache: Arc<dyn ProjectDrivenCache>,
+    evt: ProjectSecretCreated,
+) -> Result<()> {
+    cache.create_secret(&evt.into()).await?;
+
+    Ok(())
+}
+
 #[derive(Debug, Clone)]
 pub struct CreateProjectCmd {
     pub credential: Credential,
@@ -109,11 +159,51 @@ impl From<ProjectCreated> for ProjectCache {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct CreateProjectSecretCmd {
+    pub credential: Credential,
+    pub id: String,
+    pub project_id: String,
+    pub name: String,
+}
+impl CreateProjectSecretCmd {
+    pub fn new(credential: Credential, project_id: String, name: String) -> Self {
+        let id = Uuid::new_v4().to_string();
+
+        Self {
+            credential,
+            id,
+            project_id,
+            name,
+        }
+    }
+}
+
+pub struct ProjectSecretCache {
+    pub id: String,
+    pub project_id: String,
+    pub name: String,
+    pub digest: Vec<u8>,
+    pub salt: Vec<u8>,
+}
+impl From<ProjectSecretCreated> for ProjectSecretCache {
+    fn from(value: ProjectSecretCreated) -> Self {
+        Self {
+            id: value.id,
+            project_id: value.project_id,
+            name: value.name,
+            digest: value.digest,
+            salt: value.salt,
+        }
+    }
+}
+
 #[async_trait::async_trait]
 pub trait ProjectDrivenCache: Send + Sync {
     async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>>;
     async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
     async fn create(&self, project: &ProjectCache) -> Result<()>;
+    async fn create_secret(&self, secret: &ProjectSecretCache) -> Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -139,6 +229,7 @@ mod tests {
             async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
             async fn create(&self, project: &ProjectCache) -> Result<()>;
+            async fn create_secret(&self, secret: &ProjectSecretCache) -> Result<()>;
         }
     }
 

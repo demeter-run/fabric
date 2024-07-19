@@ -31,22 +31,36 @@ pub struct ResourceCreated {
 into_event!(ResourceCreated);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectSecretCreated {
+    pub id: String,
+    pub project_id: String,
+    pub name: String,
+    pub digest: Vec<u8>,
+    pub salt: Vec<u8>,
+}
+into_event!(ProjectSecretCreated);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
+#[allow(clippy::enum_variant_names)]
 pub enum Event {
     ProjectCreated(ProjectCreated),
     ResourceCreated(ResourceCreated),
+    ProjectSecretCreated(ProjectSecretCreated),
 }
 impl Event {
     pub fn key(&self) -> String {
         match self {
             Event::ProjectCreated(_) => "ProjectCreated".into(),
             Event::ResourceCreated(_) => "ResourceCreated".into(),
+            Event::ProjectSecretCreated(_) => "ProjectSecretCreated".into(),
         }
     }
     pub fn from_key(key: &str, payload: &[u8]) -> Result<Self> {
         let event = match key {
             "ProjectCreated" => Self::ProjectCreated(serde_json::from_slice(payload)?),
             "ResourceCreated" => Self::ResourceCreated(serde_json::from_slice(payload)?),
+            "ProjectSecretCreated" => Self::ProjectSecretCreated(serde_json::from_slice(payload)?),
             _ => bail!("Event key not implemented"),
         };
         Ok(event)

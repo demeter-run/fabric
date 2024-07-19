@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                INSERT INTO project_secret (id, project_id, name, digest, salt)\n                VALUES ($1, $2, $3, $4, $5)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "616a0ca604be0e3a257568a086de8108d4f6eb53160ec6a56de7c7eb5d9d4637"
+}

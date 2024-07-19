@@ -36,6 +36,9 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
                         Event::ResourceCreated(evt) => {
                             resource::apply_manifest(cluster.clone(), evt).await?
                         }
+                        _ => {
+                            info!(event = event.key(), "bypass event")
+                        }
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }

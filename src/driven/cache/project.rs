@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 
-use crate::domain::project::{ProjectCache, ProjectDrivenCache};
+use crate::domain::project::{ProjectCache, ProjectDrivenCache, ProjectSecretCache};
 
 use super::SqliteCache;
 
@@ -96,6 +96,23 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         .await?;
 
         tx.commit().await?;
+
+        Ok(())
+    }
+    async fn create_secret(&self, secret: &ProjectSecretCache) -> Result<()> {
+        sqlx::query!(
+            r#"
+                INSERT INTO project_secret (id, project_id, name, digest, salt)
+                VALUES ($1, $2, $3, $4, $5)
+            "#,
+            secret.id,
+            secret.project_id,
+            secret.name,
+            secret.digest,
+            secret.salt,
+        )
+        .execute(&self.sqlite.db)
+        .await?;
 
         Ok(())
     }

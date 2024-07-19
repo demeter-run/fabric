@@ -127,7 +127,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::domain::event::Event;
-    use crate::domain::project::ProjectCache;
+    use crate::domain::project::{ProjectCache, ProjectSecretCache};
 
     use super::*;
 
@@ -139,6 +139,7 @@ mod tests {
             async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
             async fn create(&self, project: &ProjectCache) -> Result<()>;
+            async fn create_secret(&self, secret: &ProjectSecretCache) -> Result<()>;
         }
     }
 

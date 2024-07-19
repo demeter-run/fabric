@@ -14,7 +14,7 @@ impl AuthenticatorImpl {
     }
 }
 
-fn extract_required_metadata_string(request: &tonic::Request<()>, key: &str) -> Option<String> {
+fn extract_metadata_string(request: &tonic::Request<()>, key: &str) -> Option<String> {
     let metadata = request.metadata().get(key)?;
     let Ok(key) = metadata.to_str() else {
         return None;
@@ -28,7 +28,7 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
         &mut self,
         mut request: tonic::Request<()>,
     ) -> Result<tonic::Request<()>, tonic::Status> {
-        if let Some(token) = extract_required_metadata_string(&request, "Authorization") {
+        if let Some(token) = extract_metadata_string(&request, "Authorization") {
             let token = token.replace("Bearer ", "");
             let Ok(user_id) = self.auth0.verify(&token) else {
                 return Err(tonic::Status::unauthenticated("invalid authentication"));
@@ -39,7 +39,11 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
             return Ok(request);
         }
 
-        if let Some(token) = extract_required_metadata_string(&request, "dmtr-api-key") {
+        if let Some(token) = extract_metadata_string(&request, "dmtr-api-key") {
+            let Some(project_id) = extract_metadata_string(&request, "project-id") else {
+                return Err(tonic::Status::permission_denied("project-id is required"));
+            };
+
             let (hrp, key) = bech32::decode(&token).map_err(|error| {
                 warn!(?error, "invalid bech32");
                 tonic::Status::permission_denied("invalid apikey")
@@ -50,7 +54,7 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
                 return Err(tonic::Status::permission_denied("invalid apikey"));
             }
 
-            let credential = Credential::ApiKey(key);
+            let credential = Credential::ApiKey(key, project_id);
             request.extensions_mut().insert(credential);
             return Ok(request);
         }

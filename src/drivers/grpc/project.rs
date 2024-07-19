@@ -5,7 +5,7 @@ use tonic::{async_trait, Status};
 use crate::domain::{
     auth::Credential,
     event::EventDrivenBridge,
-    project::{self, CreateProjectCmd, ProjectDrivenCache},
+    project::{self, CreateProjectCmd, CreateProjectSecretCmd, ProjectDrivenCache},
 };
 
 pub struct ProjectServiceImpl {
@@ -43,6 +43,35 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             id: cmd.id,
             name: cmd.name,
             namespace: cmd.namespace,
+        };
+
+        Ok(tonic::Response::new(message))
+    }
+
+    async fn create_project_secret(
+        &self,
+        request: tonic::Request<proto::CreateProjectSecretRequest>,
+    ) -> Result<tonic::Response<proto::CreateProjectSecretResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::permission_denied("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = CreateProjectSecretCmd::new(credential, req.project_id, req.name);
+
+        let result =
+            project::create_secret(self.cache.clone(), self.event.clone(), cmd.clone()).await;
+        if let Err(err) = result {
+            return Err(Status::failed_precondition(err.to_string()));
+        }
+
+        let key = result.unwrap();
+        let message = proto::CreateProjectSecretResponse {
+            id: cmd.id,
+            name: cmd.name,
+            key,
         };
 
         Ok(tonic::Response::new(message))
