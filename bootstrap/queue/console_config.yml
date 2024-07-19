@@ -1,9 +1,0 @@
-kafka:
-  brokers: ["${instance_name}:${kafka_external_port}"]
-  schemaRegistry:
-    enabled: true
-    urls: ["http://${instance_name}:${schema_registry_external_port}"]
-redpanda:
-  adminApi:
-    enabled: true
-    urls: ["http://${instance_name}:${admin_api_external_port}"]

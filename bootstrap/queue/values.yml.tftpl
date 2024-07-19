@@ -1,0 +1,74 @@
+tolerations:
+  - effect: "NoSchedule"
+    key: "demeter.run/compute-profile"
+    operator: "Equal"
+    value: "general-purpose"
+  - effect: "NoSchedule"
+    key: "demeter.run/compute-arch"
+    operator: "Equal"
+    value: "x86"
+  - effect: "NoSchedule"
+    key: "demeter.run/availability-sla"
+    operator: "Equal"
+    value: "consistent"
+
+# -- Authentication settings.
+# https://docs.redpanda.com/docs/manage/kubernetes/security/sasl-kubernetes/
+auth:
+  sasl:
+    enabled: true
+    secretRef: redpanda-superusers
+    users:
+      - name: ${admin_username}
+        password: ${admin_password}
+        mechanism: SCRAM-SHA-256
+      %{ for user in users }
+      - name: ${user.name}
+        password: ${user.password}
+        mechanism: SCRAM-SHA-256
+      %{ endfor }
+
+# -- TLS settings.
+# https://docs.redpanda.com/docs/manage/kubernetes/security/kubernetes-tls/
+tls:
+  enabled: true
+  certs:
+    default:
+      caEnabled: true
+    external:
+      issuerRef:
+        name: "letsencrypt-dns01"
+        kind: ClusterIssuer
+      caEnabled: false
+
+# -- External access settings.
+# https://docs.redpanda.com/docs/manage/kubernetes/networking/networking-and-connectivity/
+external:
+  enabled: true
+  type: LoadBalancer
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+
+# -- Log-level settings.
+logging:
+  logLevel: info
+  usageStats:
+    enabled: false
+
+# -- Monitoring.
+monitoring:
+  enabled: true
+  scrapeInterval: 60s
+
+# -- Persistence settings.
+# https://docs.redpanda.com/docs/manage/kubernetes/configure-storage/
+storage:
+  persistentVolume:
+    enabled: true
+    storageClass: "gp3"
+
+statefulset:
+  updateStrategy:
+    type: RollingUpdate
+  budget:
+    maxUnavailable: 1

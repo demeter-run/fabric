@@ -3,7 +3,7 @@ FROM rust:1.79-slim-buster AS build
 WORKDIR /app
 
 RUN apt update 
-RUN apt install -y build-essential pkg-config libssl-dev cmake
+RUN apt install -y build-essential pkg-config libssl-dev libsasl2-dev cmake
 
 COPY ./Cargo.toml ./Cargo.toml
 COPY . .
@@ -11,6 +11,10 @@ COPY . .
 RUN cargo build --release --bin=daemon
 
 FROM rust:1.79-slim-buster 
-COPY --from=build /app/target/release/daemon .
+
+RUN apt update 
+RUN apt install -y build-essential pkg-config libssl-dev libsasl2-dev cmake
+
+COPY --from=build /app/target/release/ ./
 CMD ["./daemon"]
 LABEL service=daemon

@@ -1,2 +1,10 @@
-brokers="${broker_urls}"
-consumer_name="${consumer_name}"
+[kafka]
+"bootstrap.servers" = "${broker_urls}"
+"group.id"= "${consumer_name}"
+
+"security.protocol" = "SASL_SSL"
+"sasl.mechanisms" = "SCRAM-SHA-256"
+"sasl.username" = "${kafka_username}"
+"sasl.password" = "${kafka_password}"
+
+"auto.offset.reset" = "earliest"

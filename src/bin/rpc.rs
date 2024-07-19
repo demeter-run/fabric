@@ -1,4 +1,4 @@
-use std::env;
+use std::{collections::HashMap, env};
 
 use anyhow::Result;
 use dotenv::dotenv;
@@ -40,8 +40,9 @@ struct Auth {
 struct Config {
     addr: String,
     db_path: String,
-    brokers: String,
     auth: Auth,
+    kafka_producer: HashMap<String, String>,
+    kafka_consumer: HashMap<String, String>,
 }
 impl Config {
     pub fn new() -> Result<Self> {
@@ -62,9 +63,9 @@ impl From<Config> for GrpcConfig {
     fn from(value: Config) -> Self {
         Self {
             addr: value.addr,
-            brokers: value.brokers,
             db_path: value.db_path,
             auth_url: value.auth.url,
+            kafka: value.kafka_producer,
         }
     }
 }
@@ -72,7 +73,7 @@ impl From<Config> for GrpcConfig {
 impl From<Config> for EventConfig {
     fn from(value: Config) -> Self {
         Self {
-            brokers: value.brokers,
+            kafka: value.kafka_consumer,
             db_path: value.db_path,
         }
     }
