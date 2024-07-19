@@ -235,6 +235,12 @@ impl From<ProjectSecretCreated> for ProjectSecretCache {
     }
 }
 
+#[derive(Debug)]
+pub struct ProjectUserCache {
+    pub user_id: String,
+    pub project_id: String,
+}
+
 #[async_trait::async_trait]
 pub trait ProjectDrivenCache: Send + Sync {
     async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>>;
@@ -242,6 +248,11 @@ pub trait ProjectDrivenCache: Send + Sync {
     async fn create(&self, project: &ProjectCache) -> Result<()>;
     async fn create_secret(&self, secret: &ProjectSecretCache) -> Result<()>;
     async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecretCache>>;
+    async fn find_user_permission(
+        &self,
+        user_id: &str,
+        project_id: &str,
+    ) -> Result<Option<ProjectUserCache>>;
 }
 
 #[async_trait::async_trait]
@@ -269,6 +280,7 @@ mod tests {
             async fn create(&self, project: &ProjectCache) -> Result<()>;
             async fn create_secret(&self, secret: &ProjectSecretCache) -> Result<()>;
             async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecretCache>>;
+            async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUserCache>>;
         }
     }
 
@@ -358,6 +370,15 @@ mod tests {
         }
     }
 
+    impl Default for ProjectUserCache {
+        fn default() -> Self {
+            Self {
+                user_id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+            }
+        }
+    }
+
     #[tokio::test]
     async fn it_should_create_project() {
         let mut cache = MockFakeProjectDrivenCache::new();
@@ -369,9 +390,7 @@ mod tests {
         let cmd = CreateProjectCmd::default();
 
         let result = create(Arc::new(cache), Arc::new(event), cmd).await;
-        if let Err(err) = result {
-            unreachable!("{err}")
-        }
+        assert!(result.is_ok());
     }
     #[tokio::test]
     async fn it_should_fail_create_project_when_namespace_exists() {
@@ -385,9 +404,7 @@ mod tests {
         let cmd = CreateProjectCmd::default();
 
         let result = create(Arc::new(cache), Arc::new(event), cmd).await;
-        if result.is_ok() {
-            unreachable!("Fail to validate create project when the namespace already exists")
-        }
+        assert!(result.is_err());
     }
     #[tokio::test]
     async fn it_should_fail_create_project_when_invalid_permission() {
@@ -400,9 +417,7 @@ mod tests {
         };
 
         let result = create(Arc::new(cache), Arc::new(event), cmd).await;
-        if result.is_ok() {
-            unreachable!("Fail to validate create project when invalid permission")
-        }
+        assert!(result.is_err());
     }
     #[tokio::test]
     async fn it_should_create_project_cache() {
@@ -412,9 +427,7 @@ mod tests {
         let evt = ProjectCreated::default();
 
         let result = create_cache(Arc::new(cache), evt).await;
-        if let Err(err) = result {
-            unreachable!("{err}")
-        }
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
@@ -430,9 +443,7 @@ mod tests {
         let cmd = CreateProjectSecretCmd::default();
 
         let result = create_secret(Arc::new(cache), Arc::new(event), cmd).await;
-        if let Err(err) = result {
-            unreachable!("{err}")
-        }
+        assert!(result.is_ok());
     }
     #[tokio::test]
     async fn it_should_fail_create_project_secret_when_project_doesnt_exists() {
@@ -444,9 +455,7 @@ mod tests {
         let cmd = CreateProjectSecretCmd::default();
 
         let result = create_secret(Arc::new(cache), Arc::new(event), cmd).await;
-        if result.is_ok() {
-            unreachable!("Fail to validate create secret when project doesnt exist")
-        }
+        assert!(result.is_err());
     }
     #[tokio::test]
     async fn it_should_fail_create_project_secret_when_invalid_permission() {
@@ -459,9 +468,7 @@ mod tests {
         };
 
         let result = create_secret(Arc::new(cache), Arc::new(event), cmd).await;
-        if result.is_ok() {
-            unreachable!("Fail to validate create secret when invalid permission")
-        }
+        assert!(result.is_err());
     }
     #[tokio::test]
     async fn it_should_create_project_secret_cache() {
@@ -471,9 +478,7 @@ mod tests {
         let evt = ProjectSecretCreated::default();
 
         let result = create_secret_cache(Arc::new(cache), evt).await;
-        if let Err(err) = result {
-            unreachable!("{err}")
-        }
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
@@ -484,9 +489,7 @@ mod tests {
             .return_once(|_| Ok(vec![ProjectSecretCache::default()]));
 
         let result = verify_secret(Arc::new(cache), Default::default(), KEY).await;
-        if let Err(err) = result {
-            unreachable!("{err}")
-        }
+        assert!(result.is_ok());
     }
     #[tokio::test]
     async fn it_should_fail_verify_secret_when_invalid_key() {
@@ -496,27 +499,21 @@ mod tests {
             .return_once(|_| Ok(vec![ProjectSecretCache::default()]));
 
         let result = verify_secret(Arc::new(cache), Default::default(), INVALID_KEY).await;
-        if result.is_ok() {
-            unreachable!("Fail to validate verify secret when invalid key");
-        }
+        assert!(result.is_err());
     }
     #[tokio::test]
     async fn it_should_fail_verify_secret_when_invalid_bech32() {
         let cache = MockFakeProjectDrivenCache::new();
 
         let result = verify_secret(Arc::new(cache), Default::default(), "invalid bech32").await;
-        if result.is_ok() {
-            unreachable!("Fail to validate verify secret when invalid bech32");
-        }
+        assert!(result.is_err());
     }
     #[tokio::test]
     async fn it_should_fail_verify_secret_when_invalid_bech32_hrp() {
         let cache = MockFakeProjectDrivenCache::new();
 
         let result = verify_secret(Arc::new(cache), Default::default(), INVALID_HRP_KEY).await;
-        if result.is_ok() {
-            unreachable!("Fail to validate verify secret when invalid bech32 hrp");
-        }
+        assert!(result.is_err());
     }
     #[tokio::test]
     async fn it_should_fail_verify_secret_when_there_arent_secrets_storaged() {
@@ -526,9 +523,7 @@ mod tests {
             .return_once(|_| Ok(vec![]));
 
         let result = verify_secret(Arc::new(cache), Default::default(), KEY).await;
-        if result.is_ok() {
-            unreachable!("Fail to validate verify secret when there arent secrets storaged");
-        }
+        assert!(result.is_err());
     }
 
     #[tokio::test]
@@ -540,9 +535,7 @@ mod tests {
         let project = ProjectCreated::default();
 
         let result = apply_manifest(Arc::new(cluster), project).await;
-        if let Err(err) = result {
-            unreachable!("{err}")
-        }
+        assert!(result.is_ok());
     }
     #[tokio::test]
     async fn it_should_fail_apply_manifest_when_resource_exists() {
@@ -555,8 +548,6 @@ mod tests {
         let project = ProjectCreated::default();
 
         let result = apply_manifest(Arc::new(cluster), project).await;
-        if result.is_ok() {
-            unreachable!("Fail to validate apply manifest when resource exists");
-        }
+        assert!(result.is_err());
     }
 }

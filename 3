@@ -146,6 +146,9 @@ pub trait ResourceDrivenCluster: Send + Sync {
 #[cfg(test)]
 mod tests {
     use mockall::mock;
+    use tracing::Level;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::EnvFilter;
     use uuid::Uuid;
 
     use crate::domain::event::Event;
@@ -233,8 +236,9 @@ mod tests {
         let cmd = CreateResourceCmd::default();
 
         let result = create(Arc::new(cache), Arc::new(event), cmd).await;
-
-        assert!(result.is_ok());
+        if let Err(err) = result {
+            unreachable!("{err}")
+        }
     }
     #[tokio::test]
     async fn it_should_fail_create_resource_when_project_doesnt_exist() {
@@ -249,7 +253,9 @@ mod tests {
         let cmd = CreateResourceCmd::default();
 
         let result = create(Arc::new(cache), Arc::new(event), cmd).await;
-        assert!(result.is_err());
+        if result.is_ok() {
+            unreachable!("Fail to validate create resource when the project doesnt exist")
+        }
     }
     #[tokio::test]
     async fn it_should_fail_create_resource_when_user_doesnt_have_permission() {
@@ -263,10 +269,19 @@ mod tests {
         let cmd = CreateResourceCmd::default();
 
         let result = create(Arc::new(cache), Arc::new(event), cmd).await;
-        assert!(result.is_err());
+        if result.is_ok() {
+            unreachable!("Fail to validate create resource when user doesnt have permission")
+        }
     }
     #[tokio::test]
-    async fn it_should_fail_create_resource_when_secret_doesnt_have_permission() {
+    async fn it_should_fail_create_resource_when_secret_invalid() {
+        let env_filter = EnvFilter::builder()
+            .with_default_directive(Level::DEBUG.into())
+            .with_env_var("RUST_LOG")
+            .from_env_lossy();
+
+        tracing_subscriber::registry().with(fmt::layer()).init();
+
         let cache = MockFakeProjectDrivenCache::new();
 
         let event = MockFakeEventDrivenBridge::new();
@@ -277,7 +292,9 @@ mod tests {
         };
 
         let result = create(Arc::new(cache), Arc::new(event), cmd).await;
-        assert!(result.is_err());
+        if result.is_ok() {
+            unreachable!("Fail to validate create resource when user doesnt have permission")
+        }
     }
 
     #[tokio::test]
@@ -288,7 +305,9 @@ mod tests {
         let evt = ResourceCreated::default();
 
         let result = create_cache(Arc::new(cache), evt).await;
-        assert!(result.is_ok());
+        if let Err(err) = result {
+            unreachable!("{err}")
+        }
     }
 
     #[tokio::test]
@@ -299,6 +318,8 @@ mod tests {
         let evt = ResourceCreated::default();
 
         let result = apply_manifest(Arc::new(cluster), evt).await;
-        assert!(result.is_ok());
+        if let Err(err) = result {
+            unreachable!("{err}")
+        }
     }
 }

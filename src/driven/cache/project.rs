@@ -2,7 +2,9 @@ use anyhow::Result;
 use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
-use crate::domain::project::{ProjectCache, ProjectDrivenCache, ProjectSecretCache};
+use crate::domain::project::{
+    ProjectCache, ProjectDrivenCache, ProjectSecretCache, ProjectUserCache,
+};
 
 use super::SqliteCache;
 
@@ -103,6 +105,24 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         Ok(secrets)
     }
+    async fn find_user_permission(
+        &self,
+        user_id: &str,
+        project_id: &str,
+    ) -> Result<Option<ProjectUserCache>> {
+        let project_user = sqlx::query_as::<_, ProjectUserCache>(
+            r#"
+                SELECT user_id, project_id
+                FROM project_user WHERE user_id = $1 and project_id = $2;
+            "#,
+        )
+        .bind(user_id)
+        .bind(project_id)
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        Ok(project_user)
+    }
 }
 
 impl FromRow<'_, SqliteRow> for ProjectCache {
@@ -123,6 +143,15 @@ impl FromRow<'_, SqliteRow> for ProjectSecretCache {
             project_id: row.try_get("project_id")?,
             name: row.try_get("name")?,
             phc: row.try_get("phc")?,
+        })
+    }
+}
+
+impl FromRow<'_, SqliteRow> for ProjectUserCache {
+    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        Ok(Self {
+            user_id: row.try_get("user_id")?,
+            project_id: row.try_get("project_id")?,
         })
     }
 }
