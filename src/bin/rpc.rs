@@ -2,7 +2,7 @@ use std::{collections::HashMap, env};
 
 use anyhow::Result;
 use dotenv::dotenv;
-use fabric::drivers::{event::EventConfig, grpc::GrpcConfig};
+use fabric::drivers::{cache::CacheConfig, grpc::GrpcConfig};
 use serde::Deserialize;
 use tracing::Level;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
 
     futures::future::try_join(
         fabric::drivers::grpc::server(config.clone().into()),
-        fabric::drivers::event::subscribe(config.clone().into()),
+        fabric::drivers::cache::subscribe(config.clone().into()),
     )
     .await?;
 
@@ -70,7 +70,7 @@ impl From<Config> for GrpcConfig {
     }
 }
 
-impl From<Config> for EventConfig {
+impl From<Config> for CacheConfig {
     fn from(value: Config) -> Self {
         Self {
             kafka: value.kafka_consumer,
