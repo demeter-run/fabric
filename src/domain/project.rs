@@ -235,7 +235,6 @@ impl From<ProjectSecretCreated> for ProjectSecretCache {
     }
 }
 
-#[derive(Debug)]
 pub struct ProjectUserCache {
     pub user_id: String,
     pub project_id: String,
