@@ -7,12 +7,12 @@ use std::{borrow::Borrow, collections::HashMap, sync::Arc};
 use tracing::{error, info};
 
 use crate::{
-    domain::{events::Event, ports, projects},
+    domain::{event::Event, project, resource},
     driven::k8s::K8sCluster,
 };
 
 pub async fn subscribe(config: MonitorConfig) -> Result<()> {
-    let k8s_cluster = Arc::new(K8sCluster::new().await?);
+    let cluster = Arc::new(K8sCluster::new().await?);
 
     let topic = String::from("events");
 
@@ -26,22 +26,24 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
     info!("Subscriber running");
     loop {
         match consumer.recv().await {
-            Err(err) => error!(error = err.to_string(), "kafka subscribe error"),
+            Err(error) => error!(?error, "kafka subscribe error"),
             Ok(message) => match message.borrow().try_into() {
                 Ok(event) => {
                     match event {
-                        Event::ProjectCreated(namespace) => {
-                            projects::create::create_resource(k8s_cluster.clone(), namespace)
-                                .await?;
+                        Event::ProjectCreated(evt) => {
+                            project::apply_manifest(cluster.clone(), evt).await?;
                         }
-                        Event::PortCreated(port) => {
-                            ports::create::create_resource(k8s_cluster.clone(), port).await?;
+                        Event::ResourceCreated(evt) => {
+                            resource::apply_manifest(cluster.clone(), evt).await?
+                        }
+                        _ => {
+                            info!(event = event.key(), "bypass event")
                         }
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }
-                Err(err) => {
-                    error!(error = err.to_string(), "fail to convert message to event");
+                Err(error) => {
+                    error!(?error, "fail to convert message to event");
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }
             },

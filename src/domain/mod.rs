@@ -1,4 +1,4 @@
-pub mod events;
-pub mod ports;
-pub mod projects;
-pub mod users;
+pub mod auth;
+pub mod event;
+pub mod project;
+pub mod resource;

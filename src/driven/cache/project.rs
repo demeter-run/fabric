@@ -1,43 +1,73 @@
 use anyhow::Result;
+use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
-use crate::domain::projects::{Project, ProjectCache, ProjectUser};
+use crate::domain::project::{
+    ProjectCache, ProjectDrivenCache, ProjectSecretCache, ProjectUserCache,
+};
 
 use super::SqliteCache;
 
-pub struct SqliteProjectCache {
+pub struct SqliteProjectDrivenCache {
     sqlite: Arc<SqliteCache>,
 }
-impl SqliteProjectCache {
+impl SqliteProjectDrivenCache {
     pub fn new(sqlite: Arc<SqliteCache>) -> Self {
         Self { sqlite }
     }
 }
 #[async_trait::async_trait]
-impl ProjectCache for SqliteProjectCache {
-    async fn create(&self, project: &Project) -> Result<()> {
+impl ProjectDrivenCache for SqliteProjectDrivenCache {
+    async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>> {
+        let project = sqlx::query_as::<_, ProjectCache>(
+            r#"
+                SELECT id, namespace, name, owner 
+                FROM project WHERE namespace = $1;
+            "#,
+        )
+        .bind(namespace)
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        Ok(project)
+    }
+    async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>> {
+        let project = sqlx::query_as::<_, ProjectCache>(
+            r#"
+                SELECT id, namespace, name, owner 
+                FROM project WHERE id = $1;
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        Ok(project)
+    }
+
+    async fn create(&self, project: &ProjectCache) -> Result<()> {
         let mut tx = self.sqlite.db.begin().await?;
 
         sqlx::query!(
             r#"
-                INSERT INTO projects (id, namespace, name, created_by)
+                INSERT INTO project (id, namespace, name, owner)
                 VALUES ($1, $2, $3, $4)
             "#,
             project.id,
             project.namespace,
             project.name,
-            project.created_by,
+            project.owner,
         )
         .execute(&mut *tx)
         .await?;
 
         sqlx::query!(
             r#"
-                INSERT INTO projects_users (project_id, user_id)
+                INSERT INTO project_user (project_id, user_id)
                 VALUES ($1, $2)
             "#,
             project.id,
-            project.created_by,
+            project.owner,
         )
         .execute(&mut *tx)
         .await?;
@@ -46,59 +76,208 @@ impl ProjectCache for SqliteProjectCache {
 
         Ok(())
     }
-    async fn find_by_id(&self, id: &str) -> Result<Option<Project>> {
-        let result = sqlx::query!(
+    async fn create_secret(&self, secret: &ProjectSecretCache) -> Result<()> {
+        sqlx::query!(
             r#"
-                SELECT id, namespace, name, created_by 
-                FROM projects WHERE id = $1;
+                INSERT INTO project_secret (id, project_id, name, phc)
+                VALUES ($1, $2, $3, $4)
             "#,
-            id
+            secret.id,
+            secret.project_id,
+            secret.name,
+            secret.phc,
         )
-        .fetch_optional(&self.sqlite.db)
+        .execute(&self.sqlite.db)
         .await?;
 
-        if result.is_none() {
-            return Ok(None);
-        }
+        Ok(())
+    }
+    async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecretCache>> {
+        let secrets = sqlx::query_as::<_, ProjectSecretCache>(
+            r#"
+                SELECT id, project_id, name, phc 
+                FROM project_secret WHERE project_id = $1;
+            "#,
+        )
+        .bind(project_id)
+        .fetch_all(&self.sqlite.db)
+        .await?;
 
-        let result = result.unwrap();
-
-        let project = Project {
-            id: result.id,
-            namespace: result.namespace,
-            name: result.name,
-            created_by: result.created_by,
-        };
-
-        Ok(Some(project))
+        Ok(secrets)
     }
     async fn find_user_permission(
         &self,
         user_id: &str,
         project_id: &str,
-    ) -> Result<Option<ProjectUser>> {
-        let result = sqlx::query!(
+    ) -> Result<Option<ProjectUserCache>> {
+        let project_user = sqlx::query_as::<_, ProjectUserCache>(
             r#"
-                SELECT user_id, project_id 
-                FROM projects_users WHERE user_id = $1 and project_id = $2;
+                SELECT user_id, project_id
+                FROM project_user WHERE user_id = $1 and project_id = $2;
             "#,
-            user_id,
-            project_id
         )
+        .bind(user_id)
+        .bind(project_id)
         .fetch_optional(&self.sqlite.db)
         .await?;
 
-        if result.is_none() {
-            return Ok(None);
-        }
+        Ok(project_user)
+    }
+}
 
-        let result = result.unwrap();
+impl FromRow<'_, SqliteRow> for ProjectCache {
+    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            name: row.try_get("name")?,
+            namespace: row.try_get("namespace")?,
+            owner: row.try_get("owner")?,
+        })
+    }
+}
 
-        let project_user = ProjectUser {
-            user_id: result.user_id,
-            project_id: result.project_id,
+impl FromRow<'_, SqliteRow> for ProjectSecretCache {
+    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            project_id: row.try_get("project_id")?,
+            name: row.try_get("name")?,
+            phc: row.try_get("phc")?,
+        })
+    }
+}
+
+impl FromRow<'_, SqliteRow> for ProjectUserCache {
+    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        Ok(Self {
+            user_id: row.try_get("user_id")?,
+            project_id: row.try_get("project_id")?,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn get_cache() -> SqliteProjectDrivenCache {
+        let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
+        SqliteProjectDrivenCache::new(sqlite_cache)
+    }
+
+    #[tokio::test]
+    async fn it_should_create_project() {
+        let cache = get_cache().await;
+        let project = ProjectCache::default();
+
+        let result = cache.create(&project).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_find_project_by_id() {
+        let cache = get_cache().await;
+        let project = ProjectCache::default();
+
+        cache.create(&project).await.unwrap();
+        let result = cache.find_by_id(&project.id).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_project_by_id() {
+        let cache = get_cache().await;
+        let project = ProjectCache::default();
+
+        let result = cache.find_by_id(&project.id).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn it_should_find_project_by_namespace() {
+        let cache = get_cache().await;
+        let project = ProjectCache::default();
+
+        cache.create(&project).await.unwrap();
+        let result = cache.find_by_namespace(&project.namespace).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_project_by_namespace() {
+        let cache = get_cache().await;
+        let project = ProjectCache::default();
+
+        let result = cache.find_by_namespace(&project.namespace).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn it_should_create_project_secret() {
+        let cache = get_cache().await;
+
+        let project = ProjectCache::default();
+        cache.create(&project).await.unwrap();
+
+        let secret = ProjectSecretCache {
+            project_id: project.id,
+            ..Default::default()
         };
+        let result = cache.create_secret(&secret).await;
 
-        Ok(Some(project_user))
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_find_secret_by_project_id() {
+        let cache = get_cache().await;
+
+        let project = ProjectCache::default();
+        cache.create(&project).await.unwrap();
+
+        let secret = ProjectSecretCache {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_secret(&secret).await.unwrap();
+
+        let result = cache.find_secret_by_project_id(&project.id).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().len() == 1);
+    }
+
+    #[tokio::test]
+    async fn it_should_find_user_permission() {
+        let cache = get_cache().await;
+
+        let project = ProjectCache::default();
+        cache.create(&project).await.unwrap();
+
+        let result = cache
+            .find_user_permission(&project.owner, &project.id)
+            .await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_user_permission() {
+        let cache = get_cache().await;
+
+        let project = ProjectCache::default();
+
+        let result = cache
+            .find_user_permission(&project.owner, &project.id)
+            .await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
     }
 }

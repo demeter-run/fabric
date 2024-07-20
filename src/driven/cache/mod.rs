@@ -1,8 +1,8 @@
 use anyhow::Result;
 use std::path::Path;
 
-pub mod port;
 pub mod project;
+pub mod resource;
 
 pub struct SqliteCache {
     db: sqlx::sqlite::SqlitePool,
@@ -22,5 +22,17 @@ impl SqliteCache {
             .await?;
 
         Ok(())
+    }
+
+    #[cfg(test)]
+    pub async fn ephemeral() -> Result<Self> {
+        let db = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect("sqlite::memory:")
+            .await?;
+
+        let out = Self { db };
+        out.migrate().await?;
+
+        Ok(out)
     }
 }
