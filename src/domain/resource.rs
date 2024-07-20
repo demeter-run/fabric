@@ -216,6 +216,16 @@ mod tests {
             }
         }
     }
+    impl Default for ResourceCache {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                kind: "CardanoNode".into(),
+                data: "{\"spec\":{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}}".into(),
+            }
+        }
+    }
 
     #[tokio::test]
     async fn it_should_create_resource() {

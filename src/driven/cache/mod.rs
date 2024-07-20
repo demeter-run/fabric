@@ -23,4 +23,16 @@ impl SqliteCache {
 
         Ok(())
     }
+
+    #[cfg(test)]
+    pub async fn ephemeral() -> Result<Self> {
+        let db = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect("sqlite::memory:")
+            .await?;
+
+        let out = Self { db };
+        out.migrate().await?;
+
+        Ok(out)
+    }
 }

@@ -22,7 +22,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         let project = sqlx::query_as::<_, ProjectCache>(
             r#"
                 SELECT id, namespace, name, owner 
-                FROM project WHERE id = $1;
+                FROM project WHERE namespace = $1;
             "#,
         )
         .bind(namespace)
@@ -153,5 +153,131 @@ impl FromRow<'_, SqliteRow> for ProjectUserCache {
             user_id: row.try_get("user_id")?,
             project_id: row.try_get("project_id")?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn get_cache() -> SqliteProjectDrivenCache {
+        let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
+        SqliteProjectDrivenCache::new(sqlite_cache)
+    }
+
+    #[tokio::test]
+    async fn it_should_create_project() {
+        let cache = get_cache().await;
+        let project = ProjectCache::default();
+
+        let result = cache.create(&project).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_find_project_by_id() {
+        let cache = get_cache().await;
+        let project = ProjectCache::default();
+
+        cache.create(&project).await.unwrap();
+        let result = cache.find_by_id(&project.id).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_project_by_id() {
+        let cache = get_cache().await;
+        let project = ProjectCache::default();
+
+        let result = cache.find_by_id(&project.id).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn it_should_find_project_by_namespace() {
+        let cache = get_cache().await;
+        let project = ProjectCache::default();
+
+        cache.create(&project).await.unwrap();
+        let result = cache.find_by_namespace(&project.namespace).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_project_by_namespace() {
+        let cache = get_cache().await;
+        let project = ProjectCache::default();
+
+        let result = cache.find_by_namespace(&project.namespace).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn it_should_create_project_secret() {
+        let cache = get_cache().await;
+
+        let project = ProjectCache::default();
+        cache.create(&project).await.unwrap();
+
+        let secret = ProjectSecretCache {
+            project_id: project.id,
+            ..Default::default()
+        };
+        let result = cache.create_secret(&secret).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_find_secret_by_project_id() {
+        let cache = get_cache().await;
+
+        let project = ProjectCache::default();
+        cache.create(&project).await.unwrap();
+
+        let secret = ProjectSecretCache {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_secret(&secret).await.unwrap();
+
+        let result = cache.find_secret_by_project_id(&project.id).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().len() == 1);
+    }
+
+    #[tokio::test]
+    async fn it_should_find_user_permission() {
+        let cache = get_cache().await;
+
+        let project = ProjectCache::default();
+        cache.create(&project).await.unwrap();
+
+        let result = cache
+            .find_user_permission(&project.owner, &project.id)
+            .await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_user_permission() {
+        let cache = get_cache().await;
+
+        let project = ProjectCache::default();
+
+        let result = cache
+            .find_user_permission(&project.owner, &project.id)
+            .await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
     }
 }

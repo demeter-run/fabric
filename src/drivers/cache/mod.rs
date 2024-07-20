@@ -9,7 +9,7 @@ use tracing::{error, info};
 use crate::{
     domain::{event::Event, project, resource},
     driven::cache::{
-        project::SqliteProjectDrivenCache, resource::SqliteResourceCache, SqliteCache,
+        project::SqliteProjectDrivenCache, resource::SqliteResourceDrivenCache, SqliteCache,
     },
 };
 
@@ -18,7 +18,7 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
     sqlite_cache.migrate().await?;
 
     let project_cache = Arc::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
-    let resource_cache = Arc::new(SqliteResourceCache::new(sqlite_cache.clone()));
+    let resource_cache = Arc::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
 
     let topic = String::from("events");
 
