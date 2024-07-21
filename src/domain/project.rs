@@ -235,6 +235,7 @@ impl From<ProjectSecretCreated> for ProjectSecretCache {
     }
 }
 
+#[allow(dead_code)]
 pub struct ProjectUserCache {
     pub user_id: String,
     pub project_id: String,
