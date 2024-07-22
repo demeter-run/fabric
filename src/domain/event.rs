@@ -36,6 +36,7 @@ pub struct ProjectSecretCreated {
     pub project_id: String,
     pub name: String,
     pub phc: String,
+    pub secret: Vec<u8>,
 }
 into_event!(ProjectSecretCreated);
 

@@ -11,11 +11,20 @@ use crate::domain::{
 pub struct ProjectServiceImpl {
     pub cache: Arc<dyn ProjectDrivenCache>,
     pub event: Arc<dyn EventDrivenBridge>,
+    pub secret: String,
 }
 
 impl ProjectServiceImpl {
-    pub fn new(cache: Arc<dyn ProjectDrivenCache>, event: Arc<dyn EventDrivenBridge>) -> Self {
-        Self { cache, event }
+    pub fn new(
+        cache: Arc<dyn ProjectDrivenCache>,
+        event: Arc<dyn EventDrivenBridge>,
+        secret: String,
+    ) -> Self {
+        Self {
+            cache,
+            event,
+            secret,
+        }
     }
 }
 
@@ -59,7 +68,8 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = CreateProjectSecretCmd::new(credential, req.project_id, req.name);
+        let cmd =
+            CreateProjectSecretCmd::new(credential, self.secret.clone(), req.project_id, req.name);
 
         let result =
             project::create_secret(self.cache.clone(), self.event.clone(), cmd.clone()).await;

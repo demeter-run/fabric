@@ -33,6 +33,7 @@ bech32 = "0.11.0"
 argon2 = "0.5.3"
 tower = "0.4.13"
 hyper = "1.4.1"
+hex = "0.4.3"
 
 [dev-dependencies]
 mockall = "0.12.1"

@@ -36,8 +36,11 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         project_cache.clone(),
     );
 
-    let project_inner =
-        project::ProjectServiceImpl::new(project_cache.clone(), event_bridge.clone());
+    let project_inner = project::ProjectServiceImpl::new(
+        project_cache.clone(),
+        event_bridge.clone(),
+        config.secret.clone(),
+    );
     let project_service = ProjectServiceServer::with_interceptor(project_inner, auth.clone());
 
     let resource_inner =
@@ -62,5 +65,6 @@ pub struct GrpcConfig {
     pub addr: String,
     pub db_path: String,
     pub auth_url: String,
+    pub secret: String,
     pub kafka: HashMap<String, String>,
 }
