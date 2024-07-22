@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 macro_rules! into_event {
@@ -17,6 +18,8 @@ pub struct ProjectCreated {
     pub name: String,
     pub namespace: String,
     pub owner: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 into_event!(ProjectCreated);
 
@@ -27,6 +30,8 @@ pub struct ResourceCreated {
     pub project_namespace: String,
     pub kind: String,
     pub data: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 into_event!(ResourceCreated);
 
@@ -37,6 +42,7 @@ pub struct ProjectSecretCreated {
     pub name: String,
     pub phc: String,
     pub secret: Vec<u8>,
+    pub created_at: DateTime<Utc>,
 }
 into_event!(ProjectSecretCreated);
 

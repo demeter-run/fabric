@@ -1,4 +1,5 @@
 use anyhow::{bail, ensure, Result};
+use chrono::{DateTime, Utc};
 use kube::{
     api::{ApiResource, DynamicObject, ObjectMeta},
     ResourceExt,
@@ -30,6 +31,8 @@ pub async fn create(
         project_namespace: project.namespace,
         kind: cmd.kind.clone(),
         data: cmd.data,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
     };
 
     event.dispatch(evt.into()).await?;
@@ -121,6 +124,8 @@ pub struct ResourceCache {
     pub project_id: String,
     pub kind: String,
     pub data: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 impl From<ResourceCreated> for ResourceCache {
     fn from(value: ResourceCreated) -> Self {
@@ -129,6 +134,8 @@ impl From<ResourceCreated> for ResourceCache {
             project_id: value.project_id,
             kind: value.kind,
             data: value.data,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
         }
     }
 }
@@ -213,6 +220,8 @@ mod tests {
                 project_namespace: "prj-test".into(),
                 kind: "CardanoNode".into(),
                 data: "{\"spec\":{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}}".into(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
             }
         }
     }
@@ -223,6 +232,8 @@ mod tests {
                 project_id: Uuid::new_v4().to_string(),
                 kind: "CardanoNode".into(),
                 data: "{\"spec\":{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}}".into(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
             }
         }
     }

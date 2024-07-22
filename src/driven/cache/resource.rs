@@ -19,13 +19,15 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
     async fn create(&self, resource: &ResourceCache) -> Result<()> {
         sqlx::query!(
             r#"
-                INSERT INTO resource (id, project_id, kind, data)
-                VALUES ($1, $2, $3, $4)
+                INSERT INTO resource (id, project_id, kind, data, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6)
             "#,
             resource.id,
             resource.project_id,
             resource.kind,
             resource.data,
+            resource.created_at,
+            resource.updated_at
         )
         .execute(&self.sqlite.db)
         .await?;
@@ -41,6 +43,8 @@ impl FromRow<'_, SqliteRow> for ResourceCache {
             project_id: row.try_get("project_id")?,
             kind: row.try_get("kind")?,
             data: row.try_get("data")?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
         })
     }
 }

@@ -1,6 +1,7 @@
 use anyhow::{bail, Error, Result};
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use bech32::{Bech32m, Hrp};
+use chrono::{DateTime, Utc};
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{api::ObjectMeta, ResourceExt};
 use rand::{
@@ -34,6 +35,8 @@ pub async fn create(
         namespace: cmd.namespace.clone(),
         name: cmd.name,
         owner: user_id,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
     };
 
     event.dispatch(evt.into()).await?;
@@ -113,6 +116,7 @@ pub async fn create_secret(
         name: cmd.name,
         phc: password_hash.to_string(),
         secret: secret.to_vec(),
+        created_at: Utc::now(),
     };
 
     event.dispatch(evt.into()).await?;
@@ -211,6 +215,8 @@ pub struct ProjectCache {
     pub name: String,
     pub namespace: String,
     pub owner: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 impl From<ProjectCreated> for ProjectCache {
     fn from(value: ProjectCreated) -> Self {
@@ -219,6 +225,8 @@ impl From<ProjectCreated> for ProjectCache {
             namespace: value.namespace,
             name: value.name,
             owner: value.owner,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
         }
     }
 }
@@ -252,6 +260,7 @@ pub struct ProjectSecretCache {
     pub name: String,
     pub phc: String,
     pub secret: Vec<u8>,
+    pub created_at: DateTime<Utc>,
 }
 impl From<ProjectSecretCreated> for ProjectSecretCache {
     fn from(value: ProjectSecretCreated) -> Self {
@@ -261,6 +270,7 @@ impl From<ProjectSecretCreated> for ProjectSecretCache {
             name: value.name,
             phc: value.phc,
             secret: value.secret,
+            created_at: value.created_at,
         }
     }
 }
@@ -269,6 +279,7 @@ impl From<ProjectSecretCreated> for ProjectSecretCache {
 pub struct ProjectUserCache {
     pub user_id: String,
     pub project_id: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[async_trait::async_trait]
@@ -350,6 +361,8 @@ mod tests {
                 name: "New Project".into(),
                 namespace: "sonic-vegas".into(),
                 owner: "user id".into(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
             }
         }
     }
@@ -360,6 +373,8 @@ mod tests {
                 name: "New Project".into(),
                 namespace: "sonic-vegas".into(),
                 owner: "user id".into(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
             }
         }
     }
@@ -389,6 +404,7 @@ mod tests {
                 name: "Key 1".into(),
                 phc: PHC.into(),
                 secret: SECRET.to_bytes().to_vec(),
+                created_at: Utc::now(),
             }
         }
     }
@@ -400,6 +416,7 @@ mod tests {
                 name: "Key 1".into(),
                 phc: PHC.into(),
                 secret: SECRET.to_bytes().to_vec(),
+                created_at: Utc::now(),
             }
         }
     }
@@ -409,6 +426,7 @@ mod tests {
             Self {
                 user_id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
+                created_at: Utc::now(),
             }
         }
     }
