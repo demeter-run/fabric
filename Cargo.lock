@@ -559,7 +559,6 @@ dependencies = [
  "dmtri",
  "dotenv",
  "futures",
- "hex",
  "hyper 1.4.1",
  "jsonwebtoken",
  "k8s-openapi",

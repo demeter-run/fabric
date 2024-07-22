@@ -85,10 +85,10 @@ pub async fn create_secret(
 
     let key = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
     let salt_string = SaltString::generate(&mut OsRng);
-    let secret = hex::decode(&cmd.secret).unwrap();
+    let secret = cmd.secret.to_bytes();
 
     let argon2 = match Argon2::new_with_secret(
-        &secret,
+        secret,
         Default::default(),
         Default::default(),
         Default::default(),
@@ -112,7 +112,7 @@ pub async fn create_secret(
         project_id: project.id,
         name: cmd.name,
         phc: password_hash.to_string(),
-        secret,
+        secret: secret.to_vec(),
     };
 
     event.dispatch(evt.into()).await?;
@@ -364,9 +364,9 @@ mod tests {
         }
     }
 
-    const KEY: &str = "dmtr_apikey1dqu4vj6kxaxhjs64g4vkgnrxfgqps5pq";
-    const PHC: &str = "$argon2id$v=19$m=19456,t=2,p=1$A07fGo86+UxIHXxJWU6kEA$h/7CHOrZJedLc1CceP/LuQkogWjjwCLyRdOhVkl4g+8";
-    const SECRET: &str = "7061756C6F40747870697065";
+    const KEY: &str = "dmtr_apikey1g9gyswtcf3zxwd26v4x5jj3jw5wx3sn2";
+    const PHC: &str = "$argon2id$v=19$m=19456,t=2,p=1$xVIt6Wr/bm1FewVhTr6zgA$nTO6EgGeOYZe7thACrHmFUWND40U4GEQCXKyvqzvRvs";
+    const SECRET: &str = "fabric@txpipe";
     const INVALID_KEY: &str = "dmtr_apikey1xe6xzcjxv9nhycnz2ffnq6m02y7nat9e";
     const INVALID_HRP_KEY: &str = "dmtr_test18pp5vkjzfuuyzwpeg9gk2a2zvsylc5wg";
 
@@ -388,7 +388,7 @@ mod tests {
                 project_id: Uuid::new_v4().to_string(),
                 name: "Key 1".into(),
                 phc: PHC.into(),
-                secret: hex::decode(SECRET).unwrap(),
+                secret: SECRET.to_bytes().to_vec(),
             }
         }
     }
@@ -399,7 +399,7 @@ mod tests {
                 project_id: Uuid::new_v4().to_string(),
                 name: "Key 1".into(),
                 phc: PHC.into(),
-                secret: hex::decode(SECRET).unwrap(),
+                secret: SECRET.to_bytes().to_vec(),
             }
         }
     }
