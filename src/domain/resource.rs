@@ -80,12 +80,10 @@ async fn assert_permission(
     match credential {
         Credential::Auth0(user_id) => {
             let result = cache.find_user_permission(user_id, project_id).await?;
-            dbg!(&result.is_some());
             ensure!(result.is_some(), "user doesnt have permission");
             Ok(())
         }
         Credential::ApiKey(secret_project_id) => {
-            dbg!(&secret_project_id, &project_id);
             ensure!(
                 project_id == secret_project_id,
                 "secret doesnt have permission"
