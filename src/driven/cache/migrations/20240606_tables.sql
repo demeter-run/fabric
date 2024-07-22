@@ -25,5 +25,6 @@ CREATE TABLE IF NOT EXISTS project_secret (
   project_id TEXT NOT NULL,
   name TEXT NOT NULL,
   phc TEXT NOT NULL,
+  secret BLOB NOT NULL,
   FOREIGN KEY(project_id) REFERENCES project(id)
 );

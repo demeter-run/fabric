@@ -153,6 +153,7 @@ data:
   rpc.toml: |
     addr="0.0.0.0:80"
     db_path="test.db"
+    secret="fabric@txpipe"
 
     [kafka_producer]
     "bootstrap.servers" = "redpanda.demeter-kafka.svc.cluster.local:19092"

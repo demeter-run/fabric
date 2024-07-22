@@ -53,7 +53,7 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
                 return tokio::runtime::Runtime::new().unwrap().block_on(async {
                     match project::verify_secret(self.cache.clone(), &project_id, &token).await {
                         Ok(secret) => {
-                            let credential = Credential::ApiKey(secret.id);
+                            let credential = Credential::ApiKey(secret.project_id);
                             request.extensions_mut().insert(credential);
                             Ok(request)
                         }

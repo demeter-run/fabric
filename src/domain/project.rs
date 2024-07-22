@@ -85,7 +85,21 @@ pub async fn create_secret(
 
     let key = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
     let salt_string = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
+    let secret = cmd.secret.to_bytes();
+
+    let argon2 = match Argon2::new_with_secret(
+        secret,
+        Default::default(),
+        Default::default(),
+        Default::default(),
+    ) {
+        Ok(argon2) => argon2.clone(),
+        Err(error) => {
+            error!(?error, "error to configure argon2 with secret");
+            bail!("internal error")
+        }
+    };
+
     let password_hash = argon2
         .hash_password(key.to_bytes(), salt_string.as_salt())
         .map_err(|err| Error::msg(err.to_string()))?;
@@ -98,6 +112,7 @@ pub async fn create_secret(
         project_id: project.id,
         name: cmd.name,
         phc: password_hash.to_string(),
+        secret: secret.to_vec(),
     };
 
     event.dispatch(evt.into()).await?;
@@ -130,10 +145,21 @@ pub async fn verify_secret(
 
     let secrets = cache.find_secret_by_project_id(project_id).await?;
 
-    let argon2 = Argon2::default();
-    let secret = secrets.into_iter().find(|secret| {
-        let Ok(password_hash) = PasswordHash::new(&secret.phc) else {
-            error!(project_id, secret_id = secret.id, "error to decode phc");
+    let secret = secrets.into_iter().find(|project_secret| {
+        let argon2 = Argon2::new_with_secret(
+            &project_secret.secret,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        )
+        .unwrap();
+
+        let Ok(password_hash) = PasswordHash::new(&project_secret.phc) else {
+            error!(
+                project_id,
+                secret_id = project_secret.id,
+                "error to decode phc"
+            );
             return false;
         };
 
@@ -200,16 +226,18 @@ impl From<ProjectCreated> for ProjectCache {
 #[derive(Debug, Clone)]
 pub struct CreateProjectSecretCmd {
     pub credential: Credential,
+    pub secret: String,
     pub id: String,
     pub project_id: String,
     pub name: String,
 }
 impl CreateProjectSecretCmd {
-    pub fn new(credential: Credential, project_id: String, name: String) -> Self {
+    pub fn new(credential: Credential, secret: String, project_id: String, name: String) -> Self {
         let id = Uuid::new_v4().to_string();
 
         Self {
             credential,
+            secret,
             id,
             project_id,
             name,
@@ -223,6 +251,7 @@ pub struct ProjectSecretCache {
     pub project_id: String,
     pub name: String,
     pub phc: String,
+    pub secret: Vec<u8>,
 }
 impl From<ProjectSecretCreated> for ProjectSecretCache {
     fn from(value: ProjectSecretCreated) -> Self {
@@ -231,6 +260,7 @@ impl From<ProjectSecretCreated> for ProjectSecretCache {
             project_id: value.project_id,
             name: value.name,
             phc: value.phc,
+            secret: value.secret,
         }
     }
 }
@@ -334,10 +364,11 @@ mod tests {
         }
     }
 
-    const KEY: &str = "dmtr_apikey12e8hvc63gfp8jutwv3t4z6jy2gr8lswa";
-    const PHC: &str = "$argon2id$v=19$m=19456,t=2,p=1$L3YdRbmEOXUg66MZF9McXQ$h4LohO/+Zvo6xRhcomO7KuIjrM9pAlHeQU9ZwEYMwnM";
+    const KEY: &str = "dmtr_apikey1g9gyswtcf3zxwd26v4x5jj3jw5wx3sn2";
+    const PHC: &str = "$argon2id$v=19$m=19456,t=2,p=1$xVIt6Wr/bm1FewVhTr6zgA$nTO6EgGeOYZe7thACrHmFUWND40U4GEQCXKyvqzvRvs";
+    const SECRET: &str = "fabric@txpipe";
     const INVALID_KEY: &str = "dmtr_apikey1xe6xzcjxv9nhycnz2ffnq6m02y7nat9e";
-    const INVALID_HRP_KEY: &str = "mykey1x9zk7c60wfj8xv6929ykynmnwseehq78";
+    const INVALID_HRP_KEY: &str = "dmtr_test18pp5vkjzfuuyzwpeg9gk2a2zvsylc5wg";
 
     impl Default for CreateProjectSecretCmd {
         fn default() -> Self {
@@ -346,6 +377,7 @@ mod tests {
                 id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
                 name: "Key 1".into(),
+                secret: SECRET.into(),
             }
         }
     }
@@ -356,6 +388,7 @@ mod tests {
                 project_id: Uuid::new_v4().to_string(),
                 name: "Key 1".into(),
                 phc: PHC.into(),
+                secret: SECRET.to_bytes().to_vec(),
             }
         }
     }
@@ -366,6 +399,7 @@ mod tests {
                 project_id: Uuid::new_v4().to_string(),
                 name: "Key 1".into(),
                 phc: PHC.into(),
+                secret: SECRET.to_bytes().to_vec(),
             }
         }
     }

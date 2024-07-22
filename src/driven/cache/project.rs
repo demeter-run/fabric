@@ -79,13 +79,14 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     async fn create_secret(&self, secret: &ProjectSecretCache) -> Result<()> {
         sqlx::query!(
             r#"
-                INSERT INTO project_secret (id, project_id, name, phc)
-                VALUES ($1, $2, $3, $4)
+                INSERT INTO project_secret (id, project_id, name, phc, secret)
+                VALUES ($1, $2, $3, $4, $5)
             "#,
             secret.id,
             secret.project_id,
             secret.name,
             secret.phc,
+            secret.secret
         )
         .execute(&self.sqlite.db)
         .await?;
@@ -95,7 +96,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecretCache>> {
         let secrets = sqlx::query_as::<_, ProjectSecretCache>(
             r#"
-                SELECT id, project_id, name, phc 
+                SELECT id, project_id, name, phc, secret
                 FROM project_secret WHERE project_id = $1;
             "#,
         )
@@ -143,6 +144,7 @@ impl FromRow<'_, SqliteRow> for ProjectSecretCache {
             project_id: row.try_get("project_id")?,
             name: row.try_get("name")?,
             phc: row.try_get("phc")?,
+            secret: row.try_get("secret")?,
         })
     }
 }
