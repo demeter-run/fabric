@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS project (
   namespace TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   owner TEXT NOT NULL,
+  status TEXT NOT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
 );
