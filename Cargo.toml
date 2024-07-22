@@ -9,7 +9,7 @@ dmtri = { version = "0.1.0", git = "https://github.com/demeter-run/specs.git" }
 
 anyhow = "1.0.86"
 async-trait = "0.1.80"
-sqlx = { version = "0.7.4", features = ["runtime-tokio-rustls", "sqlite"] }
+sqlx = { version = "0.7.4", features = ["runtime-tokio-rustls", "sqlite", "chrono"] }
 tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread", "time"] }
 tonic = "0.11.0"
 serde = { version = "1.0.203", features = ["derive"] }
@@ -33,6 +33,7 @@ bech32 = "0.11.0"
 argon2 = "0.5.3"
 tower = "0.4.13"
 hyper = "1.4.1"
+chrono = "0.4.38"
 
 [dev-dependencies]
 mockall = "0.12.1"

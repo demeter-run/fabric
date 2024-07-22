@@ -21,7 +21,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>> {
         let project = sqlx::query_as::<_, ProjectCache>(
             r#"
-                SELECT id, namespace, name, owner 
+                SELECT id, namespace, name, owner, created_at, updated_at 
                 FROM project WHERE namespace = $1;
             "#,
         )
@@ -34,7 +34,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>> {
         let project = sqlx::query_as::<_, ProjectCache>(
             r#"
-                SELECT id, namespace, name, owner 
+                SELECT id, namespace, name, owner, created_at, updated_at
                 FROM project WHERE id = $1;
             "#,
         )
@@ -50,24 +50,27 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         sqlx::query!(
             r#"
-                INSERT INTO project (id, namespace, name, owner)
-                VALUES ($1, $2, $3, $4)
+                INSERT INTO project (id, namespace, name, owner, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6)
             "#,
             project.id,
             project.namespace,
             project.name,
             project.owner,
+            project.created_at,
+            project.updated_at
         )
         .execute(&mut *tx)
         .await?;
 
         sqlx::query!(
             r#"
-                INSERT INTO project_user (project_id, user_id)
-                VALUES ($1, $2)
+                INSERT INTO project_user (project_id, user_id, created_at)
+                VALUES ($1, $2, $3)
             "#,
             project.id,
             project.owner,
+            project.created_at
         )
         .execute(&mut *tx)
         .await?;
@@ -79,14 +82,15 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     async fn create_secret(&self, secret: &ProjectSecretCache) -> Result<()> {
         sqlx::query!(
             r#"
-                INSERT INTO project_secret (id, project_id, name, phc, secret)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO project_secret (id, project_id, name, phc, secret, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6)
             "#,
             secret.id,
             secret.project_id,
             secret.name,
             secret.phc,
-            secret.secret
+            secret.secret,
+            secret.created_at
         )
         .execute(&self.sqlite.db)
         .await?;
@@ -96,7 +100,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecretCache>> {
         let secrets = sqlx::query_as::<_, ProjectSecretCache>(
             r#"
-                SELECT id, project_id, name, phc, secret
+                SELECT id, project_id, name, phc, secret, created_at
                 FROM project_secret WHERE project_id = $1;
             "#,
         )
@@ -113,7 +117,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     ) -> Result<Option<ProjectUserCache>> {
         let project_user = sqlx::query_as::<_, ProjectUserCache>(
             r#"
-                SELECT user_id, project_id
+                SELECT user_id, project_id, created_at
                 FROM project_user WHERE user_id = $1 and project_id = $2;
             "#,
         )
@@ -133,6 +137,8 @@ impl FromRow<'_, SqliteRow> for ProjectCache {
             name: row.try_get("name")?,
             namespace: row.try_get("namespace")?,
             owner: row.try_get("owner")?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
         })
     }
 }
@@ -145,6 +151,7 @@ impl FromRow<'_, SqliteRow> for ProjectSecretCache {
             name: row.try_get("name")?,
             phc: row.try_get("phc")?,
             secret: row.try_get("secret")?,
+            created_at: row.try_get("created_at")?,
         })
     }
 }
@@ -154,6 +161,7 @@ impl FromRow<'_, SqliteRow> for ProjectUserCache {
         Ok(Self {
             user_id: row.try_get("user_id")?,
             project_id: row.try_get("project_id")?,
+            created_at: row.try_get("created_at")?,
         })
     }
 }
