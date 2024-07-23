@@ -10,7 +10,7 @@ use rand::{
     Rng,
 };
 use rdkafka::message::ToBytes;
-use std::sync::Arc;
+use std::{fmt::Display, str::FromStr, sync::Arc};
 use tracing::{error, info};
 use uuid::Uuid;
 
@@ -35,6 +35,7 @@ pub async fn create(
         namespace: cmd.namespace.clone(),
         name: cmd.name,
         owner: user_id,
+        status: ProjectStatus::Active.to_string(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
@@ -46,7 +47,7 @@ pub async fn create(
 }
 
 pub async fn create_cache(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectCreated) -> Result<()> {
-    cache.create(&evt.into()).await?;
+    cache.create(&evt.try_into()?).await?;
 
     Ok(())
 }
@@ -210,24 +211,52 @@ impl CreateProjectCmd {
     }
 }
 
+pub enum ProjectStatus {
+    Active,
+    Deleted,
+}
+impl FromStr for ProjectStatus {
+    type Err = Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "active" => Ok(ProjectStatus::Active),
+            "deleted" => Ok(ProjectStatus::Deleted),
+            _ => bail!("project status not supported"),
+        }
+    }
+}
+impl Display for ProjectStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProjectStatus::Active => write!(f, "active"),
+            ProjectStatus::Deleted => write!(f, "deleted"),
+        }
+    }
+}
+
 pub struct ProjectCache {
     pub id: String,
     pub name: String,
     pub namespace: String,
     pub owner: String,
+    pub status: ProjectStatus,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
-impl From<ProjectCreated> for ProjectCache {
-    fn from(value: ProjectCreated) -> Self {
-        Self {
+impl TryFrom<ProjectCreated> for ProjectCache {
+    type Error = Error;
+
+    fn try_from(value: ProjectCreated) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             namespace: value.namespace,
             name: value.name,
             owner: value.owner,
+            status: value.status.parse()?,
             created_at: value.created_at,
             updated_at: value.updated_at,
-        }
+        })
     }
 }
 
@@ -361,6 +390,7 @@ mod tests {
                 name: "New Project".into(),
                 namespace: "sonic-vegas".into(),
                 owner: "user id".into(),
+                status: ProjectStatus::Active,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             }
@@ -373,6 +403,7 @@ mod tests {
                 name: "New Project".into(),
                 namespace: "sonic-vegas".into(),
                 owner: "user id".into(),
+                status: ProjectStatus::Active.to_string(),
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             }

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Error, Result};
 use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
@@ -21,7 +21,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>> {
         let project = sqlx::query_as::<_, ProjectCache>(
             r#"
-                SELECT id, namespace, name, owner, created_at, updated_at 
+                SELECT id, namespace, name, owner, status, created_at, updated_at 
                 FROM project WHERE namespace = $1;
             "#,
         )
@@ -34,7 +34,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>> {
         let project = sqlx::query_as::<_, ProjectCache>(
             r#"
-                SELECT id, namespace, name, owner, created_at, updated_at
+                SELECT id, namespace, name, owner, status, created_at, updated_at
                 FROM project WHERE id = $1;
             "#,
         )
@@ -48,15 +48,18 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     async fn create(&self, project: &ProjectCache) -> Result<()> {
         let mut tx = self.sqlite.db.begin().await?;
 
+        let status = project.status.to_string();
+
         sqlx::query!(
             r#"
-                INSERT INTO project (id, namespace, name, owner, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO project (id, namespace, name, owner, status, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
             project.id,
             project.namespace,
             project.name,
             project.owner,
+            status,
             project.created_at,
             project.updated_at
         )
@@ -132,11 +135,16 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
 impl FromRow<'_, SqliteRow> for ProjectCache {
     fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        let status: &str = row.try_get("status")?;
+
         Ok(Self {
             id: row.try_get("id")?,
             name: row.try_get("name")?,
             namespace: row.try_get("namespace")?,
             owner: row.try_get("owner")?,
+            status: status
+                .parse()
+                .map_err(|err: Error| sqlx::Error::Decode(err.into()))?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         })

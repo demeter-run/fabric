@@ -18,6 +18,7 @@ pub struct ProjectCreated {
     pub name: String,
     pub namespace: String,
     pub owner: String,
+    pub status: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
