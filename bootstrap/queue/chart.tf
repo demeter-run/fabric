@@ -8,9 +8,11 @@ resource "helm_release" "redpanda" {
   values = [templatefile(
     "${path.module}/values.yml.tftpl",
     {
-      users          = var.users,
-      admin_username = var.admin_username,
+      admin_username = var.admin_username
       admin_password = var.admin_password
+      rpc_username   = var.rpc_username
+      rpc_password   = var.rpc_password
+      daemon_users   = var.daemon_users
     }
   )]
 

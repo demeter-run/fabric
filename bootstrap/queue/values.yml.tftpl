@@ -22,7 +22,10 @@ auth:
       - name: ${admin_username}
         password: ${admin_password}
         mechanism: SCRAM-SHA-256
-      %{ for user in users }
+      - name: ${rpc_username}
+        password: ${rpc_password}
+        mechanism: SCRAM-SHA-256
+      %{ for user in daemon_users }
       - name: ${user.name}
         password: ${user.password}
         mechanism: SCRAM-SHA-256
