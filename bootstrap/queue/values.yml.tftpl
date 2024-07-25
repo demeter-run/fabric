@@ -22,14 +22,6 @@ auth:
       - name: ${admin_username}
         password: ${admin_password}
         mechanism: SCRAM-SHA-256
-      - name: ${rpc_username}
-        password: ${rpc_password}
-        mechanism: SCRAM-SHA-256
-      %{ for user in daemon_users }
-      - name: ${user.name}
-        password: ${user.password}
-        mechanism: SCRAM-SHA-256
-      %{ endfor }
 
 # -- TLS settings.
 # https://docs.redpanda.com/docs/manage/kubernetes/security/kubernetes-tls/

@@ -75,11 +75,11 @@ resource "kubernetes_job_v1" "fabric_queue_setup" {
 
           resources {
             limits = {
-              cpu    = "500m"
+              cpu    = "200m"
               memory = "512Mi"
             }
             requests = {
-              cpu    = "500m"
+              cpu    = "200m"
               memory = "512Mi"
             }
           }
