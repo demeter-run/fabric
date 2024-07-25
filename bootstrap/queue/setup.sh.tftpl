@@ -31,7 +31,9 @@ if ! acl_exists "User:${rpc_username}"; then
     rpk $RPK_PARAMS acl user create ${rpc_username} -p '${rpc_password}' --mechanism SCRAM-SHA-256
     rpk $RPK_PARAMS acl create \
       --allow-principal User:${rpc_username} \
-      --operation all --topic ${events_topic} \
+      --operation all --topic ${events_topic}
+    rpk $RPK_PARAMS acl create \
+      --allow-principal User:${rpc_username} \
       --operation all --group '${rpc_username}-*' --resource-pattern-type prefixed
 else
     echo "User ${rpc_username} already exist"
