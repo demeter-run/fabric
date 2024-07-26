@@ -211,6 +211,7 @@ impl CreateProjectCmd {
     }
 }
 
+#[derive(Debug)]
 pub enum ProjectStatus {
     Active,
     Deleted,
@@ -235,6 +236,7 @@ impl Display for ProjectStatus {
     }
 }
 
+#[derive(Debug)]
 pub struct ProjectCache {
     pub id: String,
     pub name: String,
@@ -313,6 +315,7 @@ pub struct ProjectUserCache {
 
 #[async_trait::async_trait]
 pub trait ProjectDrivenCache: Send + Sync {
+    async fn find(&self, user_id: &str) -> Result<Vec<ProjectCache>>;
     async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>>;
     async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
     async fn create(&self, project: &ProjectCache) -> Result<()>;
@@ -345,6 +348,7 @@ mod tests {
 
         #[async_trait::async_trait]
         impl ProjectDrivenCache for FakeProjectDrivenCache {
+            async fn find(&self, user_id: &str) -> Result<Vec<ProjectCache>>;
             async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
             async fn create(&self, project: &ProjectCache) -> Result<()>;

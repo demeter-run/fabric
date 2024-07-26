@@ -165,6 +165,7 @@ mod tests {
 
         #[async_trait::async_trait]
         impl ProjectDrivenCache for FakeProjectDrivenCache {
+            async fn find(&self, user_id: &str) -> Result<Vec<ProjectCache>>;
             async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
             async fn create(&self, project: &ProjectCache) -> Result<()>;

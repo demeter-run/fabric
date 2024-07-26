@@ -18,6 +18,28 @@ impl SqliteProjectDrivenCache {
 }
 #[async_trait::async_trait]
 impl ProjectDrivenCache for SqliteProjectDrivenCache {
+    async fn find(&self, user_id: &str) -> Result<Vec<ProjectCache>> {
+        let projects = sqlx::query_as::<_, ProjectCache>(
+            r#"
+                SELECT 
+                    p.id as id, 
+                    p.namespace as namespace, 
+                    p.name as name, 
+                    p.owner as owner, 
+                    p.status as status, 
+                    p.created_at as created_at, 
+                    p.updated_at as updated_at  
+                FROM project_user pu 
+                INNER JOIN project as p on p.id = pu.project_id
+                WHERE pu.user_id = $1;
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(projects)
+    }
     async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>> {
         let project = sqlx::query_as::<_, ProjectCache>(
             r#"
@@ -190,6 +212,26 @@ mod tests {
 
         let result = cache.create(&project).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_find_user_projects() {
+        let cache = get_cache().await;
+        let project = ProjectCache::default();
+
+        cache.create(&project).await.unwrap();
+        let result = cache.find(&project.owner).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().len() == 1);
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_user_projects() {
+        let cache = get_cache().await;
+        let result = cache.find(Default::default()).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
     }
 
     #[tokio::test]
