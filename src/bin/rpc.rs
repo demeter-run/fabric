@@ -42,6 +42,7 @@ struct Config {
     db_path: String,
     auth: Auth,
     secret: String,
+    topic: String,
     kafka_producer: HashMap<String, String>,
     kafka_consumer: HashMap<String, String>,
 }
@@ -68,6 +69,7 @@ impl From<Config> for GrpcConfig {
             auth_url: value.auth.url,
             secret: value.secret,
             kafka: value.kafka_producer,
+            topic: value.topic,
         }
     }
 }
@@ -77,6 +79,7 @@ impl From<Config> for CacheConfig {
         Self {
             kafka: value.kafka_consumer,
             db_path: value.db_path,
+            topic: value.topic,
         }
     }
 }

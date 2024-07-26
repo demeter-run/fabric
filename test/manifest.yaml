@@ -103,6 +103,7 @@ roleRef:
 apiVersion: v1
 data:
   daemon.toml: |
+    topic = "events"
     [kafka]
     "bootstrap.servers" = "redpanda.demeter-kafka.svc.cluster.local:19092"
     "group.id"= "demeter-daemon"
@@ -154,6 +155,7 @@ data:
     addr="0.0.0.0:80"
     db_path="test.db"
     secret="fabric@txpipe"
+    topic = "events"
 
     [kafka_producer]
     "bootstrap.servers" = "redpanda.demeter-kafka.svc.cluster.local:19092"

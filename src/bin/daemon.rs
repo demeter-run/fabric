@@ -28,6 +28,7 @@ async fn main() -> Result<()> {
 
 #[derive(Debug, Deserialize)]
 struct Config {
+    topic: String,
     kafka: HashMap<String, String>,
 }
 impl Config {
@@ -47,6 +48,9 @@ impl Config {
 
 impl From<Config> for MonitorConfig {
     fn from(value: Config) -> Self {
-        Self { kafka: value.kafka }
+        Self {
+            kafka: value.kafka,
+            topic: value.topic,
+        }
     }
 }

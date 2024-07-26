@@ -23,7 +23,7 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     let project_cache = Arc::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
 
-    let event_bridge = Arc::new(KafkaProducer::new("events", &config.kafka)?);
+    let event_bridge = Arc::new(KafkaProducer::new(&config.topic, &config.kafka)?);
 
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(dmtri::demeter::ops::v1alpha::FILE_DESCRIPTOR_SET)
@@ -66,5 +66,6 @@ pub struct GrpcConfig {
     pub db_path: String,
     pub auth_url: String,
     pub secret: String,
+    pub topic: String,
     pub kafka: HashMap<String, String>,
 }
