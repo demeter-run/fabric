@@ -1,0 +1,56 @@
+#!/bin/bash
+
+set -e  # Exit immediately if any command fails
+
+# Define reusable rpk parameters
+RPK_PARAMS='-X sasl.mechanism=SCRAM-SHA-256 -X user=${admin_username} -X pass=${admin_password}'
+
+topic_exists() {
+    rpk $RPK_PARAMS topic list | grep -q "$1"
+}
+
+acl_exists() {
+    rpk $RPK_PARAMS acl user list | grep -q "$1"
+}
+
+# Create topic, if it doesn't exist
+if ! topic_exists "${events_topic}"; then
+    echo "Creating topic '${events_topic}'"
+    rpk $RPK_PARAMS topic create ${events_topic} \
+      -r "${replication}" \          # Replication factor
+      -c "cleanup.policy=compact" \  # Don't delete old stuff
+      -c "retention.ms=-1"           # Keep forever
+
+else
+    echo "Topic '${events_topic}' already exists"
+fi
+
+# Create RPC user.
+if ! acl_exists "User:${rpc_username}"; then
+    echo "Creating user: ${rpc_username}"
+    rpk $RPK_PARAMS acl user create ${rpc_username} -p '${rpc_password}' --mechanism SCRAM-SHA-256
+    rpk $RPK_PARAMS acl create \
+      --allow-principal User:${rpc_username} \
+      --operation all --topic ${events_topic}
+    rpk $RPK_PARAMS acl create \
+      --allow-principal User:${rpc_username} \
+      --operation all --group '${rpc_username}-*' --resource-pattern-type prefixed
+else
+    echo "User ${rpc_username} already exist"
+fi
+
+# Define ACLs for daemon users, only read with a particular username
+%{ for user in daemon_users }
+if ! acl_exists "User:${user.name}"; then
+    echo "Creating ACLs for ${user.name}"
+    rpk $RPK_PARAMS acl user create ${user.name} -p '${user.password}' --mechanism SCRAM-SHA-256
+    rpk $RPK_PARAMS acl create \
+      --allow-principal User:${user.name} \
+      --operation read --topic ${events_topic} \
+      --operation read --group ${user.consumer_name}
+else
+    echo "User ${user.name} already exist"
+fi
+%{ endfor }
+
+echo "Setup complete."

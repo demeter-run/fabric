@@ -7,17 +7,28 @@ variable "instance_name" {
 }
 
 variable "admin_username" {
-  type = string
+  type    = string
+  default = "admin"
 }
 
 variable "admin_password" {
   type = string
 }
 
-variable "users" {
+variable "rpc_username" {
+  type    = string
+  default = "rpc"
+}
+
+variable "rpc_password" {
+  type = string
+}
+
+variable "daemon_users" {
   type = list(object({
-    name     = string
-    password = string
+    name          = string
+    password      = string
+    consumer_name = string
   }))
 }
 
@@ -51,4 +62,9 @@ variable "resources" {
 variable "replicas" {
   type    = number
   default = 3
+}
+
+variable "replication" {
+  type    = number
+  default = null
 }

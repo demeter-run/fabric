@@ -1,19 +1,45 @@
 locals {
-  create_topic_job_name = "fabric-queue-create-topic"
+  setup_job_name       = "fabric-queue-setup"
+  setup_configmap_name = "fabric-queue-setup-config"
+  replication          = coalesce(var.replication, var.replicas)
+  events_topic         = "events"
 }
 
-resource "kubernetes_job_v1" "fabric_queue_create_topic" {
-  depends_on = [helm_release.redpanda]
+resource "kubernetes_config_map_v1" "fabric_queue_setup_config" {
+  metadata {
+    name      = local.setup_configmap_name
+    namespace = var.namespace
+  }
+
+  data = {
+    "setup.sh" = "${templatefile(
+      "${path.module}/setup.sh.tftpl",
+      {
+        admin_username = var.admin_username
+        admin_password = var.admin_password
+        rpc_username   = var.rpc_username
+        rpc_password   = var.rpc_password
+        replication    = local.replication
+        events_topic   = local.events_topic
+        daemon_users   = var.daemon_users
+      }
+    )}"
+  }
+}
+
+
+resource "kubernetes_job_v1" "fabric_queue_setup" {
+  depends_on = [helm_release.redpanda, kubernetes_config_map_v1.fabric_queue_setup_config]
 
   metadata {
-    name      = local.create_topic_job_name
+    name      = local.setup_job_name
     namespace = var.namespace
   }
   spec {
     template {
       metadata {
         labels = {
-          "demeter.run/instance" = local.create_topic_job_name
+          "demeter.run/instance" = local.setup_job_name
         }
       }
       spec {
@@ -22,18 +48,9 @@ resource "kubernetes_job_v1" "fabric_queue_create_topic" {
         }
 
         container {
-          name  = "main"
-          image = "docker.redpanda.com/redpandadata/redpanda:v23.3.18"
-          command = [
-            "rpk",
-            "-X", "sasl.mechanism=SCRAM-SHA-256",
-            "-X", "user=${var.admin_username}",
-            "-X", "pass=${var.admin_password}",
-            "topic", "create", "events",
-            "-r", "${var.replicas}",
-            "-c", "cleanup.policy=compact",
-            "-c", "retention.ms=-1",
-          ]
+          name              = "main"
+          image             = "docker.redpanda.com/redpandadata/redpanda:v23.3.18"
+          command           = ["/bin/sh", "/var/setup/setup.sh"]
           image_pull_policy = "Always"
 
           volume_mount {
@@ -51,13 +68,18 @@ resource "kubernetes_job_v1" "fabric_queue_create_topic" {
             mount_path = "/etc/redpanda"
           }
 
+          volume_mount {
+            name       = "setup"
+            mount_path = "/var/setup"
+          }
+
           resources {
             limits = {
-              cpu    = "500m"
+              cpu    = "200m"
               memory = "512Mi"
             }
             requests = {
-              cpu    = "500m"
+              cpu    = "200m"
               memory = "512Mi"
             }
           }
@@ -81,6 +103,13 @@ resource "kubernetes_job_v1" "fabric_queue_create_topic" {
           name = "config"
           config_map {
             name = "redpanda"
+          }
+        }
+
+        volume {
+          name = "setup"
+          config_map {
+            name = local.setup_configmap_name
           }
         }
 
