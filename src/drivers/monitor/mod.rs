@@ -14,14 +14,12 @@ use crate::{
 pub async fn subscribe(config: MonitorConfig) -> Result<()> {
     let cluster = Arc::new(K8sCluster::new().await?);
 
-    let topic = String::from("events");
-
     let mut client_config = ClientConfig::new();
     for (k, v) in config.kafka.iter() {
         client_config.set(k, v);
     }
     let consumer: StreamConsumer = client_config.create()?;
-    consumer.subscribe(&[&topic])?;
+    consumer.subscribe(&[&config.topic])?;
 
     info!("Subscriber running");
     loop {
@@ -52,5 +50,6 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
 }
 
 pub struct MonitorConfig {
+    pub topic: String,
     pub kafka: HashMap<String, String>,
 }
