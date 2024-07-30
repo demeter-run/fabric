@@ -1,4 +1,4 @@
-use anyhow::{bail, Error, Result};
+use anyhow::{bail, ensure, Error, Result};
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use bech32::{Bech32m, Hrp};
 use chrono::{DateTime, Utc};
@@ -14,9 +14,12 @@ use std::{fmt::Display, str::FromStr, sync::Arc};
 use tracing::{error, info};
 use uuid::Uuid;
 
+use crate::domain::PAGE_SIZE_MAX;
+
 use super::{
     auth::{Credential, UserId},
     event::{EventDrivenBridge, ProjectCreated, ProjectSecretCreated},
+    Count, PAGE_SIZE_DEFAULT,
 };
 
 pub async fn create(
@@ -50,6 +53,15 @@ pub async fn create_cache(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectCreate
     cache.create(&evt.try_into()?).await?;
 
     Ok(())
+}
+
+pub async fn find_cache(
+    cache: Arc<dyn ProjectDrivenCache>,
+    cmd: FindProjectCmd,
+) -> Result<(Vec<ProjectCache>, Count)> {
+    let user_id = assert_permission(cmd.credential)?;
+
+    cache.find(&user_id, &cmd.page, &cmd.page_size).await
 }
 
 pub async fn apply_manifest(
@@ -186,6 +198,30 @@ fn assert_permission(credential: Credential) -> Result<UserId> {
 }
 
 #[derive(Debug, Clone)]
+pub struct FindProjectCmd {
+    pub credential: Credential,
+    pub page: u32,
+    pub page_size: u32,
+}
+impl FindProjectCmd {
+    pub fn new(credential: Credential, page: Option<u32>, page_size: Option<u32>) -> Result<Self> {
+        let page = page.unwrap_or(1);
+        let page_size = page_size.unwrap_or(PAGE_SIZE_DEFAULT);
+
+        ensure!(
+            page_size <= PAGE_SIZE_MAX,
+            "page_size exceeded the limit of {PAGE_SIZE_MAX}"
+        );
+
+        Ok(Self {
+            credential,
+            page,
+            page_size,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct CreateProjectCmd {
     pub credential: Credential,
     pub id: String,
@@ -315,7 +351,12 @@ pub struct ProjectUserCache {
 
 #[async_trait::async_trait]
 pub trait ProjectDrivenCache: Send + Sync {
-    async fn find(&self, user_id: &str) -> Result<Vec<ProjectCache>>;
+    async fn find(
+        &self,
+        user_id: &str,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<(Vec<ProjectCache>, Count)>;
     async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>>;
     async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
     async fn create(&self, project: &ProjectCache) -> Result<()>;
@@ -348,7 +389,7 @@ mod tests {
 
         #[async_trait::async_trait]
         impl ProjectDrivenCache for FakeProjectDrivenCache {
-            async fn find(&self, user_id: &str) -> Result<Vec<ProjectCache>>;
+            async fn find(&self, user_id: &str, page: &u32, page_size: &u32) -> Result<(Vec<ProjectCache>, Count)>;
             async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
             async fn create(&self, project: &ProjectCache) -> Result<()>;

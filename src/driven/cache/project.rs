@@ -2,8 +2,9 @@ use anyhow::{Error, Result};
 use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
-use crate::domain::project::{
-    ProjectCache, ProjectDrivenCache, ProjectSecretCache, ProjectUserCache,
+use crate::domain::{
+    project::{ProjectCache, ProjectDrivenCache, ProjectSecretCache, ProjectUserCache},
+    Count,
 };
 
 use super::SqliteCache;
@@ -18,8 +19,15 @@ impl SqliteProjectDrivenCache {
 }
 #[async_trait::async_trait]
 impl ProjectDrivenCache for SqliteProjectDrivenCache {
-    async fn find(&self, user_id: &str) -> Result<Vec<ProjectCache>> {
-        let projects = sqlx::query_as::<_, ProjectCache>(
+    async fn find(
+        &self,
+        user_id: &str,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<(Vec<ProjectCache>, Count)> {
+        let offset = page_size * (page - 1);
+
+        let rows = sqlx::query(
             r#"
                 SELECT 
                     p.id as id, 
@@ -28,17 +36,29 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     p.owner as owner, 
                     p.status as status, 
                     p.created_at as created_at, 
-                    p.updated_at as updated_at  
+                    p.updated_at as updated_at,
+                    count(*) over () as count
                 FROM project_user pu 
                 INNER JOIN project as p on p.id = pu.project_id
-                WHERE pu.user_id = $1;
+                WHERE pu.user_id = $1
+                LIMIT $2
+                OFFSET $3;
             "#,
         )
         .bind(user_id)
+        .bind(page_size)
+        .bind(offset)
         .fetch_all(&self.sqlite.db)
         .await?;
 
-        Ok(projects)
+        let count = rows.first().map(|r| r.get("count")).unwrap_or(0);
+
+        let projects = rows
+            .iter()
+            .map(ProjectCache::from_row)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok((projects, count))
     }
     async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>> {
         let project = sqlx::query_as::<_, ProjectCache>(
@@ -220,18 +240,35 @@ mod tests {
         let project = ProjectCache::default();
 
         cache.create(&project).await.unwrap();
-        let result = cache.find(&project.owner).await;
+        let result = cache.find(&project.owner, &1, &12).await;
 
         assert!(result.is_ok());
-        assert!(result.unwrap().len() == 1);
+
+        let (projects, count) = result.unwrap();
+        assert!(projects.len() == 1);
+        assert!(count == 1);
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_user_projects_invalid_page() {
+        let cache = get_cache().await;
+        let project = ProjectCache::default();
+
+        cache.create(&project).await.unwrap();
+        let result = cache.find(&project.owner, &2, &12).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().0.is_empty());
     }
     #[tokio::test]
     async fn it_should_return_none_find_user_projects() {
         let cache = get_cache().await;
-        let result = cache.find(Default::default()).await;
+        let result = cache.find(Default::default(), &1, &12).await;
 
         assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
+
+        let (projects, count) = result.unwrap();
+        assert!(projects.is_empty());
+        assert!(count == 0);
     }
 
     #[tokio::test]

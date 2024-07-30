@@ -5,7 +5,10 @@ use tonic::{async_trait, Status};
 use crate::domain::{
     auth::Credential,
     event::EventDrivenBridge,
-    project::{self, CreateProjectCmd, CreateProjectSecretCmd, ProjectDrivenCache},
+    project::{
+        self, CreateProjectCmd, CreateProjectSecretCmd, FindProjectCmd, ProjectCache,
+        ProjectDrivenCache,
+    },
 };
 
 pub struct ProjectServiceImpl {
@@ -85,5 +88,52 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         };
 
         Ok(tonic::Response::new(message))
+    }
+
+    async fn find_projects(
+        &self,
+        request: tonic::Request<proto::FindProjectsRequest>,
+    ) -> Result<tonic::Response<proto::FindProjectsResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::permission_denied("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = FindProjectCmd::new(credential, req.page, req.page_size)
+            .map_err(|err| Status::failed_precondition(err.to_string()))?;
+
+        let (projects, count) = project::find_cache(self.cache.clone(), cmd.clone())
+            .await
+            .map_err(|_| Status::internal("Internal error"))?;
+
+        let meta = proto::Meta {
+            page: cmd.page,
+            page_size: cmd.page_size,
+            count,
+        };
+
+        let records = projects.into_iter().map(|v| v.into()).collect();
+
+        let message = proto::FindProjectsResponse {
+            meta: Some(meta),
+            records,
+        };
+
+        Ok(tonic::Response::new(message))
+    }
+}
+
+impl From<ProjectCache> for proto::Project {
+    fn from(value: ProjectCache) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            status: value.status.to_string(),
+            namespace: value.namespace,
+            created_at: value.created_at.to_rfc3339(),
+            updated_at: value.updated_at.to_rfc3339(),
+        }
     }
 }
