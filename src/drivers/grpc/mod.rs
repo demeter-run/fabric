@@ -12,6 +12,7 @@ use dmtri::demeter::ops::v1alpha::project_service_server::ProjectServiceServer;
 
 use crate::driven::auth::Auth0Provider;
 use crate::driven::cache::project::SqliteProjectDrivenCache;
+use crate::driven::cache::resource::SqliteResourceDrivenCache;
 use crate::driven::cache::SqliteCache;
 use crate::driven::kafka::KafkaProducer;
 
@@ -22,6 +23,7 @@ mod resource;
 pub async fn server(config: GrpcConfig) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     let project_cache = Arc::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+    let resource_cache = Arc::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
 
     let event_bridge = Arc::new(KafkaProducer::new(&config.topic, &config.kafka)?);
 
@@ -43,8 +45,11 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
     );
     let project_service = ProjectServiceServer::with_interceptor(project_inner, auth.clone());
 
-    let resource_inner =
-        resource::ResourceServiceImpl::new(project_cache.clone(), event_bridge.clone());
+    let resource_inner = resource::ResourceServiceImpl::new(
+        project_cache.clone(),
+        resource_cache.clone(),
+        event_bridge.clone(),
+    );
     let resource_service = ResourceServiceServer::with_interceptor(resource_inner, auth.clone());
 
     let address = SocketAddr::from_str(&config.addr)?;

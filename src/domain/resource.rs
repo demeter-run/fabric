@@ -8,6 +8,8 @@ use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
 
+use crate::domain::{PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX};
+
 use super::{
     auth::Credential,
     event::{EventDrivenBridge, ResourceCreated},
@@ -45,6 +47,18 @@ pub async fn create_cache(cache: Arc<dyn ResourceDrivenCache>, evt: ResourceCrea
     cache.create(&evt.into()).await?;
 
     Ok(())
+}
+
+pub async fn find_cache(
+    project_cache: Arc<dyn ProjectDrivenCache>,
+    resource_cache: Arc<dyn ResourceDrivenCache>,
+    cmd: FindResourcdCmd,
+) -> Result<Vec<ResourceCache>> {
+    assert_permission(project_cache.clone(), &cmd.credential, &cmd.project_id).await?;
+
+    resource_cache
+        .find(&cmd.project_id, &cmd.page, &cmd.page_size)
+        .await
 }
 
 pub async fn apply_manifest(
@@ -119,6 +133,37 @@ impl CreateResourceCmd {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct FindResourcdCmd {
+    pub credential: Credential,
+    pub project_id: String,
+    pub page: u32,
+    pub page_size: u32,
+}
+impl FindResourcdCmd {
+    pub fn new(
+        credential: Credential,
+        project_id: String,
+        page: Option<u32>,
+        page_size: Option<u32>,
+    ) -> Result<Self> {
+        let page = page.unwrap_or(1);
+        let page_size = page_size.unwrap_or(PAGE_SIZE_DEFAULT);
+
+        ensure!(
+            page_size <= PAGE_SIZE_MAX,
+            "page_size exceeded the limit of {PAGE_SIZE_MAX}"
+        );
+
+        Ok(Self {
+            credential,
+            project_id,
+            page,
+            page_size,
+        })
+    }
+}
+
 pub struct ResourceCache {
     pub id: String,
     pub project_id: String,
@@ -142,6 +187,12 @@ impl From<ResourceCreated> for ResourceCache {
 
 #[async_trait::async_trait]
 pub trait ResourceDrivenCache: Send + Sync {
+    async fn find(
+        &self,
+        project_id: &str,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<Vec<ResourceCache>>;
     async fn create(&self, resource: &ResourceCache) -> Result<()>;
 }
 
@@ -157,7 +208,6 @@ mod tests {
 
     use crate::domain::event::Event;
     use crate::domain::project::{ProjectCache, ProjectSecretCache, ProjectUserCache};
-    use crate::domain::Count;
 
     use super::*;
 
@@ -166,7 +216,7 @@ mod tests {
 
         #[async_trait::async_trait]
         impl ProjectDrivenCache for FakeProjectDrivenCache {
-            async fn find(&self, user_id: &str, page: &u32, page_size: &u32) -> Result<(Vec<ProjectCache>, Count)>;
+            async fn find(&self, user_id: &str, page: &u32, page_size: &u32) -> Result<Vec<ProjectCache>>;
             async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
             async fn create(&self, project: &ProjectCache) -> Result<()>;
@@ -181,6 +231,7 @@ mod tests {
 
         #[async_trait::async_trait]
         impl ResourceDrivenCache for FakeResourceDrivenCache {
+            async fn find(&self,project_id: &str,page: &u32,page_size: &u32) -> Result<Vec<ResourceCache>>;
             async fn create(&self, resource: &ResourceCache) -> Result<()>;
         }
     }
@@ -211,6 +262,16 @@ mod tests {
                 project_id: Uuid::new_v4().to_string(),
                 kind: "CardanoNode".into(),
                 data: "{\"spec\":{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}}".into(),
+            }
+        }
+    }
+    impl Default for FindResourcdCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                project_id: Uuid::new_v4().to_string(),
+                page: 1,
+                page_size: 12,
             }
         }
     }
@@ -300,6 +361,51 @@ mod tests {
         };
 
         let result = create(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn it_should_find_project_resources_cache() {
+        let mut project_cache = MockFakeProjectDrivenCache::new();
+        project_cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUserCache::default())));
+
+        let mut resource_cache = MockFakeResourceDrivenCache::new();
+        resource_cache
+            .expect_find()
+            .return_once(|_, _, _| Ok(vec![ResourceCache::default()]));
+
+        let evt = FindResourcdCmd::default();
+
+        let result = find_cache(Arc::new(project_cache), Arc::new(resource_cache), evt).await;
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_fail_find_project_resources_when_user_doesnt_have_permission() {
+        let mut project_cache = MockFakeProjectDrivenCache::new();
+        project_cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(None));
+
+        let resource_cache = MockFakeResourceDrivenCache::new();
+
+        let cmd = FindResourcdCmd::default();
+
+        let result = find_cache(Arc::new(project_cache), Arc::new(resource_cache), cmd).await;
+        assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_find_project_resources_when_secret_doesnt_have_permission() {
+        let project_cache = MockFakeProjectDrivenCache::new();
+        let resource_cache = MockFakeResourceDrivenCache::new();
+
+        let cmd = FindResourcdCmd {
+            credential: Credential::ApiKey(Uuid::new_v4().to_string()),
+            ..Default::default()
+        };
+
+        let result = find_cache(Arc::new(project_cache), Arc::new(resource_cache), cmd).await;
         assert!(result.is_err());
     }
 

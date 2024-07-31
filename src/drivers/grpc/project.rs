@@ -104,22 +104,12 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         let cmd = FindProjectCmd::new(credential, req.page, req.page_size)
             .map_err(|err| Status::failed_precondition(err.to_string()))?;
 
-        let (projects, count) = project::find_cache(self.cache.clone(), cmd.clone())
+        let projects = project::find_cache(self.cache.clone(), cmd.clone())
             .await
-            .map_err(|_| Status::internal("Internal error"))?;
-
-        let meta = proto::Meta {
-            page: cmd.page,
-            page_size: cmd.page_size,
-            count,
-        };
+            .map_err(|err| Status::failed_precondition(err.to_string()))?;
 
         let records = projects.into_iter().map(|v| v.into()).collect();
-
-        let message = proto::FindProjectsResponse {
-            meta: Some(meta),
-            records,
-        };
+        let message = proto::FindProjectsResponse { records };
 
         Ok(tonic::Response::new(message))
     }
