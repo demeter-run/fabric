@@ -1,3 +1,6 @@
+use std::{fmt::Display, str::FromStr};
+
+use anyhow::{bail, Error};
 use chrono::{DateTime, Utc};
 
 use super::event::ResourceCreated;
@@ -11,18 +14,47 @@ pub struct Resource {
     pub project_id: String,
     pub kind: String,
     pub data: String,
+    pub status: ResourceStatus,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
-impl From<ResourceCreated> for Resource {
-    fn from(value: ResourceCreated) -> Self {
-        Self {
+impl TryFrom<ResourceCreated> for Resource {
+    type Error = Error;
+
+    fn try_from(value: ResourceCreated) -> Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             project_id: value.project_id,
             kind: value.kind,
             data: value.data,
+            status: value.status.parse()?,
             created_at: value.created_at,
             updated_at: value.updated_at,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ResourceStatus {
+    Active,
+    Deleted,
+}
+impl FromStr for ResourceStatus {
+    type Err = Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "active" => Ok(Self::Active),
+            "deleted" => Ok(Self::Deleted),
+            _ => bail!("resource status not supported"),
+        }
+    }
+}
+impl Display for ResourceStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Active => write!(f, "active"),
+            Self::Deleted => write!(f, "deleted"),
         }
     }
 }
@@ -40,6 +72,7 @@ mod tests {
                 project_id: Uuid::new_v4().to_string(),
                 kind: "CardanoNode".into(),
                 data: "{\"spec\":{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}}".into(),
+                status: ResourceStatus::Active,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             }

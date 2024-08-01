@@ -1,4 +1,4 @@
-use dmtri::demeter::ops::v1alpha as proto;
+use dmtri::demeter::ops::v1alpha::{self as proto, DeleteResourceResponse};
 use std::sync::Arc;
 use tonic::{async_trait, Status};
 
@@ -78,6 +78,34 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
+    async fn delete_resource(
+        &self,
+        request: tonic::Request<proto::DeleteResourceRequest>,
+    ) -> Result<tonic::Response<proto::DeleteResourceResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::permission_denied("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = command::DeleteCmd {
+            credential,
+            project_id: req.project_id,
+            resource_id: req.resource_id,
+        };
+
+        command::delete(
+            self.project_cache.clone(),
+            self.resource_cache.clone(),
+            self.event.clone(),
+            cmd,
+        )
+        .await
+        .map_err(|err| Status::failed_precondition(err.to_string()))?;
+
+        Ok(tonic::Response::new(DeleteResourceResponse {}))
+    }
 }
 
 impl From<Resource> for proto::Resource {
@@ -86,6 +114,7 @@ impl From<Resource> for proto::Resource {
             id: value.id,
             kind: value.kind,
             data: value.data,
+            status: value.status.to_string(),
             created_at: value.created_at.to_rfc3339(),
             updated_at: value.updated_at.to_rfc3339(),
         }

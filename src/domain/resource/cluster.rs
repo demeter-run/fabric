@@ -7,24 +7,19 @@ use kube::{
 };
 use tracing::info;
 
-use crate::domain::event::ResourceCreated;
+use crate::domain::event::{ResourceCreated, ResourceDeleted};
 
 #[async_trait::async_trait]
 pub trait ResourceDrivenCluster: Send + Sync {
     async fn create(&self, obj: &DynamicObject) -> Result<()>;
+    async fn delete(&self, obj: &DynamicObject) -> Result<()>;
 }
 
 pub async fn apply_manifest(
     cluster: Arc<dyn ResourceDrivenCluster>,
     evt: ResourceCreated,
 ) -> Result<()> {
-    let api = ApiResource {
-        kind: evt.kind.clone(),
-        group: "demeter.run".into(),
-        version: "v1alpha1".into(),
-        plural: format!("{}s", evt.kind.clone().to_lowercase()),
-        api_version: "demeter.run/v1alpha1".into(),
-    };
+    let api = build_api_resource(&evt.kind);
 
     let mut obj = DynamicObject::new(&evt.id, &api);
     obj.metadata = ObjectMeta {
@@ -41,6 +36,35 @@ pub async fn apply_manifest(
 
     Ok(())
 }
+pub async fn delete_manifest(
+    cluster: Arc<dyn ResourceDrivenCluster>,
+    evt: ResourceDeleted,
+) -> Result<()> {
+    let api = build_api_resource(&evt.kind);
+
+    let mut obj = DynamicObject::new(&evt.id, &api);
+    obj.metadata = ObjectMeta {
+        name: Some(evt.id),
+        namespace: Some(evt.project_namespace),
+        ..Default::default()
+    };
+
+    cluster.delete(&obj).await?;
+
+    info!(resource = obj.name_any(), "resource deleted");
+
+    Ok(())
+}
+
+fn build_api_resource(kind: &str) -> ApiResource {
+    ApiResource {
+        kind: kind.into(),
+        group: "demeter.run".into(),
+        version: "v1alpha1".into(),
+        plural: format!("{}s", kind.to_string().to_lowercase()),
+        api_version: "demeter.run/v1alpha1".into(),
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -54,6 +78,7 @@ mod tests {
         #[async_trait::async_trait]
         impl ResourceDrivenCluster for FakeResourceDrivenCluster {
             async fn create(&self, obj: &DynamicObject) -> Result<()>;
+            async fn delete(&self, obj: &DynamicObject) -> Result<()>;
         }
     }
 

@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS resource (
   project_id TEXT NOT NULL,
   kind TEXT NOT NULL,
   data TEXT NOT NULL,
+  status TEXT NOT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
   FOREIGN KEY(project_id) REFERENCES project(id)
