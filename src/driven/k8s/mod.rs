@@ -1,7 +1,7 @@
 use anyhow::Result;
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{
-    api::{DynamicObject, PostParams},
+    api::{DeleteParams, DynamicObject, PostParams},
     discovery, Api, Client, ResourceExt,
 };
 
@@ -46,6 +46,20 @@ impl ResourceDrivenCluster for K8sCluster {
             Api::namespaced_with(self.client.clone(), &obj.namespace().unwrap(), &ar);
 
         api.create(&PostParams::default(), obj).await?;
+        Ok(())
+    }
+    async fn delete(&self, obj: &DynamicObject) -> Result<()> {
+        let apigroup = discovery::group(&self.client, "demeter.run").await?;
+        let (ar, _caps) = apigroup
+            .recommended_kind(&obj.types.as_ref().unwrap().kind)
+            .unwrap();
+
+        let api: Api<DynamicObject> =
+            Api::namespaced_with(self.client.clone(), &obj.namespace().unwrap(), &ar);
+
+        api.delete(&obj.name_any(), &DeleteParams::default())
+            .await?;
+
         Ok(())
     }
 }

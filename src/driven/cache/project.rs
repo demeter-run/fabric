@@ -2,7 +2,9 @@ use anyhow::{Error, Result};
 use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
-use crate::domain::project::{cache::ProjectDrivenCache, Project, ProjectSecret, ProjectUser};
+use crate::domain::project::{
+    cache::ProjectDrivenCache, Project, ProjectSecret, ProjectStatus, ProjectUser,
+};
 
 use super::SqliteCache;
 
@@ -22,21 +24,23 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         let projects = sqlx::query_as::<_, Project>(
             r#"
                 SELECT 
-                    p.id as id, 
-                    p.namespace as namespace, 
-                    p.name as name, 
-                    p.owner as owner, 
-                    p.status as status, 
-                    p.created_at as created_at, 
-                    p.updated_at as updated_at
+                    p.id, 
+                    p.namespace, 
+                    p.name, 
+                    p.owner, 
+                    p.status, 
+                    p.created_at, 
+                    p.updated_at
                 FROM project_user pu 
-                INNER JOIN project as p on p.id = pu.project_id
-                WHERE pu.user_id = $1
-                LIMIT $2
-                OFFSET $3;
+                INNER JOIN project p on p.id = pu.project_id
+                WHERE pu.user_id = $1 and p.status != $2
+                ORDER BY pu.created_at DESC
+                LIMIT $3
+                OFFSET $4;
             "#,
         )
         .bind(user_id)
+        .bind(ProjectStatus::Deleted.to_string())
         .bind(page_size)
         .bind(offset)
         .fetch_all(&self.sqlite.db)
@@ -47,11 +51,20 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>> {
         let project = sqlx::query_as::<_, Project>(
             r#"
-                SELECT id, namespace, name, owner, status, created_at, updated_at 
-                FROM project WHERE namespace = $1;
+                SELECT 
+                    p.id, 
+                    p.namespace, 
+                    p.name, 
+                    p.owner, 
+                    p.status, 
+                    p.created_at, 
+                    p.updated_at
+                FROM project p
+                WHERE p.namespace = $1 and p.status != $2;
             "#,
         )
         .bind(namespace)
+        .bind(ProjectStatus::Deleted.to_string())
         .fetch_optional(&self.sqlite.db)
         .await?;
 
@@ -60,11 +73,20 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     async fn find_by_id(&self, id: &str) -> Result<Option<Project>> {
         let project = sqlx::query_as::<_, Project>(
             r#"
-                SELECT id, namespace, name, owner, status, created_at, updated_at
-                FROM project WHERE id = $1;
+                SELECT 
+                    p.id, 
+                    p.namespace, 
+                    p.name, 
+                    p.owner, 
+                    p.status, 
+                    p.created_at, 
+                    p.updated_at
+                FROM project p 
+                WHERE p.id = $1 and p.status != $2;
             "#,
         )
         .bind(id)
+        .bind(ProjectStatus::Deleted.to_string())
         .fetch_optional(&self.sqlite.db)
         .await?;
 
@@ -78,7 +100,15 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         sqlx::query!(
             r#"
-                INSERT INTO project (id, namespace, name, owner, status, created_at, updated_at)
+                INSERT INTO project (
+                    id,
+                    namespace,
+                    name,
+                    owner,
+                    status,
+                    created_at,
+                    updated_at
+                )
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
             project.id,
@@ -94,7 +124,11 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         sqlx::query!(
             r#"
-                INSERT INTO project_user (project_id, user_id, created_at)
+                INSERT INTO project_user (
+                    project_id,
+                    user_id,
+                    created_at
+                )
                 VALUES ($1, $2, $3)
             "#,
             project.id,
@@ -111,7 +145,14 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     async fn create_secret(&self, secret: &ProjectSecret) -> Result<()> {
         sqlx::query!(
             r#"
-                INSERT INTO project_secret (id, project_id, name, phc, secret, created_at)
+                INSERT INTO project_secret (
+                    id,
+                    project_id, 
+                    name, 
+                    phc, 
+                    secret,
+                    created_at
+                )
                 VALUES ($1, $2, $3, $4, $5, $6)
             "#,
             secret.id,
@@ -129,8 +170,15 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>> {
         let secrets = sqlx::query_as::<_, ProjectSecret>(
             r#"
-                SELECT id, project_id, name, phc, secret, created_at
-                FROM project_secret WHERE project_id = $1;
+                SELECT 
+                    ps.id, 
+                    ps.project_id, 
+                    ps.name, 
+                    ps.phc, 
+                    ps.secret, 
+                    ps.created_at
+                FROM project_secret ps 
+                WHERE ps.project_id = $1;
             "#,
         )
         .bind(project_id)
@@ -146,8 +194,12 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     ) -> Result<Option<ProjectUser>> {
         let project_user = sqlx::query_as::<_, ProjectUser>(
             r#"
-                SELECT user_id, project_id, created_at
-                FROM project_user WHERE user_id = $1 and project_id = $2;
+                SELECT 
+                    pu.user_id, 
+                    pu.project_id, 
+                    pu.created_at
+                FROM project_user pu 
+                WHERE pu.user_id = $1 and pu.project_id = $2;
             "#,
         )
         .bind(user_id)

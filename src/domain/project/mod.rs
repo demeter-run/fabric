@@ -9,7 +9,7 @@ pub mod cache;
 pub mod cluster;
 pub mod command;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Project {
     pub id: String,
     pub name: String,
@@ -35,7 +35,7 @@ impl TryFrom<ProjectCreated> for Project {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ProjectStatus {
     Active,
     Deleted,

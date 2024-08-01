@@ -34,6 +34,9 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
                         Event::ResourceCreated(evt) => {
                             resource::cluster::apply_manifest(cluster.clone(), evt).await?
                         }
+                        Event::ResourceDeleted(evt) => {
+                            resource::cluster::delete_manifest(cluster.clone(), evt).await?
+                        }
                         _ => {
                             info!(event = event.key(), "bypass event")
                         }
