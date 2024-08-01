@@ -34,6 +34,37 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
 
         Ok(())
     }
+    async fn find(
+        &self,
+        project_id: &str,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<Vec<ResourceCache>> {
+        let offset = page_size * (page - 1);
+
+        let resources = sqlx::query_as::<_, ResourceCache>(
+            r#"
+                SELECT 
+                    r.id, 
+                	  r.project_id, 
+                	  r.kind, 
+                	  r.data, 
+                	  r.created_at, 
+                	  r.updated_at
+                FROM resource r
+                WHERE r.project_id = $1
+                LIMIT $2
+                OFFSET $3;
+            "#,
+        )
+        .bind(project_id)
+        .bind(page_size)
+        .bind(offset)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(resources)
+    }
 }
 
 impl FromRow<'_, SqliteRow> for ResourceCache {
@@ -84,5 +115,52 @@ mod tests {
         println!("{:?}", result);
 
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_find_project_resources() {
+        let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
+        let cache = SqliteResourceDrivenCache::new(sqlite_cache.clone());
+
+        let project = mock_project(sqlite_cache.clone()).await;
+
+        let resource = ResourceCache {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create(&resource).await.unwrap();
+
+        let result = cache.find(&project.id, &1, &12).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().len() == 1);
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_project_resources_invalid_page() {
+        let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
+        let cache = SqliteResourceDrivenCache::new(sqlite_cache.clone());
+
+        let project = mock_project(sqlite_cache.clone()).await;
+
+        let resource = ResourceCache {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create(&resource).await.unwrap();
+
+        let result = cache.find(&project.id, &2, &12).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_project_resources() {
+        let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
+        let cache = SqliteResourceDrivenCache::new(sqlite_cache.clone());
+
+        let result = cache.find(Default::default(), &1, &12).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
     }
 }

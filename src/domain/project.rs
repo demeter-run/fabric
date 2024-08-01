@@ -19,7 +19,7 @@ use crate::domain::PAGE_SIZE_MAX;
 use super::{
     auth::{Credential, UserId},
     event::{EventDrivenBridge, ProjectCreated, ProjectSecretCreated},
-    Count, PAGE_SIZE_DEFAULT,
+    PAGE_SIZE_DEFAULT,
 };
 
 pub async fn create(
@@ -27,7 +27,7 @@ pub async fn create(
     event: Arc<dyn EventDrivenBridge>,
     cmd: CreateProjectCmd,
 ) -> Result<()> {
-    let user_id = assert_permission(cmd.credential)?;
+    let user_id = assert_credential(&cmd.credential)?;
 
     if cache.find_by_namespace(&cmd.namespace).await?.is_some() {
         bail!("invalid project namespace")
@@ -58,8 +58,8 @@ pub async fn create_cache(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectCreate
 pub async fn find_cache(
     cache: Arc<dyn ProjectDrivenCache>,
     cmd: FindProjectCmd,
-) -> Result<(Vec<ProjectCache>, Count)> {
-    let user_id = assert_permission(cmd.credential)?;
+) -> Result<Vec<ProjectCache>> {
+    let user_id = assert_credential(&cmd.credential)?;
 
     cache.find(&user_id, &cmd.page, &cmd.page_size).await
 }
@@ -93,7 +93,8 @@ pub async fn create_secret(
     event: Arc<dyn EventDrivenBridge>,
     cmd: CreateProjectSecretCmd,
 ) -> Result<String> {
-    assert_permission(cmd.credential)?;
+    assert_credential(&cmd.credential)?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
 
     let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
         bail!("project doesnt exist")
@@ -190,9 +191,23 @@ pub async fn verify_secret(
     Ok(secret)
 }
 
-fn assert_permission(credential: Credential) -> Result<UserId> {
+fn assert_credential(credential: &Credential) -> Result<UserId> {
     match credential {
-        Credential::Auth0(user_id) => Ok(user_id),
+        Credential::Auth0(user_id) => Ok(user_id.into()),
+        Credential::ApiKey(_) => bail!("rpc doesnt support api-key"),
+    }
+}
+async fn assert_permission(
+    cache: Arc<dyn ProjectDrivenCache>,
+    credential: &Credential,
+    project_id: &str,
+) -> Result<()> {
+    match credential {
+        Credential::Auth0(user_id) => {
+            let result = cache.find_user_permission(user_id, project_id).await?;
+            ensure!(result.is_some(), "user doesnt have permission");
+            Ok(())
+        }
         Credential::ApiKey(_) => bail!("rpc doesnt support api-key"),
     }
 }
@@ -351,12 +366,7 @@ pub struct ProjectUserCache {
 
 #[async_trait::async_trait]
 pub trait ProjectDrivenCache: Send + Sync {
-    async fn find(
-        &self,
-        user_id: &str,
-        page: &u32,
-        page_size: &u32,
-    ) -> Result<(Vec<ProjectCache>, Count)>;
+    async fn find(&self, user_id: &str, page: &u32, page_size: &u32) -> Result<Vec<ProjectCache>>;
     async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>>;
     async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
     async fn create(&self, project: &ProjectCache) -> Result<()>;
@@ -389,7 +399,7 @@ mod tests {
 
         #[async_trait::async_trait]
         impl ProjectDrivenCache for FakeProjectDrivenCache {
-            async fn find(&self, user_id: &str, page: &u32, page_size: &u32) -> Result<(Vec<ProjectCache>, Count)>;
+            async fn find(&self, user_id: &str, page: &u32, page_size: &u32) -> Result<Vec<ProjectCache>>;
             async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>>;
             async fn create(&self, project: &ProjectCache) -> Result<()>;
@@ -472,6 +482,15 @@ mod tests {
             }
         }
     }
+    impl Default for FindProjectCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                page: 1,
+                page_size: 12,
+            }
+        }
+    }
     impl Default for ProjectSecretCache {
         fn default() -> Self {
             Self {
@@ -547,6 +566,7 @@ mod tests {
         let result = create(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_err());
     }
+
     #[tokio::test]
     async fn it_should_create_project_cache() {
         let mut cache = MockFakeProjectDrivenCache::new();
@@ -559,8 +579,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn it_should_find_user_projects_cache() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find()
+            .return_once(|_, _, _| Ok(vec![ProjectCache::default()]));
+
+        let evt = FindProjectCmd::default();
+
+        let result = find_cache(Arc::new(cache), evt).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
     async fn it_should_create_project_secret() {
         let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUserCache::default())));
         cache
             .expect_find_by_id()
             .return_once(|_| Ok(Some(ProjectCache::default())));
@@ -576,6 +612,9 @@ mod tests {
     #[tokio::test]
     async fn it_should_fail_create_project_secret_when_project_doesnt_exists() {
         let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUserCache::default())));
         cache.expect_find_by_id().return_once(|_| Ok(None));
 
         let event = MockFakeEventDrivenBridge::new();
@@ -586,7 +625,7 @@ mod tests {
         assert!(result.is_err());
     }
     #[tokio::test]
-    async fn it_should_fail_create_project_secret_when_invalid_permission() {
+    async fn it_should_fail_create_project_secret_when_invalid_credential() {
         let cache = MockFakeProjectDrivenCache::new();
         let event = MockFakeEventDrivenBridge::new();
 
@@ -598,6 +637,21 @@ mod tests {
         let result = create_secret(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_err());
     }
+    #[tokio::test]
+    async fn it_should_fail_create_project_secret_when_invalid_permission() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(None));
+
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = CreateProjectSecretCmd::default();
+
+        let result = create_secret(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+    }
+
     #[tokio::test]
     async fn it_should_create_project_secret_cache() {
         let mut cache = MockFakeProjectDrivenCache::new();
