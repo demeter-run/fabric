@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     domain::{
         auth::Credential,
-        project::{self, ProjectDrivenCache},
+        project::{self, cache::ProjectDrivenCache},
     },
     driven::auth::Auth0Provider,
 };
@@ -51,7 +51,12 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
             };
             return tokio::task::block_in_place(|| {
                 return tokio::runtime::Runtime::new().unwrap().block_on(async {
-                    match project::verify_secret(self.cache.clone(), &project_id, &token).await {
+                    let cmd = project::command::VerifySecretCmd {
+                        key: token,
+                        project_id,
+                    };
+
+                    match project::command::verify_secret(self.cache.clone(), cmd).await {
                         Ok(secret) => {
                             let credential = Credential::ApiKey(secret.project_id);
                             request.extensions_mut().insert(credential);

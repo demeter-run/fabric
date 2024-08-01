@@ -5,7 +5,9 @@ use kube::{
     discovery, Api, Client, ResourceExt,
 };
 
-use crate::domain::{project::ProjectDrivenCluster, resource::ResourceDrivenCluster};
+use crate::domain::{
+    project::cluster::ProjectDrivenCluster, resource::cluster::ResourceDrivenCluster,
+};
 
 pub struct K8sCluster {
     client: Client,

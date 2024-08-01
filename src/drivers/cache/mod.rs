@@ -35,13 +35,13 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                 Ok(event) => {
                     match event {
                         Event::ProjectCreated(evt) => {
-                            project::create_cache(project_cache.clone(), evt).await?;
-                        }
-                        Event::ResourceCreated(evt) => {
-                            resource::create_cache(resource_cache.clone(), evt).await?
+                            project::cache::create(project_cache.clone(), evt).await?;
                         }
                         Event::ProjectSecretCreated(evt) => {
-                            project::create_secret_cache(project_cache.clone(), evt).await?;
+                            project::cache::create_secret(project_cache.clone(), evt).await?;
+                        }
+                        Event::ResourceCreated(evt) => {
+                            resource::cache::create(resource_cache.clone(), evt).await?
                         }
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;
