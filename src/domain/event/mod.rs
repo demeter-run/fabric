@@ -78,3 +78,54 @@ impl Event {
 pub trait EventDrivenBridge: Send + Sync {
     async fn dispatch(&self, event: Event) -> Result<()>;
 }
+
+#[cfg(test)]
+mod tests {
+    use uuid::Uuid;
+
+    use crate::domain::{
+        project::ProjectStatus,
+        tests::{PHC, SECRET},
+    };
+
+    use super::*;
+
+    impl Default for ProjectCreated {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                name: "New Project".into(),
+                namespace: "sonic-vegas".into(),
+                owner: "user id".into(),
+                status: ProjectStatus::Active.to_string(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ProjectSecretCreated {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                name: "Key 1".into(),
+                phc: PHC.into(),
+                secret: SECRET.as_bytes().to_vec(),
+                created_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ResourceCreated {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                project_namespace: "prj-test".into(),
+                kind: "CardanoNode".into(),
+                data: "{\"spec\":{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}}".into(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            }
+        }
+    }
+}

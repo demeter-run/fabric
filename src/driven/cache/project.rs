@@ -2,9 +2,7 @@ use anyhow::{Error, Result};
 use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
-use crate::domain::project::{
-    ProjectCache, ProjectDrivenCache, ProjectSecretCache, ProjectUserCache,
-};
+use crate::domain::project::{cache::ProjectDrivenCache, Project, ProjectSecret, ProjectUser};
 
 use super::SqliteCache;
 
@@ -18,10 +16,10 @@ impl SqliteProjectDrivenCache {
 }
 #[async_trait::async_trait]
 impl ProjectDrivenCache for SqliteProjectDrivenCache {
-    async fn find(&self, user_id: &str, page: &u32, page_size: &u32) -> Result<Vec<ProjectCache>> {
+    async fn find(&self, user_id: &str, page: &u32, page_size: &u32) -> Result<Vec<Project>> {
         let offset = page_size * (page - 1);
 
-        let projects = sqlx::query_as::<_, ProjectCache>(
+        let projects = sqlx::query_as::<_, Project>(
             r#"
                 SELECT 
                     p.id as id, 
@@ -46,8 +44,8 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         Ok(projects)
     }
-    async fn find_by_namespace(&self, namespace: &str) -> Result<Option<ProjectCache>> {
-        let project = sqlx::query_as::<_, ProjectCache>(
+    async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>> {
+        let project = sqlx::query_as::<_, Project>(
             r#"
                 SELECT id, namespace, name, owner, status, created_at, updated_at 
                 FROM project WHERE namespace = $1;
@@ -59,8 +57,8 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         Ok(project)
     }
-    async fn find_by_id(&self, id: &str) -> Result<Option<ProjectCache>> {
-        let project = sqlx::query_as::<_, ProjectCache>(
+    async fn find_by_id(&self, id: &str) -> Result<Option<Project>> {
+        let project = sqlx::query_as::<_, Project>(
             r#"
                 SELECT id, namespace, name, owner, status, created_at, updated_at
                 FROM project WHERE id = $1;
@@ -73,7 +71,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         Ok(project)
     }
 
-    async fn create(&self, project: &ProjectCache) -> Result<()> {
+    async fn create(&self, project: &Project) -> Result<()> {
         let mut tx = self.sqlite.db.begin().await?;
 
         let status = project.status.to_string();
@@ -110,7 +108,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         Ok(())
     }
-    async fn create_secret(&self, secret: &ProjectSecretCache) -> Result<()> {
+    async fn create_secret(&self, secret: &ProjectSecret) -> Result<()> {
         sqlx::query!(
             r#"
                 INSERT INTO project_secret (id, project_id, name, phc, secret, created_at)
@@ -128,8 +126,8 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         Ok(())
     }
-    async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecretCache>> {
-        let secrets = sqlx::query_as::<_, ProjectSecretCache>(
+    async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>> {
+        let secrets = sqlx::query_as::<_, ProjectSecret>(
             r#"
                 SELECT id, project_id, name, phc, secret, created_at
                 FROM project_secret WHERE project_id = $1;
@@ -145,8 +143,8 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         &self,
         user_id: &str,
         project_id: &str,
-    ) -> Result<Option<ProjectUserCache>> {
-        let project_user = sqlx::query_as::<_, ProjectUserCache>(
+    ) -> Result<Option<ProjectUser>> {
+        let project_user = sqlx::query_as::<_, ProjectUser>(
             r#"
                 SELECT user_id, project_id, created_at
                 FROM project_user WHERE user_id = $1 and project_id = $2;
@@ -161,7 +159,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     }
 }
 
-impl FromRow<'_, SqliteRow> for ProjectCache {
+impl FromRow<'_, SqliteRow> for Project {
     fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
         let status: &str = row.try_get("status")?;
 
@@ -179,7 +177,7 @@ impl FromRow<'_, SqliteRow> for ProjectCache {
     }
 }
 
-impl FromRow<'_, SqliteRow> for ProjectSecretCache {
+impl FromRow<'_, SqliteRow> for ProjectSecret {
     fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
         Ok(Self {
             id: row.try_get("id")?,
@@ -192,7 +190,7 @@ impl FromRow<'_, SqliteRow> for ProjectSecretCache {
     }
 }
 
-impl FromRow<'_, SqliteRow> for ProjectUserCache {
+impl FromRow<'_, SqliteRow> for ProjectUser {
     fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
         Ok(Self {
             user_id: row.try_get("user_id")?,
@@ -214,7 +212,7 @@ mod tests {
     #[tokio::test]
     async fn it_should_create_project() {
         let cache = get_cache().await;
-        let project = ProjectCache::default();
+        let project = Project::default();
 
         let result = cache.create(&project).await;
         assert!(result.is_ok());
@@ -223,7 +221,7 @@ mod tests {
     #[tokio::test]
     async fn it_should_find_user_projects() {
         let cache = get_cache().await;
-        let project = ProjectCache::default();
+        let project = Project::default();
 
         cache.create(&project).await.unwrap();
         let result = cache.find(&project.owner, &1, &12).await;
@@ -234,7 +232,7 @@ mod tests {
     #[tokio::test]
     async fn it_should_return_none_find_user_projects_invalid_page() {
         let cache = get_cache().await;
-        let project = ProjectCache::default();
+        let project = Project::default();
 
         cache.create(&project).await.unwrap();
         let result = cache.find(&project.owner, &2, &12).await;
@@ -254,7 +252,7 @@ mod tests {
     #[tokio::test]
     async fn it_should_find_project_by_id() {
         let cache = get_cache().await;
-        let project = ProjectCache::default();
+        let project = Project::default();
 
         cache.create(&project).await.unwrap();
         let result = cache.find_by_id(&project.id).await;
@@ -265,7 +263,7 @@ mod tests {
     #[tokio::test]
     async fn it_should_return_none_find_project_by_id() {
         let cache = get_cache().await;
-        let project = ProjectCache::default();
+        let project = Project::default();
 
         let result = cache.find_by_id(&project.id).await;
 
@@ -276,7 +274,7 @@ mod tests {
     #[tokio::test]
     async fn it_should_find_project_by_namespace() {
         let cache = get_cache().await;
-        let project = ProjectCache::default();
+        let project = Project::default();
 
         cache.create(&project).await.unwrap();
         let result = cache.find_by_namespace(&project.namespace).await;
@@ -287,7 +285,7 @@ mod tests {
     #[tokio::test]
     async fn it_should_return_none_find_project_by_namespace() {
         let cache = get_cache().await;
-        let project = ProjectCache::default();
+        let project = Project::default();
 
         let result = cache.find_by_namespace(&project.namespace).await;
 
@@ -299,10 +297,10 @@ mod tests {
     async fn it_should_create_project_secret() {
         let cache = get_cache().await;
 
-        let project = ProjectCache::default();
+        let project = Project::default();
         cache.create(&project).await.unwrap();
 
-        let secret = ProjectSecretCache {
+        let secret = ProjectSecret {
             project_id: project.id,
             ..Default::default()
         };
@@ -315,10 +313,10 @@ mod tests {
     async fn it_should_find_secret_by_project_id() {
         let cache = get_cache().await;
 
-        let project = ProjectCache::default();
+        let project = Project::default();
         cache.create(&project).await.unwrap();
 
-        let secret = ProjectSecretCache {
+        let secret = ProjectSecret {
             project_id: project.id.clone(),
             ..Default::default()
         };
@@ -334,7 +332,7 @@ mod tests {
     async fn it_should_find_user_permission() {
         let cache = get_cache().await;
 
-        let project = ProjectCache::default();
+        let project = Project::default();
         cache.create(&project).await.unwrap();
 
         let result = cache
@@ -348,7 +346,7 @@ mod tests {
     async fn it_should_return_none_find_user_permission() {
         let cache = get_cache().await;
 
-        let project = ProjectCache::default();
+        let project = Project::default();
 
         let result = cache
             .find_user_permission(&project.owner, &project.id)

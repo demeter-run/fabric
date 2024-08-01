@@ -5,8 +5,8 @@ use tonic::{async_trait, Status};
 use crate::domain::{
     auth::Credential,
     event::EventDrivenBridge,
-    project::ProjectDrivenCache,
-    resource::{self, CreateResourceCmd, FindResourcdCmd, ResourceCache, ResourceDrivenCache},
+    project::cache::ProjectDrivenCache,
+    resource::{cache::ResourceDrivenCache, command, Resource},
 };
 
 pub struct ResourceServiceImpl {
@@ -30,6 +30,30 @@ impl ResourceServiceImpl {
 
 #[async_trait]
 impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
+    async fn fetch_resources(
+        &self,
+        request: tonic::Request<proto::FetchResourcesRequest>,
+    ) -> Result<tonic::Response<proto::FetchResourcesResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::permission_denied("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)
+            .map_err(|err| Status::failed_precondition(err.to_string()))?;
+
+        let resources =
+            command::fetch(self.project_cache.clone(), self.resource_cache.clone(), cmd)
+                .await
+                .map_err(|err| Status::failed_precondition(err.to_string()))?;
+
+        let records = resources.into_iter().map(|v| v.into()).collect();
+        let message = proto::FetchResourcesResponse { records };
+
+        Ok(tonic::Response::new(message))
+    }
     async fn create_resource(
         &self,
         request: tonic::Request<proto::CreateResourceRequest>,
@@ -41,48 +65,23 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = CreateResourceCmd::new(credential, req.project_id, req.kind, req.data);
-        let result =
-            resource::create(self.project_cache.clone(), self.event.clone(), cmd.clone()).await;
+        let cmd = command::CreateCmd::new(credential, req.project_id, req.kind, req.data);
 
-        if let Err(err) = result {
-            return Err(Status::failed_precondition(err.to_string()));
-        }
+        command::create(self.project_cache.clone(), self.event.clone(), cmd.clone())
+            .await
+            .map_err(|err| Status::failed_precondition(err.to_string()))?;
 
         let message = proto::CreateResourceResponse {
             id: cmd.id,
             kind: cmd.kind,
         };
-        Ok(tonic::Response::new(message))
-    }
-    async fn find_resources(
-        &self,
-        request: tonic::Request<proto::FindResourcesRequest>,
-    ) -> Result<tonic::Response<proto::FindResourcesResponse>, tonic::Status> {
-        let credential = match request.extensions().get::<Credential>() {
-            Some(credential) => credential.clone(),
-            None => return Err(Status::permission_denied("invalid credential")),
-        };
-
-        let req = request.into_inner();
-
-        let cmd = FindResourcdCmd::new(credential, req.project_id, req.page, req.page_size)
-            .map_err(|err| Status::failed_precondition(err.to_string()))?;
-
-        let resources =
-            resource::find_cache(self.project_cache.clone(), self.resource_cache.clone(), cmd)
-                .await
-                .map_err(|err| Status::failed_precondition(err.to_string()))?;
-
-        let records = resources.into_iter().map(|v| v.into()).collect();
-        let message = proto::FindResourcesResponse { records };
 
         Ok(tonic::Response::new(message))
     }
 }
 
-impl From<ResourceCache> for proto::Resource {
-    fn from(value: ResourceCache) -> Self {
+impl From<Resource> for proto::Resource {
+    fn from(value: Resource) -> Self {
         Self {
             id: value.id,
             kind: value.kind,

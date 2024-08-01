@@ -476,7 +476,6 @@ dependencies = [
 [[package]]
 name = "dmtri"
 version = "0.1.0"
-source = "git+https://github.com/demeter-run/specs.git#04f4a89bb382c11504d5c230f2375de94c319dbd"
 dependencies = [
  "bytes",
  "pbjson",

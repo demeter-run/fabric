@@ -2,7 +2,7 @@ use anyhow::Result;
 use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
-use crate::domain::resource::{ResourceCache, ResourceDrivenCache};
+use crate::domain::resource::{cache::ResourceDrivenCache, Resource};
 
 use super::SqliteCache;
 
@@ -16,7 +16,7 @@ impl SqliteResourceDrivenCache {
 }
 #[async_trait::async_trait]
 impl ResourceDrivenCache for SqliteResourceDrivenCache {
-    async fn create(&self, resource: &ResourceCache) -> Result<()> {
+    async fn create(&self, resource: &Resource) -> Result<()> {
         sqlx::query!(
             r#"
                 INSERT INTO resource (id, project_id, kind, data, created_at, updated_at)
@@ -34,15 +34,10 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
 
         Ok(())
     }
-    async fn find(
-        &self,
-        project_id: &str,
-        page: &u32,
-        page_size: &u32,
-    ) -> Result<Vec<ResourceCache>> {
+    async fn find(&self, project_id: &str, page: &u32, page_size: &u32) -> Result<Vec<Resource>> {
         let offset = page_size * (page - 1);
 
-        let resources = sqlx::query_as::<_, ResourceCache>(
+        let resources = sqlx::query_as::<_, Resource>(
             r#"
                 SELECT 
                     r.id, 
@@ -67,7 +62,7 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
     }
 }
 
-impl FromRow<'_, SqliteRow> for ResourceCache {
+impl FromRow<'_, SqliteRow> for Resource {
     fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
         Ok(Self {
             id: row.try_get("id")?,
@@ -83,17 +78,17 @@ impl FromRow<'_, SqliteRow> for ResourceCache {
 #[cfg(test)]
 mod tests {
     use crate::{
-        domain::project::{ProjectCache, ProjectDrivenCache},
+        domain::project::{cache::ProjectDrivenCache, Project},
         driven::cache::project::SqliteProjectDrivenCache,
     };
 
     use super::*;
 
-    async fn mock_project(sqlite_cache: Arc<SqliteCache>) -> ProjectCache {
+    async fn mock_project(sqlite_cache: Arc<SqliteCache>) -> Project {
         let cache: Box<dyn ProjectDrivenCache> =
             Box::new(SqliteProjectDrivenCache::new(sqlite_cache));
 
-        let project = ProjectCache::default();
+        let project = Project::default();
         cache.create(&project).await.unwrap();
 
         project
@@ -106,7 +101,7 @@ mod tests {
 
         let project = mock_project(sqlite_cache.clone()).await;
 
-        let resource = ResourceCache {
+        let resource = Resource {
             project_id: project.id,
             ..Default::default()
         };
@@ -124,7 +119,7 @@ mod tests {
 
         let project = mock_project(sqlite_cache.clone()).await;
 
-        let resource = ResourceCache {
+        let resource = Resource {
             project_id: project.id.clone(),
             ..Default::default()
         };
@@ -142,7 +137,7 @@ mod tests {
 
         let project = mock_project(sqlite_cache.clone()).await;
 
-        let resource = ResourceCache {
+        let resource = Resource {
             project_id: project.id.clone(),
             ..Default::default()
         };

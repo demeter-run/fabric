@@ -5,10 +5,7 @@ use tonic::{async_trait, Status};
 use crate::domain::{
     auth::Credential,
     event::EventDrivenBridge,
-    project::{
-        self, CreateProjectCmd, CreateProjectSecretCmd, FindProjectCmd, ProjectCache,
-        ProjectDrivenCache,
-    },
+    project::{self, cache::ProjectDrivenCache, Project},
 };
 
 pub struct ProjectServiceImpl {
@@ -33,6 +30,29 @@ impl ProjectServiceImpl {
 
 #[async_trait]
 impl proto::project_service_server::ProjectService for ProjectServiceImpl {
+    async fn fetch_projects(
+        &self,
+        request: tonic::Request<proto::FetchProjectsRequest>,
+    ) -> Result<tonic::Response<proto::FetchProjectsResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::permission_denied("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = project::command::FetchCmd::new(credential, req.page, req.page_size)
+            .map_err(|err| Status::failed_precondition(err.to_string()))?;
+
+        let projects = project::command::fetch(self.cache.clone(), cmd.clone())
+            .await
+            .map_err(|err| Status::failed_precondition(err.to_string()))?;
+
+        let records = projects.into_iter().map(|v| v.into()).collect();
+        let message = proto::FetchProjectsResponse { records };
+
+        Ok(tonic::Response::new(message))
+    }
     async fn create_project(
         &self,
         request: tonic::Request<proto::CreateProjectRequest>,
@@ -44,12 +64,11 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = CreateProjectCmd::new(credential, req.name);
+        let cmd = project::command::CreateCmd::new(credential, req.name);
 
-        let result = project::create(self.cache.clone(), self.event.clone(), cmd.clone()).await;
-        if let Err(err) = result {
-            return Err(Status::failed_precondition(err.to_string()));
-        }
+        project::command::create(self.cache.clone(), self.event.clone(), cmd.clone())
+            .await
+            .map_err(|err| Status::failed_precondition(err.to_string()))?;
 
         let message = proto::CreateProjectResponse {
             id: cmd.id,
@@ -71,16 +90,18 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd =
-            CreateProjectSecretCmd::new(credential, self.secret.clone(), req.project_id, req.name);
+        let cmd = project::command::CreateSecretCmd::new(
+            credential,
+            self.secret.clone(),
+            req.project_id,
+            req.name,
+        );
 
-        let result =
-            project::create_secret(self.cache.clone(), self.event.clone(), cmd.clone()).await;
-        if let Err(err) = result {
-            return Err(Status::failed_precondition(err.to_string()));
-        }
+        let key =
+            project::command::create_secret(self.cache.clone(), self.event.clone(), cmd.clone())
+                .await
+                .map_err(|err| Status::failed_precondition(err.to_string()))?;
 
-        let key = result.unwrap();
         let message = proto::CreateProjectSecretResponse {
             id: cmd.id,
             name: cmd.name,
@@ -89,34 +110,10 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
-
-    async fn find_projects(
-        &self,
-        request: tonic::Request<proto::FindProjectsRequest>,
-    ) -> Result<tonic::Response<proto::FindProjectsResponse>, tonic::Status> {
-        let credential = match request.extensions().get::<Credential>() {
-            Some(credential) => credential.clone(),
-            None => return Err(Status::permission_denied("invalid credential")),
-        };
-
-        let req = request.into_inner();
-
-        let cmd = FindProjectCmd::new(credential, req.page, req.page_size)
-            .map_err(|err| Status::failed_precondition(err.to_string()))?;
-
-        let projects = project::find_cache(self.cache.clone(), cmd.clone())
-            .await
-            .map_err(|err| Status::failed_precondition(err.to_string()))?;
-
-        let records = projects.into_iter().map(|v| v.into()).collect();
-        let message = proto::FindProjectsResponse { records };
-
-        Ok(tonic::Response::new(message))
-    }
 }
 
-impl From<ProjectCache> for proto::Project {
-    fn from(value: ProjectCache) -> Self {
+impl From<Project> for proto::Project {
+    fn from(value: Project) -> Self {
         Self {
             id: value.id,
             name: value.name,
