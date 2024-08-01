@@ -28,6 +28,11 @@ variable "kafka_password" {
   type = string
 }
 
+variable "kafka_topic" {
+  type    = string
+  default = "events"
+}
+
 variable "replicas" {
   type    = number
   default = 1
