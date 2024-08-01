@@ -12,6 +12,7 @@ resource "kubernetes_config_map_v1" "fabric_daemon_config" {
         consumer_name  = var.consumer_name
         kafka_username = var.kafka_username
         kafka_password = var.kafka_password
+        topic          = var.kafka_topic
       }
     )}"
   }
