@@ -1,5 +1,5 @@
 use anyhow::{Error, Result};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
@@ -97,9 +97,8 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
 
         Ok(())
     }
-    async fn delete(&self, id: &str) -> Result<()> {
+    async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()> {
         let status = ResourceStatus::Deleted.to_string();
-        let updated_at = Utc::now();
 
         sqlx::query!(
             r#"
@@ -111,7 +110,7 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
             "#,
             id,
             status,
-            updated_at
+            deleted_at
         )
         .execute(&self.sqlite.db)
         .await?;
@@ -187,7 +186,7 @@ mod tests {
             ..Default::default()
         };
         cache.create(&resource).await.unwrap();
-        cache.delete(&resource.id).await.unwrap();
+        cache.delete(&resource.id, &Utc::now()).await.unwrap();
 
         let result = cache.find(&project.id, &1, &12).await;
 
@@ -293,7 +292,7 @@ mod tests {
         };
         cache.create(&resource).await.unwrap();
 
-        let result = cache.delete(&resource.id).await;
+        let result = cache.delete(&resource.id, &Utc::now()).await;
 
         assert!(result.is_ok());
     }

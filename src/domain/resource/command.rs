@@ -178,6 +178,7 @@ pub struct DeleteCmd {
 
 #[cfg(test)]
 mod tests {
+    use chrono::DateTime;
     use mockall::mock;
     use uuid::Uuid;
 
@@ -209,7 +210,7 @@ mod tests {
             async fn find(&self,project_id: &str,page: &u32,page_size: &u32) -> Result<Vec<Resource>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<Resource>>;
             async fn create(&self, resource: &Resource) -> Result<()>;
-            async fn delete(&self, id: &str) -> Result<()>;
+            async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
         }
     }
 
