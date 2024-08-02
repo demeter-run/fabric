@@ -16,7 +16,7 @@ use crate::domain::{
     auth::{Credential, UserId},
     event::{EventDrivenBridge, ProjectCreated, ProjectSecretCreated},
     project::ProjectStatus,
-    PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
+    MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
 use super::{cache::ProjectDrivenCache, Project, ProjectSecret};
@@ -65,6 +65,11 @@ pub async fn create_secret(
     let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
         bail!("project doesnt exist")
     };
+
+    let secrets = cache.find_secret_by_project_id(&cmd.project_id).await?;
+    if secrets.len() >= MAX_SECRET {
+        bail!("secrets exceeded the limit of {MAX_SECRET}")
+    }
 
     let key = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
     let salt_string = SaltString::generate(&mut OsRng);
@@ -386,6 +391,9 @@ mod tests {
         cache
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
+        cache
+            .expect_find_secret_by_project_id()
+            .return_once(|_| Ok(Vec::new()));
 
         let mut event = MockFakeEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
@@ -429,6 +437,26 @@ mod tests {
         cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
+
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = CreateSecretCmd::default();
+
+        let result = create_secret(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_create_project_secret_when_max_secret_exceeded() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+        cache
+            .expect_find_secret_by_project_id()
+            .return_once(|_| Ok(vec![ProjectSecret::default(); 3]));
 
         let event = MockFakeEventDrivenBridge::new();
 
