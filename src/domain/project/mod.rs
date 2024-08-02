@@ -60,7 +60,7 @@ impl Display for ProjectStatus {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProjectSecret {
     pub id: String,
     pub project_id: String,

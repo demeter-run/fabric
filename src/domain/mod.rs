@@ -5,6 +5,7 @@ pub mod resource;
 
 pub const PAGE_SIZE_DEFAULT: u32 = 12;
 pub const PAGE_SIZE_MAX: u32 = 120;
+pub const MAX_SECRET: usize = 2;
 
 #[cfg(test)]
 mod tests {
