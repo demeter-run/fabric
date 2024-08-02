@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS resource (
   id TEXT PRIMARY KEY NOT NULL,
   project_id TEXT NOT NULL,
   kind TEXT NOT NULL,
-  data TEXT NOT NULL,
+  spec TEXT NOT NULL,
   status TEXT NOT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,

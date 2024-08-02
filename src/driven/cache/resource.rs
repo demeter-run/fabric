@@ -26,7 +26,7 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
                     r.id, 
                 	  r.project_id, 
                 	  r.kind, 
-                	  r.data, 
+                	  r.spec, 
                     r.status,
                 	  r.created_at, 
                 	  r.updated_at
@@ -53,7 +53,7 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
                     r.id, 
                 	  r.project_id, 
                 	  r.kind, 
-                	  r.data, 
+                	  r.spec, 
                     r.status,
                 	  r.created_at, 
                 	  r.updated_at
@@ -77,7 +77,7 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
                     id,
                     project_id,
                     kind,
-                    data,
+                    spec,
                     status,
                     created_at,
                     updated_at
@@ -87,7 +87,7 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
             resource.id,
             resource.project_id,
             resource.kind,
-            resource.data,
+            resource.spec,
             status,
             resource.created_at,
             resource.updated_at
@@ -127,7 +127,7 @@ impl FromRow<'_, SqliteRow> for Resource {
             id: row.try_get("id")?,
             project_id: row.try_get("project_id")?,
             kind: row.try_get("kind")?,
-            data: row.try_get("data")?,
+            spec: row.try_get("spec")?,
             status: status
                 .parse()
                 .map_err(|err: Error| sqlx::Error::Decode(err.into()))?,

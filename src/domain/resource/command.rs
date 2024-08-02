@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
-use anyhow::{bail, ensure, Result};
+use anyhow::{bail, ensure, Error, Result};
+use argon2::{password_hash::SaltString, Argon2};
+use bech32::{Bech32m, Hrp};
 use chrono::Utc;
+use rand::rngs::OsRng;
 use tracing::info;
 use uuid::Uuid;
 
@@ -38,12 +41,17 @@ pub async fn create(
         bail!("project doesnt exist")
     };
 
+    let auth_token = build_auth_token(&project.id, &cmd.id, &cmd.kind)?;
+
+    let mut spec = cmd.spec.clone();
+    spec.insert("authToken".into(), serde_json::Value::String(auth_token));
+
     let evt = ResourceCreated {
         id: cmd.id,
         project_id: project.id,
         project_namespace: project.namespace,
         kind: cmd.kind.clone(),
-        data: cmd.data,
+        spec: serde_json::to_string(&spec)?,
         status: ResourceStatus::Active.to_string(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
@@ -116,6 +124,24 @@ fn assert_project_resource(project: &Project, resource: &Resource) -> Result<()>
     Ok(())
 }
 
+pub fn build_auth_token(project_id: &str, resource_id: &str, kind: &str) -> Result<String> {
+    let argon2 = Argon2::default();
+    let key = format!("{project_id}{resource_id}").as_bytes().to_vec();
+
+    let salt = SaltString::generate(&mut OsRng);
+
+    let mut output = vec![0; 8];
+    argon2
+        .hash_password_into(&key, salt.as_str().as_bytes(), &mut output)
+        .map_err(|err| Error::msg(err.to_string()))?;
+
+    let prefix = format!("dmtr_{}", kind.to_lowercase());
+    let hrp = Hrp::parse(&prefix)?;
+    let bech = bech32::encode::<Bech32m>(hrp, &output)?;
+
+    Ok(bech)
+}
+
 #[derive(Debug, Clone)]
 pub struct FetchCmd {
     pub credential: Credential,
@@ -147,16 +173,17 @@ impl FetchCmd {
     }
 }
 
+pub type Spec = serde_json::value::Map<String, serde_json::Value>;
 #[derive(Debug, Clone)]
 pub struct CreateCmd {
     pub credential: Credential,
     pub id: String,
     pub project_id: String,
     pub kind: String,
-    pub data: String,
+    pub spec: Spec,
 }
 impl CreateCmd {
-    pub fn new(credential: Credential, project_id: String, kind: String, data: String) -> Self {
+    pub fn new(credential: Credential, project_id: String, kind: String, spec: Spec) -> Self {
         let id = Uuid::new_v4().to_string();
 
         Self {
@@ -164,7 +191,7 @@ impl CreateCmd {
             id,
             project_id,
             kind,
-            data,
+            spec,
         }
     }
 }
@@ -240,7 +267,7 @@ mod tests {
                 id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
                 kind: "CardanoNode".into(),
-                data: "{\"spec\":{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}}".into(),
+                spec: serde_json::Map::new(),
             }
         }
     }
