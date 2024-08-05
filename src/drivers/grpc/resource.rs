@@ -37,7 +37,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
     ) -> Result<tonic::Response<proto::FetchResourcesResponse>, tonic::Status> {
         let credential = match request.extensions().get::<Credential>() {
             Some(credential) => credential.clone(),
-            None => return Err(Status::permission_denied("invalid credential")),
+            None => return Err(Status::unauthenticated("invalid credential")),
         };
 
         let req = request.into_inner();
@@ -58,7 +58,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
     ) -> Result<tonic::Response<proto::CreateResourceResponse>, tonic::Status> {
         let credential = match request.extensions().get::<Credential>() {
             Some(credential) => credential.clone(),
-            None => return Err(Status::permission_denied("invalid credential")),
+            None => return Err(Status::unauthenticated("invalid credential")),
         };
 
         let req = request.into_inner();
@@ -87,7 +87,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
     ) -> Result<tonic::Response<proto::DeleteResourceResponse>, tonic::Status> {
         let credential = match request.extensions().get::<Credential>() {
             Some(credential) => credential.clone(),
-            None => return Err(Status::permission_denied("invalid credential")),
+            None => return Err(Status::unauthenticated("invalid credential")),
         };
 
         let req = request.into_inner();

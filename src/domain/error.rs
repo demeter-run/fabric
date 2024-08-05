@@ -2,10 +2,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Unauthorized")]
-    Unauthorized,
     #[error("{0}")]
-    PermissionDenied(String),
+    Unauthorized(String),
     #[error("{0}")]
     CommandMalformed(String),
     #[error("{0}")]

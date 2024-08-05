@@ -118,12 +118,12 @@ pub async fn verify_secret(
 ) -> Result<ProjectSecret> {
     let (hrp, key) = bech32::decode(&cmd.key).map_err(|error| {
         error!(?error, "invalid bech32");
-        Error::CommandMalformed("invalid bech32".into())
+        Error::Unauthorized("invalid bech32".into())
     })?;
 
     if !hrp.to_string().eq("dmtr_apikey") {
         error!(?hrp, "invalid bech32 hrp");
-        return Err(Error::CommandMalformed("invalid project secret".into()));
+        return Err(Error::Unauthorized("invalid project secret".into()));
     }
 
     let secrets = cache.find_secret_by_project_id(&cmd.project_id).await?;
@@ -150,7 +150,7 @@ pub async fn verify_secret(
     });
 
     let Some(secret) = secret else {
-        return Err(Error::CommandMalformed("invalid project secret".into()));
+        return Err(Error::Unauthorized("invalid project secret".into()));
     };
 
     Ok(secret)
@@ -159,7 +159,9 @@ pub async fn verify_secret(
 fn assert_credential(credential: &Credential) -> Result<UserId> {
     match credential {
         Credential::Auth0(user_id) => Ok(user_id.into()),
-        Credential::ApiKey(_) => Err(Error::Unauthorized),
+        Credential::ApiKey(_) => Err(Error::Unauthorized(
+            "project rpc doesnt support secret".into(),
+        )),
     }
 }
 async fn assert_permission(
@@ -171,14 +173,12 @@ async fn assert_permission(
         Credential::Auth0(user_id) => {
             let result = cache.find_user_permission(user_id, project_id).await?;
             if result.is_none() {
-                return Err(Error::PermissionDenied(
-                    "user doesnt have permission".into(),
-                ));
+                return Err(Error::Unauthorized("user doesnt have permission".into()));
             }
 
             Ok(())
         }
-        Credential::ApiKey(_) => Err(Error::PermissionDenied("rpc doesnt support api-key".into())),
+        Credential::ApiKey(_) => Err(Error::Unauthorized("rpc doesnt support api-key".into())),
     }
 }
 

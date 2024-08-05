@@ -108,18 +108,14 @@ async fn assert_permission(
                 .await?;
 
             if result.is_none() {
-                return Err(Error::PermissionDenied(
-                    "user doesnt have permission".into(),
-                ));
+                return Err(Error::Unauthorized("user doesnt have permission".into()));
             }
 
             Ok(())
         }
         Credential::ApiKey(secret_project_id) => {
             if project_id != secret_project_id {
-                return Err(Error::PermissionDenied(
-                    "secret doesnt have permission".into(),
-                ));
+                return Err(Error::Unauthorized("secret doesnt have permission".into()));
             }
 
             Ok(())
@@ -128,7 +124,7 @@ async fn assert_permission(
 }
 fn assert_project_resource(project: &Project, resource: &Resource) -> Result<()> {
     if project.id != resource.project_id {
-        return Err(Error::PermissionDenied(
+        return Err(Error::Unauthorized(
             "invalid resource for the project".into(),
         ));
     }

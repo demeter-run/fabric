@@ -80,8 +80,7 @@ pub struct GrpcConfig {
 impl From<Error> for Status {
     fn from(value: Error) -> Self {
         match value {
-            Error::Unauthorized => Status::unauthenticated("Unauthorized".to_string()),
-            Error::PermissionDenied(err) => Status::permission_denied(err),
+            Error::Unauthorized(err) => Status::permission_denied(err),
             Error::CommandMalformed(err) => Status::failed_precondition(err),
             Error::SecretExceeded(err) => Status::resource_exhausted(err),
             Error::Unexpected(err) => {

@@ -36,7 +36,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
     ) -> Result<tonic::Response<proto::FetchProjectsResponse>, tonic::Status> {
         let credential = match request.extensions().get::<Credential>() {
             Some(credential) => credential.clone(),
-            None => return Err(Status::permission_denied("invalid credential")),
+            None => return Err(Status::unauthenticated("invalid credential")),
         };
 
         let req = request.into_inner();
@@ -56,7 +56,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
     ) -> Result<tonic::Response<proto::CreateProjectResponse>, tonic::Status> {
         let credential = match request.extensions().get::<Credential>() {
             Some(credential) => credential.clone(),
-            None => return Err(Status::permission_denied("invalid credential")),
+            None => return Err(Status::unauthenticated("invalid credential")),
         };
 
         let req = request.into_inner();
@@ -80,7 +80,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
     ) -> Result<tonic::Response<proto::CreateProjectSecretResponse>, tonic::Status> {
         let credential = match request.extensions().get::<Credential>() {
             Some(credential) => credential.clone(),
-            None => return Err(Status::permission_denied("invalid credential")),
+            None => return Err(Status::unauthenticated("invalid credential")),
         };
 
         let req = request.into_inner();
