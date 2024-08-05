@@ -6,7 +6,6 @@ use chrono::Utc;
 use rand::{
     distributions::{Alphanumeric, DistString},
     rngs::OsRng,
-    Rng,
 };
 use tracing::{error, info};
 use uuid::Uuid;
@@ -16,7 +15,7 @@ use crate::domain::{
     error::Error,
     event::{EventDrivenBridge, ProjectCreated, ProjectSecretCreated},
     project::ProjectStatus,
-    Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
+    utils, Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
 use super::{cache::ProjectDrivenCache, Project, ProjectSecret};
@@ -216,12 +215,7 @@ pub struct CreateCmd {
 impl CreateCmd {
     pub fn new(credential: Credential, name: String) -> Self {
         let id = Uuid::new_v4().to_string();
-        let namespace: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(7)
-            .map(char::from)
-            .collect();
-        let namespace = format!("prj-{}", namespace.to_lowercase());
+        let namespace = format!("prj-{}", utils::get_random_name());
 
         Self {
             credential,
