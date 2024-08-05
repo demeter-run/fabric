@@ -1,9 +1,10 @@
-use anyhow::{Error, Result};
 use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
-use crate::domain::project::{
-    cache::ProjectDrivenCache, Project, ProjectSecret, ProjectStatus, ProjectUser,
+use crate::domain::{
+    error::Error,
+    project::{cache::ProjectDrivenCache, Project, ProjectSecret, ProjectStatus, ProjectUser},
+    Result,
 };
 
 use super::SqliteCache;

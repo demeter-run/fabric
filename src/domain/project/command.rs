@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use anyhow::{bail, ensure, Error, Result};
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use bech32::{Bech32m, Hrp};
 use chrono::Utc;
@@ -14,9 +13,10 @@ use uuid::Uuid;
 
 use crate::domain::{
     auth::{Credential, UserId},
+    error::Error,
     event::{EventDrivenBridge, ProjectCreated, ProjectSecretCreated},
     project::ProjectStatus,
-    MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
+    Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
 use super::{cache::ProjectDrivenCache, Project, ProjectSecret};
@@ -35,7 +35,7 @@ pub async fn create(
     let user_id = assert_credential(&cmd.credential)?;
 
     if cache.find_by_namespace(&cmd.namespace).await?.is_some() {
-        bail!("invalid project namespace")
+        return Err(Error::CommandMalformed("invalid project namespace".into()));
     }
 
     let evt = ProjectCreated {
@@ -63,12 +63,14 @@ pub async fn create_secret(
     assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
 
     let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
-        bail!("project doesnt exist")
+        return Err(Error::CommandMalformed("invalid project id".into()));
     };
 
     let secrets = cache.find_secret_by_project_id(&cmd.project_id).await?;
     if secrets.len() >= MAX_SECRET {
-        bail!("secrets exceeded the limit of {MAX_SECRET}")
+        return Err(Error::SecretExceeded(format!(
+            "secrets exceeded the limit of {MAX_SECRET}"
+        )));
     }
 
     let key = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
@@ -84,15 +86,13 @@ pub async fn create_secret(
         Ok(argon2) => argon2.clone(),
         Err(error) => {
             error!(?error, "error to configure argon2 with secret");
-            bail!("internal error")
+            return Err(Error::Unexpected("error to create the secret".into()));
         }
     };
 
     let key_bytes = key.into_bytes();
 
-    let password_hash = argon2
-        .hash_password(&key_bytes, salt_string.as_salt())
-        .map_err(|err| Error::msg(err.to_string()))?;
+    let password_hash = argon2.hash_password(&key_bytes, salt_string.as_salt())?;
 
     let hrp = Hrp::parse("dmtr_apikey")?;
     let key = bech32::encode::<Bech32m>(hrp, &key_bytes)?;
@@ -118,12 +118,12 @@ pub async fn verify_secret(
 ) -> Result<ProjectSecret> {
     let (hrp, key) = bech32::decode(&cmd.key).map_err(|error| {
         error!(?error, "invalid bech32");
-        Error::msg("invalid bech32")
+        Error::Unauthorized("invalid bech32".into())
     })?;
 
     if !hrp.to_string().eq("dmtr_apikey") {
         error!(?hrp, "invalid bech32 hrp");
-        bail!("invalid project secret")
+        return Err(Error::Unauthorized("invalid project secret".into()));
     }
 
     let secrets = cache.find_secret_by_project_id(&cmd.project_id).await?;
@@ -150,7 +150,7 @@ pub async fn verify_secret(
     });
 
     let Some(secret) = secret else {
-        bail!("invalid project secret");
+        return Err(Error::Unauthorized("invalid project secret".into()));
     };
 
     Ok(secret)
@@ -159,7 +159,9 @@ pub async fn verify_secret(
 fn assert_credential(credential: &Credential) -> Result<UserId> {
     match credential {
         Credential::Auth0(user_id) => Ok(user_id.into()),
-        Credential::ApiKey(_) => bail!("rpc doesnt support api-key"),
+        Credential::ApiKey(_) => Err(Error::Unauthorized(
+            "project rpc doesnt support secret".into(),
+        )),
     }
 }
 async fn assert_permission(
@@ -170,10 +172,13 @@ async fn assert_permission(
     match credential {
         Credential::Auth0(user_id) => {
             let result = cache.find_user_permission(user_id, project_id).await?;
-            ensure!(result.is_some(), "user doesnt have permission");
+            if result.is_none() {
+                return Err(Error::Unauthorized("user doesnt have permission".into()));
+            }
+
             Ok(())
         }
-        Credential::ApiKey(_) => bail!("rpc doesnt support api-key"),
+        Credential::ApiKey(_) => Err(Error::Unauthorized("rpc doesnt support api-key".into())),
     }
 }
 
@@ -188,10 +193,11 @@ impl FetchCmd {
         let page = page.unwrap_or(1);
         let page_size = page_size.unwrap_or(PAGE_SIZE_DEFAULT);
 
-        ensure!(
-            page_size <= PAGE_SIZE_MAX,
-            "page_size exceeded the limit of {PAGE_SIZE_MAX}"
-        );
+        if page_size >= PAGE_SIZE_MAX {
+            return Err(Error::CommandMalformed(format!(
+                "page_size exceeded the limit of {PAGE_SIZE_MAX}"
+            )));
+        }
 
         Ok(Self {
             credential,

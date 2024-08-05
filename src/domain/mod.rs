@@ -1,4 +1,7 @@
+use error::Error;
+
 pub mod auth;
+pub mod error;
 pub mod event;
 pub mod project;
 pub mod resource;
@@ -6,6 +9,8 @@ pub mod resource;
 pub const PAGE_SIZE_DEFAULT: u32 = 12;
 pub const PAGE_SIZE_MAX: u32 = 120;
 pub const MAX_SECRET: usize = 2;
+
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[cfg(test)]
 mod tests {

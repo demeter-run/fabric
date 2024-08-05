@@ -41,7 +41,9 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
                     request.extensions_mut().insert(credential);
                     Ok(request)
                 }
-                Err(_) => Err(tonic::Status::unauthenticated("invalid authentication")),
+                Err(_) => Err(tonic::Status::permission_denied(
+                    "invalid authorization token",
+                )),
             };
         }
 
@@ -56,14 +58,11 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
                         project_id,
                     };
 
-                    match project::command::verify_secret(self.cache.clone(), cmd).await {
-                        Ok(secret) => {
-                            let credential = Credential::ApiKey(secret.project_id);
-                            request.extensions_mut().insert(credential);
-                            Ok(request)
-                        }
-                        Err(_) => Err(tonic::Status::permission_denied("invalid project secret")),
-                    }
+                    let secret = project::command::verify_secret(self.cache.clone(), cmd).await?;
+                    let credential = Credential::ApiKey(secret.project_id);
+                    request.extensions_mut().insert(credential);
+
+                    Ok(request)
                 });
             });
         }

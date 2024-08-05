@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use anyhow::Result;
 use kube::{
     api::{ApiResource, DynamicObject, ObjectMeta},
     ResourceExt,
@@ -8,7 +7,10 @@ use kube::{
 use serde_json::json;
 use tracing::info;
 
-use crate::domain::event::{ResourceCreated, ResourceDeleted};
+use crate::domain::{
+    event::{ResourceCreated, ResourceDeleted},
+    Result,
+};
 
 #[async_trait::async_trait]
 pub trait ResourceDrivenCluster: Send + Sync {

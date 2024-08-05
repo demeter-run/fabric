@@ -1,18 +1,22 @@
-use anyhow::{bail, Error, Result};
+use anyhow::Result as AnyhowResult;
 use rdkafka::{
     producer::{FutureProducer, FutureRecord},
     ClientConfig, Message,
 };
 use std::{collections::HashMap, time::Duration};
 
-use crate::domain::event::{Event, EventDrivenBridge};
+use crate::domain::{
+    error::Error,
+    event::{Event, EventDrivenBridge},
+    Result,
+};
 
 pub struct KafkaProducer {
     producer: FutureProducer,
     topic: String,
 }
 impl KafkaProducer {
-    pub fn new(topic: &str, properties: &HashMap<String, String>) -> Result<Self> {
+    pub fn new(topic: &str, properties: &HashMap<String, String>) -> AnyhowResult<Self> {
         let producer: FutureProducer = {
             let mut client_config = ClientConfig::new();
             for (k, v) in properties.iter() {
@@ -39,7 +43,7 @@ impl EventDrivenBridge for KafkaProducer {
                 Duration::from_secs(0),
             )
             .await
-            .map_err(|err| Error::msg(err.0.to_string()))?;
+            .map_err(|err| Error::Unexpected(err.0.to_string()))?;
 
         Ok(())
     }
@@ -51,12 +55,13 @@ impl TryFrom<&rdkafka::message::BorrowedMessage<'_>> for Event {
         value: &rdkafka::message::BorrowedMessage<'_>,
     ) -> std::result::Result<Self, Self::Error> {
         let Some(key) = value.key() else {
-            bail!("event with empty key")
+            return Err(Error::Unexpected("event with empty key".into()));
         };
-        let key = String::from_utf8(key.to_vec())?;
+        let key =
+            String::from_utf8(key.to_vec()).map_err(|err| Error::Unexpected(err.to_string()))?;
 
         let Some(payload) = value.payload() else {
-            bail!("event with empty payload")
+            return Err(Error::Unexpected("event with empty payload".into()));
         };
         let event = Event::from_key(&key, payload)?;
         Ok(event)

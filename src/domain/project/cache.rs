@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
-use anyhow::Result;
-
 use crate::domain::event::{ProjectCreated, ProjectSecretCreated};
+use crate::domain::Result;
 
 use super::{Project, ProjectSecret, ProjectUser};
 

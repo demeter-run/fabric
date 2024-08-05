@@ -1,9 +1,11 @@
 use std::{fmt::Display, str::FromStr};
 
-use anyhow::{bail, Error};
 use chrono::{DateTime, Utc};
 
-use super::event::{ProjectCreated, ProjectSecretCreated};
+use super::{
+    error::Error,
+    event::{ProjectCreated, ProjectSecretCreated},
+};
 
 pub mod cache;
 pub mod cluster;
@@ -47,7 +49,7 @@ impl FromStr for ProjectStatus {
         match s {
             "active" => Ok(ProjectStatus::Active),
             "deleted" => Ok(ProjectStatus::Deleted),
-            _ => bail!("project status not supported"),
+            _ => Err(Error::Unexpected("project status not supported".into())),
         }
     }
 }
