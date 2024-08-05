@@ -1,9 +1,8 @@
 use std::{fmt::Display, str::FromStr};
 
-use anyhow::{bail, Error};
 use chrono::{DateTime, Utc};
 
-use super::event::ResourceCreated;
+use super::{error::Error, event::ResourceCreated};
 
 pub mod cache;
 pub mod cluster;
@@ -46,7 +45,7 @@ impl FromStr for ResourceStatus {
         match s {
             "active" => Ok(Self::Active),
             "deleted" => Ok(Self::Deleted),
-            _ => bail!("resource status not supported"),
+            _ => Err(Error::Unexpected("resource status not supported".into())),
         }
     }
 }

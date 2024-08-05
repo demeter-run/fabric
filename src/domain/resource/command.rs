@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use anyhow::{bail, ensure, Error, Result};
 use argon2::{password_hash::SaltString, Argon2};
 use bech32::{Bech32m, Hrp};
 use chrono::Utc;
@@ -10,10 +9,11 @@ use uuid::Uuid;
 
 use crate::domain::{
     auth::Credential,
+    error::Error,
     event::{EventDrivenBridge, ResourceCreated, ResourceDeleted},
     project::{cache::ProjectDrivenCache, Project},
     resource::ResourceStatus,
-    PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
+    Result, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
 use super::{cache::ResourceDrivenCache, Resource};
@@ -38,7 +38,7 @@ pub async fn create(
     assert_permission(project_cache.clone(), &cmd.credential, &cmd.project_id).await?;
 
     let Some(project) = project_cache.find_by_id(&cmd.project_id).await? else {
-        bail!("project doesnt exist")
+        return Err(Error::CommandMalformed("invalid project id".into()));
     };
 
     let auth_token = build_auth_token(&project.id, &cmd.id, &cmd.kind)?;
@@ -72,11 +72,11 @@ pub async fn delete(
     assert_permission(project_cache.clone(), &cmd.credential, &cmd.project_id).await?;
 
     let Some(project) = project_cache.find_by_id(&cmd.project_id).await? else {
-        bail!("project doesnt exist")
+        return Err(Error::CommandMalformed("invalid project id".into()));
     };
 
     let Some(resource) = resource_cache.find_by_id(&cmd.resource_id).await? else {
-        bail!("resource doesnt exist")
+        return Err(Error::CommandMalformed("invalid resource id".into()));
     };
 
     assert_project_resource(&project, &resource)?;
@@ -106,21 +106,32 @@ async fn assert_permission(
             let result = project_cache
                 .find_user_permission(user_id, project_id)
                 .await?;
-            ensure!(result.is_some(), "user doesnt have permission");
+
+            if result.is_none() {
+                return Err(Error::PermissionDenied(
+                    "user doesnt have permission".into(),
+                ));
+            }
+
             Ok(())
         }
         Credential::ApiKey(secret_project_id) => {
-            ensure!(
-                project_id == secret_project_id,
-                "secret doesnt have permission"
-            );
+            if project_id != secret_project_id {
+                return Err(Error::PermissionDenied(
+                    "secret doesnt have permission".into(),
+                ));
+            }
 
             Ok(())
         }
     }
 }
 fn assert_project_resource(project: &Project, resource: &Resource) -> Result<()> {
-    ensure!(project.id == resource.project_id);
+    if project.id != resource.project_id {
+        return Err(Error::PermissionDenied(
+            "invalid resource for the project".into(),
+        ));
+    }
     Ok(())
 }
 
@@ -131,9 +142,7 @@ pub fn build_auth_token(project_id: &str, resource_id: &str, kind: &str) -> Resu
     let salt = SaltString::generate(&mut OsRng);
 
     let mut output = vec![0; 8];
-    argon2
-        .hash_password_into(&key, salt.as_str().as_bytes(), &mut output)
-        .map_err(|err| Error::msg(err.to_string()))?;
+    argon2.hash_password_into(&key, salt.as_str().as_bytes(), &mut output)?;
 
     let prefix = format!("dmtr_{}", kind.to_lowercase());
     let hrp = Hrp::parse(&prefix)?;
@@ -159,10 +168,11 @@ impl FetchCmd {
         let page = page.unwrap_or(1);
         let page_size = page_size.unwrap_or(PAGE_SIZE_DEFAULT);
 
-        ensure!(
-            page_size <= PAGE_SIZE_MAX,
-            "page_size exceeded the limit of {PAGE_SIZE_MAX}"
-        );
+        if page_size >= PAGE_SIZE_MAX {
+            return Err(Error::CommandMalformed(format!(
+                "page_size exceeded the limit of {PAGE_SIZE_MAX}"
+            )));
+        }
 
         Ok(Self {
             credential,

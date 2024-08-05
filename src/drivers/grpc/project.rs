@@ -41,12 +41,9 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = project::command::FetchCmd::new(credential, req.page, req.page_size)
-            .map_err(|err| Status::failed_precondition(err.to_string()))?;
+        let cmd = project::command::FetchCmd::new(credential, req.page, req.page_size)?;
 
-        let projects = project::command::fetch(self.cache.clone(), cmd.clone())
-            .await
-            .map_err(|err| Status::failed_precondition(err.to_string()))?;
+        let projects = project::command::fetch(self.cache.clone(), cmd.clone()).await?;
 
         let records = projects.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchProjectsResponse { records };
@@ -66,9 +63,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let cmd = project::command::CreateCmd::new(credential, req.name);
 
-        project::command::create(self.cache.clone(), self.event.clone(), cmd.clone())
-            .await
-            .map_err(|err| Status::failed_precondition(err.to_string()))?;
+        project::command::create(self.cache.clone(), self.event.clone(), cmd.clone()).await?;
 
         let message = proto::CreateProjectResponse {
             id: cmd.id,
@@ -99,8 +94,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let key =
             project::command::create_secret(self.cache.clone(), self.event.clone(), cmd.clone())
-                .await
-                .map_err(|err| Status::failed_precondition(err.to_string()))?;
+                .await?;
 
         let message = proto::CreateProjectSecretResponse {
             id: cmd.id,

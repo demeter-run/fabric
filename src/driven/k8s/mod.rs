@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::Result as AnyhowResult;
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{
     api::{DeleteParams, DynamicObject, PostParams},
@@ -6,14 +6,14 @@ use kube::{
 };
 
 use crate::domain::{
-    project::cluster::ProjectDrivenCluster, resource::cluster::ResourceDrivenCluster,
+    project::cluster::ProjectDrivenCluster, resource::cluster::ResourceDrivenCluster, Result,
 };
 
 pub struct K8sCluster {
     client: Client,
 }
 impl K8sCluster {
-    pub async fn new() -> Result<Self> {
+    pub async fn new() -> AnyhowResult<Self> {
         let client = Client::try_default().await?;
 
         Ok(Self { client })

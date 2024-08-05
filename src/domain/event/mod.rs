@@ -1,6 +1,9 @@
-use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+
+use crate::domain::Result;
+
+use super::error::Error;
 
 macro_rules! into_event {
     ($name:ident) => {
@@ -78,14 +81,15 @@ impl Event {
         }
     }
     pub fn from_key(key: &str, payload: &[u8]) -> Result<Self> {
-        let event = match key {
-            "ProjectCreated" => Self::ProjectCreated(serde_json::from_slice(payload)?),
-            "ProjectSecretCreated" => Self::ProjectSecretCreated(serde_json::from_slice(payload)?),
-            "ResourceCreated" => Self::ResourceCreated(serde_json::from_slice(payload)?),
-            "ResourceDeleted" => Self::ResourceDeleted(serde_json::from_slice(payload)?),
-            _ => bail!("Event key not implemented"),
-        };
-        Ok(event)
+        match key {
+            "ProjectCreated" => Ok(Self::ProjectCreated(serde_json::from_slice(payload)?)),
+            "ProjectSecretCreated" => {
+                Ok(Self::ProjectSecretCreated(serde_json::from_slice(payload)?))
+            }
+            "ResourceCreated" => Ok(Self::ResourceCreated(serde_json::from_slice(payload)?)),
+            "ResourceDeleted" => Ok(Self::ResourceDeleted(serde_json::from_slice(payload)?)),
+            _ => Err(Error::Unexpected("Event key not implemented".into())),
+        }
     }
 }
 

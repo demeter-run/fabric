@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
-use crate::domain::event::{ResourceCreated, ResourceDeleted};
+use crate::domain::{
+    event::{ResourceCreated, ResourceDeleted},
+    Result,
+};
 
 use super::Resource;
 
-use anyhow::Result;
 use chrono::{DateTime, Utc};
 
 #[async_trait::async_trait]

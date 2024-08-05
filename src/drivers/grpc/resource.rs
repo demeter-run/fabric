@@ -42,13 +42,10 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)
-            .map_err(|err| Status::failed_precondition(err.to_string()))?;
+        let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)?;
 
         let resources =
-            command::fetch(self.project_cache.clone(), self.resource_cache.clone(), cmd)
-                .await
-                .map_err(|err| Status::failed_precondition(err.to_string()))?;
+            command::fetch(self.project_cache.clone(), self.resource_cache.clone(), cmd).await?;
 
         let records = resources.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchResourcesResponse { records };
@@ -75,9 +72,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         let cmd = command::CreateCmd::new(credential, req.project_id, req.kind, spec);
 
-        command::create(self.project_cache.clone(), self.event.clone(), cmd.clone())
-            .await
-            .map_err(|err| Status::failed_precondition(err.to_string()))?;
+        command::create(self.project_cache.clone(), self.event.clone(), cmd.clone()).await?;
 
         let message = proto::CreateResourceResponse {
             id: cmd.id,
@@ -109,8 +104,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
             self.event.clone(),
             cmd,
         )
-        .await
-        .map_err(|err| Status::failed_precondition(err.to_string()))?;
+        .await?;
 
         Ok(tonic::Response::new(DeleteResourceResponse {}))
     }

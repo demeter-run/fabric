@@ -6,10 +6,12 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::{path::Path, sync::Arc};
 use tonic::transport::Server;
-use tracing::info;
+use tonic::Status;
+use tracing::{error, info};
 
 use dmtri::demeter::ops::v1alpha::project_service_server::ProjectServiceServer;
 
+use crate::domain::error::Error;
 use crate::driven::auth::Auth0Provider;
 use crate::driven::cache::project::SqliteProjectDrivenCache;
 use crate::driven::cache::resource::SqliteResourceDrivenCache;
@@ -73,4 +75,19 @@ pub struct GrpcConfig {
     pub secret: String,
     pub topic: String,
     pub kafka: HashMap<String, String>,
+}
+
+impl From<Error> for Status {
+    fn from(value: Error) -> Self {
+        match value {
+            Error::Unauthorized => Status::unauthenticated("Unauthorized".to_string()),
+            Error::PermissionDenied(err) => Status::permission_denied(err),
+            Error::CommandMalformed(err) => Status::failed_precondition(err),
+            Error::SecretExceeded(err) => Status::resource_exhausted(err),
+            Error::Unexpected(err) => {
+                error!(err);
+                Status::internal("internal error")
+            }
+        }
+    }
 }

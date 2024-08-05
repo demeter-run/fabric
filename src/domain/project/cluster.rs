@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{api::ObjectMeta, ResourceExt};
 use tracing::info;
 
-use crate::domain::event::ProjectCreated;
+use crate::domain::{error::Error, event::ProjectCreated, Result};
 
 #[async_trait::async_trait]
 pub trait ProjectDrivenCluster: Send + Sync {
@@ -18,7 +17,7 @@ pub async fn apply_manifest(
     evt: ProjectCreated,
 ) -> Result<()> {
     if cluster.find_by_name(&evt.namespace).await?.is_some() {
-        bail!("namespace alread exist")
+        return Err(Error::CommandMalformed("namespace alread exist".into()));
     }
 
     let namespace = Namespace {

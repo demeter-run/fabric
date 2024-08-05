@@ -1,9 +1,12 @@
-use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
-use crate::domain::resource::{cache::ResourceDrivenCache, Resource, ResourceStatus};
+use crate::domain::{
+    error::Error,
+    resource::{cache::ResourceDrivenCache, Resource, ResourceStatus},
+    Result,
+};
 
 use super::SqliteCache;
 
