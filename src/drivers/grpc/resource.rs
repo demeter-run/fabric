@@ -1,4 +1,5 @@
 use dmtri::demeter::ops::v1alpha::{self as proto, DeleteResourceResponse};
+use serde_json::Value;
 use std::sync::Arc;
 use tonic::{async_trait, Status};
 
@@ -65,7 +66,14 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = command::CreateCmd::new(credential, req.project_id, req.kind, req.data);
+        let value = serde_json::from_str(&req.spec)
+            .map_err(|_| Status::failed_precondition("spec must be a json"))?;
+        let spec = match value {
+            Value::Object(v) => Ok(v),
+            _ => Err(Status::failed_precondition("invalid spec json")),
+        }?;
+
+        let cmd = command::CreateCmd::new(credential, req.project_id, req.kind, spec);
 
         command::create(self.project_cache.clone(), self.event.clone(), cmd.clone())
             .await
@@ -113,7 +121,7 @@ impl From<Resource> for proto::Resource {
         Self {
             id: value.id,
             kind: value.kind,
-            data: value.data,
+            spec: value.spec,
             status: value.status.to_string(),
             created_at: value.created_at.to_rfc3339(),
             updated_at: value.updated_at.to_rfc3339(),
