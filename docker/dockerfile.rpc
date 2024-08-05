@@ -15,6 +15,10 @@ FROM rust:1.79-slim-buster
 RUN apt update 
 RUN apt install -y build-essential pkg-config libssl-dev libsasl2-dev cmake
 
+WORKDIR /app
+
 COPY --from=build /app/target/release/rpc .
+COPY ./data ./data
+
 CMD ["./rpc"]
 LABEL service=rpc

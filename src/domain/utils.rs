@@ -12,14 +12,14 @@ lazy_static! {
 }
 
 fn load_adjectives() -> Vec<String> {
-    let path = Path::new("src/domain/utils/adjectives.json");
+    let path = Path::new("data/adjectives.json");
     let file = File::open(path).expect("invalid adjectives file path");
     let reader = BufReader::new(file);
     serde_json::from_reader(reader).expect("adjectives file must be a json array of string")
 }
 
 fn load_nouns() -> Vec<String> {
-    let path = Path::new("src/domain/utils/nouns.json");
+    let path = Path::new("data/nouns.json");
     let file = File::open(path).expect("invalid nouns file path");
     let reader = BufReader::new(file);
     serde_json::from_reader(reader).expect("nouns file must be a json array of string")
