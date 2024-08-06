@@ -1,66 +1,3 @@
-# Kafka
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: demeter-kafka 
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: redpanda
-  namespace: demeter-kafka
-  labels:
-    app: redpanda
-spec:
-  selector:
-    matchLabels:
-      app: redpanda
-  template:
-    metadata:
-      labels:
-        app: redpanda
-    spec:
-      containers:
-        - name: redpanda
-          image: docker.redpanda.com/redpandadata/redpanda:latest
-          args:
-           - redpanda
-           - start
-           - --kafka-addr internal://localhost:9092,external://0.0.0.0:19092
-           - --advertise-kafka-addr internal://localhost:9092,external://redpanda.demeter-kafka.svc.cluster.local:19092
-           - --pandaproxy-addr internal://localhost:8082,external://0.0.0.0:18082
-           - --advertise-pandaproxy-addr internal://localhost:8082,external://redpanda.demeter-kafka.svc.cluster.local:18082
-           - --schema-registry-addr internal://localhost:8081,external://0.0.0.0:18081
-           - --rpc-addr localhost:33145
-           - --advertise-rpc-addr localhost:33145
-           - --mode dev-container
-           - --smp 1
-           - --default-log-level=debug
-
-          ports:
-            - containerPort: 19092 
-          lifecycle:
-            postStart:
-              exec:
-                command: ["/bin/sh", "-c", " rpk topic create events"]
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: redpanda 
-  namespace: demeter-kafka
-  labels:
-    app: redpanda
-spec:
-  selector:
-    app: redpanda
-  type: ClusterIP
-  ports:
-    - name: redpanda
-      port: 19092 
-      targetPort: 19092
-      protocol: TCP
----
 # Daemon 
 apiVersion: v1
 kind: Namespace
@@ -133,10 +70,10 @@ spec:
           image: daemon:1.0
           env:
             - name: DAEMON_CONFIG 
-              value: "/fabric/daemon.toml"
+              value: "/fabric/config/daemon.toml"
           volumeMounts:
             - name: daemon-vol
-              mountPath: /fabric 
+              mountPath: /fabric/config
       volumes:
         - name: daemon-vol
           configMap:
@@ -194,10 +131,10 @@ spec:
             - containerPort: 80
           env:
             - name: RPC_CONFIG 
-              value: "/fabric/rpc.toml"
+              value: "/fabric/config/rpc.toml"
           volumeMounts:
             - name: rpc-vol
-              mountPath: /fabric 
+              mountPath: /fabric/config 
       volumes:
         - name: rpc-vol
           configMap:

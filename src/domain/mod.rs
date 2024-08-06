@@ -5,6 +5,7 @@ pub mod error;
 pub mod event;
 pub mod project;
 pub mod resource;
+pub mod utils;
 
 pub const PAGE_SIZE_DEFAULT: u32 = 12;
 pub const PAGE_SIZE_MAX: u32 = 120;

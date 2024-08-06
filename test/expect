@@ -1,37 +1,97 @@
-wget https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_linux_x86_64.tar.gz
-tar -zxvf ./grpcurl_1.9.1_linux_x86_64.tar.gz grpcurl 
+#!/bin/bash
 
-echo "Waiting for kafka to be ready..."
-while true; do
-    pod_status=$(kubectl get pods -n demeter-kafka -o 'jsonpath={.items[*].status.conditions[?(@.type=="Ready")].status}' | grep True)
+RPC_IMAGE="rpc:1.0"
+DAEMON_IMAGE="daemon:1.0"
+CLUSTER_NAME="k8scluster"
+KAFKA_NAMESPACE="demeter-kafka"
+FABRIC_NAMESPACE="demeter-rpc"
+DAEMON_NAMESPACE="demeter-daemon"
+MAX_ATTEMPT=6
+SLEEP_DURATION=5
+GRPCURL_VERSION="1.9.1"
+AUTH0_URL="https://dev-dflg0ssi.us.auth0.com/oauth/token"
 
-    if [[ -n "$pod_status" ]]; then
-        break
-    else
-        echo "Kafka is not ready yet, waiting..."
-        sleep 5
+build_and_load_image() {
+    local image_name=$1
+    local dockerfile=$2
+
+    echo "Building $image_name"
+    docker build -t "$image_name" -f "$dockerfile" .
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to build $image_name"
+        exit 1
     fi
-done
+    kind load docker-image "$image_name" --name $CLUSTER_NAME
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to load $image_name into kind cluster"
+        exit 1
+    fi
+}
 
-TOKEN=$(curl --verbose --request POST --url https://dev-dflg0ssi.us.auth0.com/oauth/token --header 'content-type: application/json' --data $TEST_CREDENTIAL | jq -r '.access_token')
+wait_for_pods() {
+    local namespace=$1
+    local resource_name=$2
+
+    echo "Waiting for $resource_name to be ready in namespace $namespace"
+    for attempt in $(seq 1 $MAX_ATTEMPT); do
+        pod_status=$(kubectl get pods -n "$namespace" -o 'jsonpath={.items[*].status.conditions[?(@.type=="Ready")].status}' | grep True)
+
+        if [[ -n "$pod_status" ]]; then
+            echo "$resource_name is ready."
+            return 0
+        else
+            echo "$resource_name is not ready yet, waiting... (attempt $attempt)"
+            sleep $SLEEP_DURATION
+        fi
+    done
+
+    echo "Error: $resource_name is not ready after $MAX_ATTEMPT attempts."
+    exit 1
+}
+
+# Build and load image
+build_and_load_image $RPC_IMAGE docker/dockerfile.rpc
+build_and_load_image $DAEMON_IMAGE docker/dockerfile.daemon
+
+# Apply Kafka manifest
+kubectl apply -f ./test/kafka.manifest.yaml
+wait_for_pods $KAFKA_NAMESPACE "Kafka"
+
+# Apply Fabric manifest
+kubectl apply -f ./test/fabric.manifest.yaml
+wait_for_pods $FABRIC_NAMESPACE "Fabric"
+wait_for_pods $DAEMON_NAMESPACE "Daemon"
+
+# Download and extract grpcurl
+wget "https://github.com/fullstorydev/grpcurl/releases/download/v${GRPCURL_VERSION}/grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz"
+tar -zxvf "./grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz" grpcurl
+
+# Get Auth0 access token
+echo "Getting Auth0 access token"
+TOKEN=$(curl --silent --request POST --url $AUTH0_URL --header 'content-type: application/json' --data "$TEST_CREDENTIAL" | jq -r '.access_token')
+if [ -z "$TOKEN" ]; then
+    echo "Error: Failed to get Auth0 access token"
+    exit 1
+fi
+
+# Create namespace using grpcurl
+echo "Creating namespace"
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-NAMESPACE=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"name": "New Namespace"}' "$NODE_IP":30950 demeter.ops.v1alpha.ProjectService.CreateProject | jq -r '.namespace')
-ATTEMPT=1
-MAX_ATTEMPT=120
+NAMESPACE=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"name": "New Namespace"}' "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.CreateProject | jq -r '.namespace')
 
-echo "Checking executation"
-while [ $ATTEMPT -lt $MAX_ATTEMPT ]; do
+# Check if namespace is created
+echo "Checking if namespace $NAMESPACE exists"
+for attempt in $(seq 1 120); do
     if kubectl get namespace "$NAMESPACE" &> /dev/null; then
         echo "Namespace $NAMESPACE exists."
         break
     else
-        echo "Namespace $NAMESPACE not found. Retrying..."
+        echo "Namespace $NAMESPACE not found. Retrying... (attempt $attempt)"
         sleep 2
-        let ATTEMPT=ATTEMPT+1
     fi
 done
 
-if [ $ATTEMPT -eq $MAX_ATTEMPT ]; then
-    echo "Error: Namespace $NAMESPACE not found after $MAX_ATTEMPT attempts."
+if ! kubectl get namespace "$NAMESPACE" &> /dev/null; then
+    echo "Error: Namespace $NAMESPACE not found after 120 attempts."
     exit 1
 fi
