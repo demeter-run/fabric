@@ -1,8 +1,10 @@
 wget https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_linux_x86_64.tar.gz
 tar -zxvf ./grpcurl_1.9.1_linux_x86_64.tar.gz grpcurl 
 
+ATTEMPT=1
+MAX_ATTEMPT=3
 echo "Waiting for kafka to be ready..."
-while true; do
+while [ $ATTEMPT -lt $MAX_ATTEMPT ]; do
     pod_status=$(kubectl get pods -n demeter-kafka -o 'jsonpath={.items[*].status.conditions[?(@.type=="Ready")].status}' | grep True)
 
     if [[ -n "$pod_status" ]]; then
@@ -10,18 +12,25 @@ while true; do
     else
         echo "Kafka is not ready yet, waiting..."
         sleep 5
+        let ATTEMPT=ATTEMPT+1
     fi
 done
 
+ATTEMPT=3
+MAX_ATTEMPT=120
 echo "Waiting for rpc to be ready..."
-while true; do
+while [ $ATTEMPT -lt $MAX_ATTEMPT ]; do
     pod_status=$(kubectl get pods -n demeter-rpc -o 'jsonpath={.items[*].status.conditions[?(@.type=="Ready")].status}' | grep True)
 
     if [[ -n "$pod_status" ]]; then
         break
     else
         echo "Rpc is not ready yet, waiting..."
+        POD_NAME=$(kubectl get pods -n demeter-rpc -o jsonpath='{.items[0].metadata.name}')
+        kubectl logs -n demeter-rpc $POD_NAME
+
         sleep 5
+        let ATTEMPT=ATTEMPT+1
     fi
 done
 
@@ -40,8 +49,7 @@ POD_NAME=$(kubectl get pods -n demeter-daemon -o jsonpath='{.items[0].metadata.n
 kubectl logs -n demeter-daemon $POD_NAME
 
 ATTEMPT=1
-MAX_ATTEMPT=120
-
+MAX_ATTEMPT=12
 echo "Checking executation"
 while [ $ATTEMPT -lt $MAX_ATTEMPT ]; do
     if kubectl get namespace "$NAMESPACE" &> /dev/null; then
