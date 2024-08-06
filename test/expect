@@ -1,6 +1,14 @@
-wget https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_linux_x86_64.tar.gz
-tar -zxvf ./grpcurl_1.9.1_linux_x86_64.tar.gz grpcurl 
+#!/bin/bash
 
+echo "Build RPC"
+docker build -t rpc:1.0 -f docker/dockerfile.rpc .
+kind load docker-image rpc:1.0 --name k8scluster
+
+echo "Build Daemon"
+docker build -t daemon:1.0 -f docker/dockerfile.daemon .
+kind load docker-image daemon:1.0 --name k8scluster
+
+kubectl apply -f ./test/kafka.manifest.yaml 
 ATTEMPT=1
 MAX_ATTEMPT=6
 echo "Waiting for kafka to be ready"
@@ -19,6 +27,29 @@ if [ $ATTEMPT -eq $MAX_ATTEMPT ]; then
     echo "Error: Kafka is not ready after $MAX_ATTEMPT attempts."
     exit 1
 fi
+
+kubectl apply -f ./test/fabric.manifest.yaml 
+ATTEMPT=1
+MAX_ATTEMPT=6
+echo "Waiting for fabric to be ready"
+while [ $ATTEMPT -lt $MAX_ATTEMPT ]; do
+    pod_status=$(kubectl get pods -n demeter-rpc -o 'jsonpath={.items[*].status.conditions[?(@.type=="Ready")].status}' | grep True)
+
+    if [[ -n "$pod_status" ]]; then
+        break
+    else
+        echo "fabric is not ready yet, waiting..."
+        sleep 5
+        let ATTEMPT=ATTEMPT+1
+    fi
+done
+if [ $ATTEMPT -eq $MAX_ATTEMPT ]; then
+    echo "Error: fabric is not ready after $MAX_ATTEMPT attempts."
+    exit 1
+fi
+
+wget https://github.com/fullstorydev/grpcurl/releases/download/v1.9.1/grpcurl_1.9.1_linux_x86_64.tar.gz
+tar -zxvf ./grpcurl_1.9.1_linux_x86_64.tar.gz grpcurl 
 
 echo "Getting Auth0 access token"
 TOKEN=$(curl --verbose --request POST --url https://dev-dflg0ssi.us.auth0.com/oauth/token --header 'content-type: application/json' --data $TEST_CREDENTIAL | jq -r '.access_token')
