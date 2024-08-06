@@ -39,10 +39,6 @@ spec:
 
           ports:
             - containerPort: 19092 
-          lifecycle:
-            postStart:
-              exec:
-                command: ["/bin/sh", "-c", " rpk topic create events"]
 ---
 apiVersion: v1
 kind: Service
@@ -60,6 +56,23 @@ spec:
       port: 19092 
       targetPort: 19092
       protocol: TCP
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-topic
+  namespace: demeter-kafka
+spec:
+  template:
+    spec:
+      containers:
+        - name: create-topic
+          image: docker.redpanda.com/redpandadata/redpanda:latest
+          command: ["/bin/sh", "-c", "rpk topic create events"]
+          env:
+            - name: REDPANDA_BROKERS
+              value: "redpanda.demeter-kafka.svc.cluster.local:19092"
+      restartPolicy: OnFailure
 ---
 # Daemon 
 apiVersion: v1
