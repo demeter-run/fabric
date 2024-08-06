@@ -583,7 +583,6 @@ dependencies = [
  "jsonwebtoken",
  "k8s-openapi",
  "kube",
- "lazy_static",
  "mockall",
  "prost 0.12.6",
  "protoc-wkt",
