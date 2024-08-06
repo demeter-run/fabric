@@ -28,7 +28,7 @@ NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="
 NAMESPACE=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"name": "New Namespace"}' "$NODE_IP":30950 demeter.ops.v1alpha.ProjectService.CreateProject | jq -r '.namespace')
 
 ATTEMPT=1
-MAX_ATTEMPT=6
+MAX_ATTEMPT=120
 echo "Checking executation"
 while [ $ATTEMPT -lt $MAX_ATTEMPT ]; do
     if kubectl get namespace "$NAMESPACE" &> /dev/null; then
@@ -36,7 +36,7 @@ while [ $ATTEMPT -lt $MAX_ATTEMPT ]; do
         break
     else
         echo "Namespace $NAMESPACE not found. Retrying..."
-        sleep 5
+        sleep 2
         let ATTEMPT=ATTEMPT+1
     fi
 done
