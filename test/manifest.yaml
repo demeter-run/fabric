@@ -133,10 +133,10 @@ spec:
           image: daemon:1.0
           env:
             - name: DAEMON_CONFIG 
-              value: "/fabric/daemon.toml"
+              value: "/fabric/config/daemon.toml"
           volumeMounts:
             - name: daemon-vol
-              mountPath: /fabric 
+              mountPath: /fabric/config
       volumes:
         - name: daemon-vol
           configMap:
@@ -194,10 +194,10 @@ spec:
             - containerPort: 80
           env:
             - name: RPC_CONFIG 
-              value: "/fabric/rpc.toml"
+              value: "/fabric/config/rpc.toml"
           volumeMounts:
             - name: rpc-vol
-              mountPath: /fabric 
+              mountPath: /fabric/config 
       volumes:
         - name: rpc-vol
           configMap:

@@ -13,7 +13,7 @@ RUN cargo build --release --bin=daemon
 FROM rust:1.79-slim-buster 
 
 RUN apt update 
-RUN apt install -y build-essential pkg-config libssl-dev libsasl2-dev cmake
+RUN apt install -y libssl-dev libsasl2-dev
 
 COPY --from=build /app/target/release/ ./
 CMD ["./daemon"]
