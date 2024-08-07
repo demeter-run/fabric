@@ -52,6 +52,33 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
+    async fn fetch_resources_by_id(
+        &self,
+        request: tonic::Request<proto::FetchResourcesByIdRequest>,
+    ) -> Result<tonic::Response<proto::FetchResourcesByIdResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = command::FetchByIdCmd {
+            credential,
+            project_id: req.project_id,
+            resource_id: req.resource_id,
+        };
+
+        let resource =
+            command::fetch_by_id(self.project_cache.clone(), self.resource_cache.clone(), cmd)
+                .await?;
+
+        let records = vec![resource.into()];
+        let message = proto::FetchResourcesByIdResponse { records };
+
+        Ok(tonic::Response::new(message))
+    }
+
     async fn create_resource(
         &self,
         request: tonic::Request<proto::CreateResourceRequest>,

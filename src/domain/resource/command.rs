@@ -30,6 +30,26 @@ pub async fn fetch(
         .await
 }
 
+pub async fn fetch_by_id(
+    project_cache: Arc<dyn ProjectDrivenCache>,
+    resource_cache: Arc<dyn ResourceDrivenCache>,
+    cmd: FetchByIdCmd,
+) -> Result<Resource> {
+    assert_permission(project_cache.clone(), &cmd.credential, &cmd.project_id).await?;
+
+    let Some(project) = project_cache.find_by_id(&cmd.project_id).await? else {
+        return Err(Error::CommandMalformed("invalid project id".into()));
+    };
+
+    let Some(resource) = resource_cache.find_by_id(&cmd.resource_id).await? else {
+        return Err(Error::CommandMalformed("invalid resource id".into()));
+    };
+
+    assert_project_resource(&project, &resource)?;
+
+    Ok(resource)
+}
+
 pub async fn create(
     project_cache: Arc<dyn ProjectDrivenCache>,
     event: Arc<dyn EventDrivenBridge>,
@@ -124,9 +144,7 @@ async fn assert_permission(
 }
 fn assert_project_resource(project: &Project, resource: &Resource) -> Result<()> {
     if project.id != resource.project_id {
-        return Err(Error::Unauthorized(
-            "invalid resource for the project".into(),
-        ));
+        return Err(Error::CommandMalformed("invalid resource id".into()));
     }
     Ok(())
 }
@@ -177,6 +195,13 @@ impl FetchCmd {
             page_size,
         })
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct FetchByIdCmd {
+    pub credential: Credential,
+    pub project_id: String,
+    pub resource_id: String,
 }
 
 pub type Spec = serde_json::value::Map<String, serde_json::Value>;
@@ -266,6 +291,15 @@ mod tests {
             }
         }
     }
+    impl Default for FetchByIdCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                project_id: Uuid::new_v4().to_string(),
+                resource_id: Uuid::new_v4().to_string(),
+            }
+        }
+    }
     impl Default for CreateCmd {
         fn default() -> Self {
             Self {
@@ -329,6 +363,56 @@ mod tests {
         };
 
         let result = fetch(Arc::new(project_cache), Arc::new(resource_cache), cmd).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn it_should_fetch_project_resources_by_id() {
+        let mut project_cache = MockFakeProjectDrivenCache::new();
+        project_cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+
+        let project = Project::default();
+
+        let project_cloned = project.clone();
+        project_cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(project_cloned)));
+
+        let mut resource_cache = MockFakeResourceDrivenCache::new();
+        resource_cache.expect_find_by_id().return_once(|_| {
+            Ok(Some(Resource {
+                project_id: project.id,
+                ..Default::default()
+            }))
+        });
+
+        let cmd = FetchByIdCmd::default();
+
+        let result = fetch_by_id(Arc::new(project_cache), Arc::new(resource_cache), cmd).await;
+
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_fail_fetch_project_resources_by_id_when_resource_is_from_other_project() {
+        let mut project_cache = MockFakeProjectDrivenCache::new();
+        project_cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        project_cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let mut resource_cache = MockFakeResourceDrivenCache::new();
+        resource_cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Resource::default())));
+
+        let cmd = FetchByIdCmd::default();
+
+        let result = fetch_by_id(Arc::new(project_cache), Arc::new(resource_cache), cmd).await;
+
         assert!(result.is_err());
     }
 
