@@ -2,7 +2,6 @@ use std::{fs, path::Path};
 
 use anyhow::Result as AnyhowResult;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
-use tracing::error;
 
 use crate::domain::{metadata::MetadataDriven, Result};
 
@@ -17,16 +16,14 @@ impl MetadataCrd {
         let mut crds: Vec<CustomResourceDefinition> = Vec::new();
 
         for path in dir {
-            match path {
-                Ok(entry) => {
-                    let file = fs::read(entry.path())?;
-                    let crd: CustomResourceDefinition = serde_json::from_slice(&file)?;
-                    crds.push(crd);
-                }
-                Err(error) => {
-                    error!(?error)
-                }
-            };
+            let entry = path?;
+            if entry.path().is_file()
+                && entry.path().extension().and_then(|e| e.to_str()) == Some("json")
+            {
+                let file = fs::read(entry.path())?;
+                let crd: CustomResourceDefinition = serde_json::from_slice(&file)?;
+                crds.push(crd);
+            }
         }
 
         Ok(Self { crds })
