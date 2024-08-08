@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use argon2::{password_hash::SaltString, Argon2};
+use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use bech32::{Bech32m, Hrp};
 use chrono::Utc;
 use rand::rngs::OsRng;
@@ -11,8 +12,10 @@ use crate::domain::{
     auth::Credential,
     error::Error,
     event::{EventDrivenBridge, ResourceCreated, ResourceDeleted},
+    metadata::{KnownField, MetadataDriven},
     project::{cache::ProjectDrivenCache, Project},
     resource::ResourceStatus,
+    utils::get_schema_from_crd,
     Result, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
@@ -52,20 +55,44 @@ pub async fn fetch_by_id(
 
 pub async fn create(
     project_cache: Arc<dyn ProjectDrivenCache>,
+    metadata: Arc<dyn MetadataDriven>,
     event: Arc<dyn EventDrivenBridge>,
     cmd: CreateCmd,
 ) -> Result<()> {
     assert_permission(project_cache.clone(), &cmd.credential, &cmd.project_id).await?;
 
+    let Some(crd) = metadata.find_by_kind(&cmd.kind).await? else {
+        return Err(Error::CommandMalformed("kind not supported".into()));
+    };
+
     let Some(project) = project_cache.find_by_id(&cmd.project_id).await? else {
         return Err(Error::CommandMalformed("invalid project id".into()));
     };
 
-    let auth_token = build_auth_token(&project.id, &cmd.id, &cmd.kind)?;
-
     let mut spec = cmd.spec.clone();
-    spec.insert("authToken".into(), serde_json::Value::String(auth_token));
+    if let Some(status_schema) = get_schema_from_crd(&crd, "status") {
+        for (key, _) in status_schema {
+            if let Ok(status_field) = key.parse::<KnownField>() {
+                let value = match status_field {
+                    KnownField::AuthToken => {
+                        let key = build_key(&project.id, &cmd.id)?;
+                        encode_key(key, &cmd.kind)?
+                    }
+                    KnownField::Username => {
+                        let user_key = build_key(&project.id, &cmd.id)?;
+                        encode_key(user_key, &cmd.kind)?
+                    }
+                    KnownField::Password => {
+                        let password_key = build_key(&project.id, &cmd.id)?;
+                        BASE64_STANDARD_NO_PAD.encode(password_key)
+                    }
+                };
+                spec.insert(key, serde_json::Value::String(value));
+            }
+        }
+    };
 
+    // TODO: add data from crd to build api resource
     let evt = ResourceCreated {
         id: cmd.id,
         project_id: project.id,
@@ -149,7 +176,7 @@ fn assert_project_resource(project: &Project, resource: &Resource) -> Result<()>
     Ok(())
 }
 
-pub fn build_auth_token(project_id: &str, resource_id: &str, kind: &str) -> Result<String> {
+pub fn build_key(project_id: &str, resource_id: &str) -> Result<Vec<u8>> {
     let argon2 = Argon2::default();
     let key = format!("{project_id}{resource_id}").as_bytes().to_vec();
 
@@ -158,9 +185,13 @@ pub fn build_auth_token(project_id: &str, resource_id: &str, kind: &str) -> Resu
     let mut output = vec![0; 8];
     argon2.hash_password_into(&key, salt.as_str().as_bytes(), &mut output)?;
 
-    let prefix = format!("dmtr_{}", kind.to_lowercase());
+    Ok(output)
+}
+
+pub fn encode_key(key: Vec<u8>, prefix: &str) -> Result<String> {
+    let prefix = format!("dmtr_{}", prefix.to_lowercase());
     let hrp = Hrp::parse(&prefix)?;
-    let bech = bech32::encode::<Bech32m>(hrp, &output)?;
+    let bech = bech32::encode::<Bech32m>(hrp, &key)?;
 
     Ok(bech)
 }
@@ -237,10 +268,12 @@ pub struct DeleteCmd {
 #[cfg(test)]
 mod tests {
     use chrono::DateTime;
+    use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
     use mockall::mock;
     use uuid::Uuid;
 
     use crate::domain::event::Event;
+    use crate::domain::metadata::tests::mock_crd;
     use crate::domain::project::{Project, ProjectSecret, ProjectUser};
 
     use super::*;
@@ -281,6 +314,16 @@ mod tests {
         }
     }
 
+    mock! {
+        pub FakeMetadataDrivenCrds { }
+
+        #[async_trait::async_trait]
+        impl MetadataDriven for FakeMetadataDrivenCrds {
+            async fn find(&self) -> Result<Vec<CustomResourceDefinition>>;
+            async fn find_by_kind(&self, kind: &str) -> Result<Option<CustomResourceDefinition>>;
+        }
+    }
+
     impl Default for FetchCmd {
         fn default() -> Self {
             Self {
@@ -306,8 +349,8 @@ mod tests {
                 credential: Credential::Auth0("user id".into()),
                 id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
-                kind: "CardanoNode".into(),
-                spec: serde_json::Map::new(),
+                kind: "CardanoNodePort".into(),
+                spec: serde_json::Map::default(),
             }
         }
     }
@@ -426,14 +469,49 @@ mod tests {
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
 
+        let mut metadata = MockFakeMetadataDrivenCrds::new();
+        metadata
+            .expect_find_by_kind()
+            .return_once(|_| Ok(Some(mock_crd())));
+
         let mut event = MockFakeEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
 
         let cmd = CreateCmd::default();
 
-        let result = create(Arc::new(project_cache), Arc::new(event), cmd).await;
+        let result = create(
+            Arc::new(project_cache),
+            Arc::new(metadata),
+            Arc::new(event),
+            cmd,
+        )
+        .await;
 
         assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_fail_create_resource_when_crd_doesnt_exist() {
+        let mut project_cache = MockFakeProjectDrivenCache::new();
+        project_cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+
+        let mut metadata = MockFakeMetadataDrivenCrds::new();
+        metadata.expect_find_by_kind().return_once(|_| Ok(None));
+
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = CreateCmd::default();
+
+        let result = create(
+            Arc::new(project_cache),
+            Arc::new(metadata),
+            Arc::new(event),
+            cmd,
+        )
+        .await;
+
+        assert!(result.is_err());
     }
     #[tokio::test]
     async fn it_should_fail_create_resource_when_project_doesnt_exist() {
@@ -443,11 +521,23 @@ mod tests {
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
         project_cache.expect_find_by_id().return_once(|_| Ok(None));
 
+        let mut metadata = MockFakeMetadataDrivenCrds::new();
+        metadata
+            .expect_find_by_kind()
+            .return_once(|_| Ok(Some(mock_crd())));
+
         let event = MockFakeEventDrivenBridge::new();
 
         let cmd = CreateCmd::default();
 
-        let result = create(Arc::new(project_cache), Arc::new(event), cmd).await;
+        let result = create(
+            Arc::new(project_cache),
+            Arc::new(metadata),
+            Arc::new(event),
+            cmd,
+        )
+        .await;
+
         assert!(result.is_err());
     }
     #[tokio::test]
@@ -457,17 +547,24 @@ mod tests {
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
 
+        let metadata = MockFakeMetadataDrivenCrds::new();
         let event = MockFakeEventDrivenBridge::new();
 
         let cmd = CreateCmd::default();
 
-        let result = create(Arc::new(project_cache), Arc::new(event), cmd).await;
+        let result = create(
+            Arc::new(project_cache),
+            Arc::new(metadata),
+            Arc::new(event),
+            cmd,
+        )
+        .await;
         assert!(result.is_err());
     }
     #[tokio::test]
     async fn it_should_fail_create_resource_when_secret_doesnt_have_permission() {
         let project_cache = MockFakeProjectDrivenCache::new();
-
+        let metadata = MockFakeMetadataDrivenCrds::new();
         let event = MockFakeEventDrivenBridge::new();
 
         let cmd = CreateCmd {
@@ -475,7 +572,14 @@ mod tests {
             ..Default::default()
         };
 
-        let result = create(Arc::new(project_cache), Arc::new(event), cmd).await;
+        let result = create(
+            Arc::new(project_cache),
+            Arc::new(metadata),
+            Arc::new(event),
+            cmd,
+        )
+        .await;
+
         assert!(result.is_err());
     }
 

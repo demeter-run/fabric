@@ -7,3 +7,4 @@ grpcurl*
 config.toml
 test/.terraform*
 test/local.tfstate*
+crds/

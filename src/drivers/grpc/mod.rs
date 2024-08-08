@@ -1,8 +1,10 @@
 use anyhow::Result;
+use dmtri::demeter::ops::v1alpha::metadata_service_server::MetadataServiceServer;
 use dmtri::demeter::ops::v1alpha::resource_service_server::ResourceServiceServer;
 use middlewares::auth::AuthenticatorImpl;
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::{path::Path, sync::Arc};
 use tonic::transport::Server;
@@ -17,7 +19,9 @@ use crate::driven::cache::project::SqliteProjectDrivenCache;
 use crate::driven::cache::resource::SqliteResourceDrivenCache;
 use crate::driven::cache::SqliteCache;
 use crate::driven::kafka::KafkaProducer;
+use crate::driven::metadata::MetadataCrd;
 
+mod metadata;
 mod middlewares;
 mod project;
 mod resource;
@@ -28,6 +32,8 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
     let resource_cache = Arc::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
 
     let event_bridge = Arc::new(KafkaProducer::new(&config.topic, &config.kafka)?);
+
+    let metadata = Arc::new(MetadataCrd::new(&config.crds_path)?);
 
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(dmtri::demeter::ops::v1alpha::FILE_DESCRIPTOR_SET)
@@ -51,8 +57,12 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         project_cache.clone(),
         resource_cache.clone(),
         event_bridge.clone(),
+        metadata.clone(),
     );
     let resource_service = ResourceServiceServer::with_interceptor(resource_inner, auth.clone());
+
+    let metadata_inner = metadata::MetadataServiceImpl::new(metadata.clone());
+    let metadata_service = MetadataServiceServer::new(metadata_inner);
 
     let address = SocketAddr::from_str(&config.addr)?;
 
@@ -62,6 +72,7 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         .add_service(reflection)
         .add_service(project_service)
         .add_service(resource_service)
+        .add_service(metadata_service)
         .serve(address)
         .await?;
 
@@ -71,6 +82,7 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
 pub struct GrpcConfig {
     pub addr: String,
     pub db_path: String,
+    pub crds_path: PathBuf,
     pub auth_url: String,
     pub secret: String,
     pub topic: String,

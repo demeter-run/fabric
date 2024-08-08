@@ -3,6 +3,7 @@ use error::Error;
 pub mod auth;
 pub mod error;
 pub mod event;
+pub mod metadata;
 pub mod project;
 pub mod resource;
 pub mod utils;
