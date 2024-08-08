@@ -189,7 +189,7 @@ pub fn build_key(project_id: &str, resource_id: &str) -> Result<Vec<u8>> {
 }
 
 pub fn encode_key(key: Vec<u8>, prefix: &str) -> Result<String> {
-    let prefix = format!("dmtr_{}", prefix.to_lowercase());
+    let prefix = format!("dmtr_{}", prefix.to_lowercase().replace("port", ""));
     let hrp = Hrp::parse(&prefix)?;
     let bech = bech32::encode::<Bech32m>(hrp, &key)?;
 
