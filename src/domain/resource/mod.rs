@@ -69,8 +69,9 @@ mod tests {
             Self {
                 id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
-                kind: "CardanoNode".into(),
-                spec: "{\"operatorVersion\":\"1\",\"kupoVersion\":\"v1\",\"network\":\"mainnet\",\"pruneUtxo\":false,\"throughputTier\":\"0\"}".into(),
+                kind: "CardanoNodePort".into(),
+                spec: "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
+                    .into(),
                 status: ResourceStatus::Active,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),

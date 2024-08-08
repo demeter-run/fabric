@@ -1,3 +1,8 @@
+use std::collections::BTreeMap;
+
+use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::{
+    CustomResourceDefinition, JSONSchemaProps,
+};
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 
@@ -22,4 +27,13 @@ pub fn get_random_name() -> String {
     let noun = get_random_word(NOUNS.lines().collect());
 
     format!("{adjective}-{noun}-{salt}")
+}
+
+pub fn get_schema_from_crd(
+    crd: &CustomResourceDefinition,
+    field: &str,
+) -> Option<BTreeMap<String, JSONSchemaProps>> {
+    let version = crd.spec.versions.last()?;
+    let schema = version.schema.clone()?.open_api_v3_schema?.properties?;
+    schema.get(field)?.properties.clone()
 }

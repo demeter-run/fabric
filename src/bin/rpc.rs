@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env};
+use std::{collections::HashMap, env, path::PathBuf};
 
 use anyhow::Result;
 use dotenv::dotenv;
@@ -40,6 +40,7 @@ struct Auth {
 struct Config {
     addr: String,
     db_path: String,
+    crds_path: PathBuf,
     auth: Auth,
     secret: String,
     topic: String,
@@ -66,6 +67,7 @@ impl From<Config> for GrpcConfig {
         Self {
             addr: value.addr,
             db_path: value.db_path,
+            crds_path: value.crds_path,
             auth_url: value.auth.url,
             secret: value.secret,
             kafka: value.kafka_producer,

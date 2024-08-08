@@ -1,11 +1,11 @@
 use dmtri::demeter::ops::v1alpha::{self as proto, DeleteResourceResponse};
-use serde_json::Value;
 use std::sync::Arc;
 use tonic::{async_trait, Status};
 
 use crate::domain::{
     auth::Credential,
     event::EventDrivenBridge,
+    metadata::MetadataDriven,
     project::cache::ProjectDrivenCache,
     resource::{cache::ResourceDrivenCache, command, Resource},
 };
@@ -14,17 +14,20 @@ pub struct ResourceServiceImpl {
     pub project_cache: Arc<dyn ProjectDrivenCache>,
     pub resource_cache: Arc<dyn ResourceDrivenCache>,
     pub event: Arc<dyn EventDrivenBridge>,
+    pub metadata: Arc<dyn MetadataDriven>,
 }
 impl ResourceServiceImpl {
     pub fn new(
         project_cache: Arc<dyn ProjectDrivenCache>,
         resource_cache: Arc<dyn ResourceDrivenCache>,
         event: Arc<dyn EventDrivenBridge>,
+        metadata: Arc<dyn MetadataDriven>,
     ) -> Self {
         Self {
             project_cache,
             resource_cache,
             event,
+            metadata,
         }
     }
 }
@@ -93,13 +96,19 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
         let value = serde_json::from_str(&req.spec)
             .map_err(|_| Status::failed_precondition("spec must be a json"))?;
         let spec = match value {
-            Value::Object(v) => Ok(v),
+            serde_json::Value::Object(v) => Ok(v),
             _ => Err(Status::failed_precondition("invalid spec json")),
         }?;
 
         let cmd = command::CreateCmd::new(credential, req.project_id, req.kind, spec);
 
-        command::create(self.project_cache.clone(), self.event.clone(), cmd.clone()).await?;
+        command::create(
+            self.project_cache.clone(),
+            self.metadata.clone(),
+            self.event.clone(),
+            cmd.clone(),
+        )
+        .await?;
 
         let message = proto::CreateResourceResponse {
             id: cmd.id,

@@ -4,7 +4,6 @@ use kube::{
     api::{ApiResource, DynamicObject, ObjectMeta},
     ResourceExt,
 };
-use serde_json::json;
 use tracing::info;
 
 use crate::domain::{
@@ -32,7 +31,7 @@ pub async fn apply_manifest(
     };
 
     let spec = serde_json::from_str(&evt.spec)?;
-    obj.data = json!({ "spec": serde_json::Value::Object(spec) });
+    obj.data = serde_json::json!({ "spec": serde_json::Value::Object(spec) });
 
     cluster.create(&obj).await?;
 

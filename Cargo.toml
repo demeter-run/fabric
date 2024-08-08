@@ -33,6 +33,7 @@ bech32 = "0.11.0"
 argon2 = "0.5.3"
 chrono = "0.4.38"
 thiserror = "1.0.63"
+base64 = "0.22.1"
 
 [dev-dependencies]
 mockall = "0.12.1"
