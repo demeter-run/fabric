@@ -1,6 +1,7 @@
 locals {
-  configmap_name = "fabric-rpc-config"
-  port           = 5050
+  configmap_name      = "fabric-rpc-config"
+  crds_configmap_name = "fabric-rpc-crds"
+  port                = 5050
 }
 
 variable "namespace" {
