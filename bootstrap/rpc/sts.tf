@@ -2,7 +2,7 @@ locals {
   role = "fabric-rpc"
 }
 
-resource "kubernetes_deployment_v1" "rpc" {
+resource "kubernetes_stateful_set_v1" "rpc" {
   wait_for_rollout = false
 
   metadata {
@@ -14,7 +14,23 @@ resource "kubernetes_deployment_v1" "rpc" {
   }
 
   spec {
-    replicas = var.replicas
+    replicas     = var.replicas
+    service_name = "fabric-rpc"
+
+    volume_claim_template {
+      metadata {
+        name = "cache"
+      }
+      spec {
+        access_modes = ["ReadWriteOnce"]
+        resources {
+          requests = {
+            storage = var.resources.storage.size
+          }
+        }
+        storage_class_name = var.resources.storage.class
+      }
+    }
 
     selector {
       match_labels = {
@@ -41,6 +57,11 @@ resource "kubernetes_deployment_v1" "rpc" {
 
           port {
             container_port = local.port
+          }
+
+          volume_mount {
+            name       = "cache"
+            mount_path = "/var/cache"
           }
 
           volume_mount {
