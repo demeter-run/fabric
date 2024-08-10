@@ -9,7 +9,7 @@ resource "kubernetes_config_map_v1" "fabric_rpc_config" {
       "${path.module}/rpc.toml.tftpl",
       {
         port           = local.port,
-        db_path        = "cache.db",
+        db_path        = "/var/cache/cache.db",
         broker_urls    = var.broker_urls
         consumer_name  = var.consumer_name
         kafka_username = var.kafka_username

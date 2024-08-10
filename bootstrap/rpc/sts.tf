@@ -2,7 +2,7 @@ locals {
   role = "fabric-rpc"
 }
 
-resource "kubernetes_deployment_v1" "rpc" {
+resource "kubernetes_stateful_set_v1" "rpc" {
   wait_for_rollout = false
 
   metadata {
@@ -14,7 +14,23 @@ resource "kubernetes_deployment_v1" "rpc" {
   }
 
   spec {
-    replicas = var.replicas
+    replicas     = var.replicas
+    service_name = "fabric-rpc"
+
+    volume_claim_template {
+      metadata {
+        name = "cache"
+      }
+      spec {
+        access_modes = ["ReadWriteOnce"]
+        resources {
+          requests = {
+            storage = var.resources.storage.size
+          }
+        }
+        storage_class_name = var.resources.storage.class
+      }
+    }
 
     selector {
       match_labels = {
@@ -36,7 +52,7 @@ resource "kubernetes_deployment_v1" "rpc" {
 
           env {
             name  = "RPC_CONFIG"
-            value = "/fabric/config/rpc.toml"
+            value = "/fabric/rpc.toml"
           }
 
           port {
@@ -44,13 +60,13 @@ resource "kubernetes_deployment_v1" "rpc" {
           }
 
           volume_mount {
-            name       = "config"
-            mount_path = "/fabric/config"
+            name       = "cache"
+            mount_path = "/var/cache"
           }
 
           volume_mount {
-            name       = "crds"
-            mount_path = "/fabric/crds"
+            name       = "config"
+            mount_path = "/fabric"
           }
 
           resources {
@@ -69,13 +85,6 @@ resource "kubernetes_deployment_v1" "rpc" {
           name = "config"
           config_map {
             name = local.configmap_name
-          }
-        }
-
-        volume {
-          name = "crds"
-          config_map {
-            name = local.crds_configmap_name
           }
         }
 

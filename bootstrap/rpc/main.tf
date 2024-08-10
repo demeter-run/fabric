@@ -83,6 +83,10 @@ variable "resources" {
       cpu    = string
       memory = string
     })
+    storage = object({
+      size  = string
+      class = string
+    })
   })
   default = {
     requests = {
@@ -92,6 +96,10 @@ variable "resources" {
     limits = {
       cpu    = "500m"
       memory = "500Mi"
+    }
+    storage = {
+      size  = "10Gi"
+      class = "fast"
     }
   }
 }
