@@ -52,7 +52,7 @@ resource "kubernetes_stateful_set_v1" "rpc" {
 
           env {
             name  = "RPC_CONFIG"
-            value = "/fabric/rpc.toml"
+            value = "/fabric/config/rpc.toml"
           }
 
           port {
@@ -66,7 +66,12 @@ resource "kubernetes_stateful_set_v1" "rpc" {
 
           volume_mount {
             name       = "config"
-            mount_path = "/fabric"
+            mount_path = "/fabric/config"
+          }
+
+          volume_mount {
+            name       = "crds"
+            mount_path = "/fabric/crds"
           }
 
           resources {
@@ -85,6 +90,13 @@ resource "kubernetes_stateful_set_v1" "rpc" {
           name = "config"
           config_map {
             name = local.configmap_name
+          }
+        }
+
+        volume {
+          name = "crds"
+          config_map {
+            name = local.crds_configmap_name
           }
         }
 
