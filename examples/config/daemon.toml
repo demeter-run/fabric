@@ -1,0 +1,6 @@
+topic="events"
+
+[kafka]
+"bootstrap.servers" = "localhost:19092"
+"group.id"= "demeter-daemon"
+
