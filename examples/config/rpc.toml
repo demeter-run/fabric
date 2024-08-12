@@ -1,0 +1,15 @@
+addr="0.0.0.0:5000"
+db_path="dev.db"
+crds_path="examples/crds"
+secret="fabric@txpipe"
+topic="events"
+
+[kafka_producer]
+"bootstrap.servers" = "localhost:19092"
+
+[kafka_consumer]
+"bootstrap.servers" = "localhost:19092"
+"group.id"= "rpc"
+
+[auth]
+url="https://txpipe.us.auth0.com"
