@@ -1,6 +1,0 @@
-addr="0.0.0.0:5000"
-db_path="dev.db"
-brokers="localhost:19092"
-
-[auth]
-url=""
