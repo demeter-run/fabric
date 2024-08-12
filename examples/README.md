@@ -6,10 +6,10 @@ Two binaries need to be executed, `rpc` which will allow external requests to cr
 
 It's possible to create a toml file as config and set the file path in the env `RPC_CONFIG`, but it's possible to set the config using the prefix `RPC_`. The auth url is the endpoint to integrate with auth0.
 
-Use the [rpc config example](examples/config/rpc.toml)
+Use the [rpc config](config/rpc.toml)
 
 ## daemon
 
 It's possible to create a toml file as config and set the file path in the env `DAEMON_CONFIG`, but it's possible to set the config using the prefix `DAEMON_`
 
-Use the [daemon config example](examples/config/daemon.toml)
+Use the [daemon config](config/daemon.toml)
