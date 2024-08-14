@@ -4,7 +4,7 @@ use rdkafka::{
     ClientConfig,
 };
 use std::{borrow::Borrow, collections::HashMap, sync::Arc};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::{
     domain::{event::Event, project, resource},
@@ -27,20 +27,37 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
             Err(error) => error!(?error, "kafka subscribe error"),
             Ok(message) => match message.borrow().try_into() {
                 Ok(event) => {
-                    match event {
-                        Event::ProjectCreated(evt) => {
-                            project::cluster::apply_manifest(cluster.clone(), evt).await?;
-                        }
-                        Event::ResourceCreated(evt) => {
-                            resource::cluster::apply_manifest(cluster.clone(), evt).await?
-                        }
-                        Event::ResourceDeleted(evt) => {
-                            resource::cluster::delete_manifest(cluster.clone(), evt).await?
-                        }
-                        _ => {
-                            info!(event = event.key(), "bypass event")
+                    let event_appliclation = {
+                        match &event {
+                            Event::ProjectCreated(evt) => {
+                                project::cluster::apply_manifest(cluster.clone(), evt.clone()).await
+                            }
+                            Event::ResourceCreated(evt) => {
+                                resource::cluster::apply_manifest(cluster.clone(), evt.clone())
+                                    .await
+                            }
+                            Event::ResourceDeleted(evt) => {
+                                resource::cluster::delete_manifest(cluster.clone(), evt.clone())
+                                    .await
+                            }
+                            _ => {
+                                info!(event = event.key(), "bypass event");
+                                Ok(())
+                            }
                         }
                     };
+
+                    match event_appliclation {
+                        Ok(()) => {
+                            info!(event = event.key(), "Successfully handled event")
+                        }
+                        Err(err) => warn!(
+                            event = event.key(),
+                            error = err.to_string(),
+                            "Error running event."
+                        ),
+                    }
+
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }
                 Err(error) => {
