@@ -2,8 +2,9 @@ use anyhow::Result as AnyhowResult;
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{
     api::{DeleteParams, DynamicObject, PostParams},
-    discovery, Api, Client, ResourceExt,
+    discovery, Api, Client, Error, ResourceExt,
 };
+use tracing::{info, warn};
 
 use crate::domain::{
     project::cluster::ProjectDrivenCluster, resource::cluster::ResourceDrivenCluster, Result,
@@ -24,7 +25,19 @@ impl K8sCluster {
 impl ProjectDrivenCluster for K8sCluster {
     async fn create(&self, namespace: &Namespace) -> Result<()> {
         let api: Api<Namespace> = Api::all(self.client.clone());
-        api.create(&PostParams::default(), namespace).await?;
+        if let Err(err) = api.create(&PostParams::default(), namespace).await {
+            match &err {
+                Error::Api(error_response) => {
+                    if error_response.reason == "AlreadyExists" {
+                        info!("Resource already exists, skipping.")
+                    } else {
+                        return Err(err.into());
+                    }
+                }
+                _ => return Err(err.into()),
+            }
+        };
+
         Ok(())
     }
 
@@ -38,27 +51,59 @@ impl ProjectDrivenCluster for K8sCluster {
 impl ResourceDrivenCluster for K8sCluster {
     async fn create(&self, obj: &DynamicObject) -> Result<()> {
         let apigroup = discovery::group(&self.client, "demeter.run").await?;
-        let (ar, _caps) = apigroup
-            .recommended_kind(&obj.types.as_ref().unwrap().kind)
-            .unwrap();
+        let kind = &obj.types.as_ref().unwrap().kind;
+        let (ar, _caps) = match apigroup.recommended_kind(kind) {
+            Some((ar, _caps)) => (ar, _caps),
+            None => {
+                warn!(kind = kind, "Coundnt find kind in cluster, skipping.");
+                return Ok(());
+            }
+        };
 
         let api: Api<DynamicObject> =
             Api::namespaced_with(self.client.clone(), &obj.namespace().unwrap(), &ar);
 
-        api.create(&PostParams::default(), obj).await?;
+        if let Err(err) = api.create(&PostParams::default(), obj).await {
+            match &err {
+                Error::Api(error_response) => {
+                    if error_response.reason == "AlreadyExists" {
+                        info!("Resource already exists, skipping.")
+                    } else {
+                        return Err(err.into());
+                    }
+                }
+                _ => return Err(err.into()),
+            }
+        };
         Ok(())
     }
+
     async fn delete(&self, obj: &DynamicObject) -> Result<()> {
         let apigroup = discovery::group(&self.client, "demeter.run").await?;
-        let (ar, _caps) = apigroup
-            .recommended_kind(&obj.types.as_ref().unwrap().kind)
-            .unwrap();
+        let kind = &obj.types.as_ref().unwrap().kind;
+        let (ar, _caps) = match apigroup.recommended_kind(kind) {
+            Some((ar, _caps)) => (ar, _caps),
+            None => {
+                warn!(kind = kind, "Coundnt find kind in cluster, skipping.");
+                return Ok(());
+            }
+        };
 
         let api: Api<DynamicObject> =
             Api::namespaced_with(self.client.clone(), &obj.namespace().unwrap(), &ar);
 
-        api.delete(&obj.name_any(), &DeleteParams::default())
-            .await?;
+        if let Err(err) = api.delete(&obj.name_any(), &DeleteParams::default()).await {
+            match &err {
+                Error::Api(error_response) => {
+                    if error_response.reason == "NotFound" {
+                        info!("Resource not found in cluster, skipping.")
+                    } else {
+                        return Err(err.into());
+                    }
+                }
+                _ => return Err(err.into()),
+            }
+        };
 
         Ok(())
     }

@@ -88,7 +88,10 @@ impl Event {
             }
             "ResourceCreated" => Ok(Self::ResourceCreated(serde_json::from_slice(payload)?)),
             "ResourceDeleted" => Ok(Self::ResourceDeleted(serde_json::from_slice(payload)?)),
-            _ => Err(Error::Unexpected("Event key not implemented".into())),
+            _ => Err(Error::Unexpected(format!(
+                "Event key '{}' not implemented",
+                key
+            ))),
         }
     }
 }
