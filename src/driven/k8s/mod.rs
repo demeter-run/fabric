@@ -40,11 +40,6 @@ impl ProjectDrivenCluster for K8sCluster {
 
         Ok(())
     }
-
-    async fn find_by_name(&self, name: &str) -> Result<Option<Namespace>> {
-        let api: Api<Namespace> = Api::all(self.client.clone());
-        Ok(api.get_opt(name).await?)
-    }
 }
 
 #[async_trait::async_trait]
