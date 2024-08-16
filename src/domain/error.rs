@@ -47,3 +47,8 @@ impl From<kube::Error> for Error {
         Self::Unexpected(value.to_string())
     }
 }
+impl From<reqwest::Error> for Error {
+    fn from(value: reqwest::Error) -> Self {
+        Self::Unexpected(value.to_string())
+    }
+}

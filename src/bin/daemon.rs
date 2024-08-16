@@ -4,6 +4,7 @@ use anyhow::Result;
 use dotenv::dotenv;
 use fabric::drivers::monitor::MonitorConfig;
 use serde::Deserialize;
+use tokio::try_join;
 use tracing::Level;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -23,7 +24,12 @@ async fn main() -> Result<()> {
 
     let config = Config::new()?;
 
-    fabric::drivers::monitor::subscribe(config.into()).await
+    let schedule = fabric::drivers::cron::schedule();
+    let subscribe = fabric::drivers::monitor::subscribe(config.into());
+
+    try_join!(schedule, subscribe)?;
+
+    Ok(())
 }
 
 #[derive(Debug, Deserialize)]

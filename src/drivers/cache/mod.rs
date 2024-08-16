@@ -46,6 +46,9 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                         Event::ResourceDeleted(evt) => {
                             resource::cache::delete(resource_cache.clone(), evt).await?
                         }
+                        Event::UsageCreated(_evt) => {
+                            todo!("Persist cache")
+                        }
                     };
                     consumer.commit_message(&message, CommitMode::Async)?;
                 }
