@@ -22,11 +22,11 @@ pub async fn sync_usage(
     usage: Arc<dyn UsageDriven>,
     event: Arc<dyn EventDrivenBridge>,
     cluster_id: &str,
+    cursor: DateTime<Utc>,
 ) -> Result<()> {
-    let start = Default::default();
-    let end = Default::default();
+    let end = Utc::now();
 
-    let resources = usage.find_metrics(start, end).await?;
+    let resources = usage.find_metrics(cursor, end).await?;
 
     let evt = UsageCreated {
         id: Uuid::new_v4().to_string(),
@@ -37,7 +37,7 @@ pub async fn sync_usage(
 
     event.dispatch(evt.into()).await?;
     info!(
-        start = start.to_string(),
+        cursor = cursor.to_string(),
         end = end.to_string(),
         "usage collected"
     );
@@ -79,7 +79,13 @@ mod tests {
         let mut event = MockFakeEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
 
-        let result = sync_usage(Arc::new(usage), Arc::new(event), Default::default()).await;
+        let result = sync_usage(
+            Arc::new(usage),
+            Arc::new(event),
+            Default::default(),
+            Default::default(),
+        )
+        .await;
         assert!(result.is_ok());
     }
 }
