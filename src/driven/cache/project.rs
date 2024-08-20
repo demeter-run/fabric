@@ -3,7 +3,10 @@ use std::sync::Arc;
 
 use crate::domain::{
     error::Error,
-    project::{cache::ProjectDrivenCache, Project, ProjectSecret, ProjectStatus, ProjectUser},
+    project::{
+        cache::ProjectDrivenCache, Project, ProjectSecret, ProjectStatus, ProjectUpdate,
+        ProjectUser,
+    },
     Result,
 };
 
@@ -142,6 +145,63 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         tx.commit().await?;
 
         Ok(())
+    }
+
+    async fn update(&self, project_update: &ProjectUpdate) -> Result<()> {
+        match (&project_update.name, &project_update.status) {
+            (Some(new_name), Some(new_status)) => {
+                let new_status = new_status.to_string();
+                sqlx::query!(
+                    r#"
+                        UPDATE project
+                        SET name = $1, status = $2, updated_at = $3
+                        WHERE id = $4
+                    "#,
+                    new_name,
+                    new_status,
+                    project_update.updated_at,
+                    project_update.id,
+                )
+                .execute(&self.sqlite.db)
+                .await?;
+
+                Ok(())
+            }
+            (Some(new_name), None) => {
+                sqlx::query!(
+                    r#"
+                        UPDATE project
+                        SET name = $1, updated_at = $2
+                        WHERE id = $3
+                    "#,
+                    new_name,
+                    project_update.updated_at,
+                    project_update.id,
+                )
+                .execute(&self.sqlite.db)
+                .await?;
+
+                Ok(())
+            }
+            (None, Some(new_status)) => {
+                let new_status = new_status.to_string();
+                sqlx::query!(
+                    r#"
+                        UPDATE project
+                        SET status = $1, updated_at = $2
+                        WHERE id = $3
+                    "#,
+                    new_status,
+                    project_update.updated_at,
+                    project_update.id,
+                )
+                .execute(&self.sqlite.db)
+                .await?;
+
+                Ok(())
+            }
+            (None, None) => Ok(()),
+        }
     }
     async fn create_secret(&self, secret: &ProjectSecret) -> Result<()> {
         sqlx::query!(

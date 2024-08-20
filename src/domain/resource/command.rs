@@ -274,7 +274,7 @@ mod tests {
 
     use crate::domain::event::Event;
     use crate::domain::metadata::tests::mock_crd;
-    use crate::domain::project::{Project, ProjectSecret, ProjectUser};
+    use crate::domain::project::{Project, ProjectSecret, ProjectUpdate, ProjectUser};
 
     use super::*;
 
@@ -287,6 +287,7 @@ mod tests {
             async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
             async fn create(&self, project: &Project) -> Result<()>;
+            async fn update(&self, project: &ProjectUpdate) -> Result<()>;
             async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
             async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
             async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;

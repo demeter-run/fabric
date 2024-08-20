@@ -28,6 +28,15 @@ pub struct ProjectCreated {
 into_event!(ProjectCreated);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectUpdated {
+    pub id: String,
+    pub name: Option<String>,
+    pub status: Option<String>,
+    pub updated_at: DateTime<Utc>,
+}
+into_event!(ProjectUpdated);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectSecretCreated {
     pub id: String,
     pub project_id: String,
@@ -67,6 +76,7 @@ into_event!(ResourceDeleted);
 #[allow(clippy::enum_variant_names)]
 pub enum Event {
     ProjectCreated(ProjectCreated),
+    ProjectUpdated(ProjectUpdated),
     ProjectSecretCreated(ProjectSecretCreated),
     ResourceCreated(ResourceCreated),
     ResourceDeleted(ResourceDeleted),
@@ -75,6 +85,7 @@ impl Event {
     pub fn key(&self) -> String {
         match self {
             Event::ProjectCreated(_) => "ProjectCreated".into(),
+            Event::ProjectUpdated(_) => "ProjectUpdated".into(),
             Event::ProjectSecretCreated(_) => "ProjectSecretCreated".into(),
             Event::ResourceCreated(_) => "ResourceCreated".into(),
             Event::ResourceDeleted(_) => "ResourceDeleted".into(),
@@ -83,6 +94,7 @@ impl Event {
     pub fn from_key(key: &str, payload: &[u8]) -> Result<Self> {
         match key {
             "ProjectCreated" => Ok(Self::ProjectCreated(serde_json::from_slice(payload)?)),
+            "ProjectUpdated" => Ok(Self::ProjectUpdated(serde_json::from_slice(payload)?)),
             "ProjectSecretCreated" => {
                 Ok(Self::ProjectSecretCreated(serde_json::from_slice(payload)?))
             }
