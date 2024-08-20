@@ -41,6 +41,7 @@ impl TryFrom<ProjectCreated> for Project {
 pub enum ProjectStatus {
     Active,
     Deleted,
+    PaymentMethodFailed,
 }
 impl FromStr for ProjectStatus {
     type Err = Error;
@@ -48,8 +49,13 @@ impl FromStr for ProjectStatus {
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             "active" => Ok(ProjectStatus::Active),
+            "dcu-consumed" => Ok(ProjectStatus::Active),
+            "pm-failed" => Ok(ProjectStatus::PaymentMethodFailed),
             "deleted" => Ok(ProjectStatus::Deleted),
-            _ => Err(Error::Unexpected("project status not supported".into())),
+            _ => Err(Error::Unexpected(format!(
+                "project status not supported: {}",
+                s
+            ))),
         }
     }
 }
@@ -58,6 +64,7 @@ impl Display for ProjectStatus {
         match self {
             ProjectStatus::Active => write!(f, "active"),
             ProjectStatus::Deleted => write!(f, "deleted"),
+            ProjectStatus::PaymentMethodFailed => write!(f, "pm-failed"),
         }
     }
 }
