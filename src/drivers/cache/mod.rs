@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rdkafka::{
     consumer::{CommitMode, Consumer, StreamConsumer},
-    ClientConfig,
+    ClientConfig, Message,
 };
 use std::{borrow::Borrow, collections::HashMap, path::Path, sync::Arc};
 use tracing::{error, info};
@@ -29,31 +29,43 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
 
     info!("Subscriber running");
     loop {
-        match consumer.recv().await {
-            Err(error) => error!(?error, "kafka subscribe error"),
-            Ok(message) => match message.borrow().try_into() {
-                Ok(event) => {
-                    match event {
-                        Event::ProjectCreated(evt) => {
-                            project::cache::create(project_cache.clone(), evt).await?;
-                        }
-                        Event::ProjectSecretCreated(evt) => {
-                            project::cache::create_secret(project_cache.clone(), evt).await?;
-                        }
-                        Event::ResourceCreated(evt) => {
-                            resource::cache::create(resource_cache.clone(), evt).await?
-                        }
-                        Event::ResourceDeleted(evt) => {
-                            resource::cache::delete(resource_cache.clone(), evt).await?
-                        }
-                    };
-                    consumer.commit_message(&message, CommitMode::Async)?;
+        // If we fail to consume from Kafka, we need a restart.
+        let message = consumer
+            .recv()
+            .await
+            .expect("Failed to consume from Kafka, restarting");
+
+        info!("Consuming from kafka, current offset: {}", message.offset());
+        match message.borrow().try_into() {
+            Ok(event) => {
+                let event_application = match &event {
+                    Event::ProjectCreated(evt) => {
+                        project::cache::create(project_cache.clone(), evt.clone()).await
+                    }
+                    Event::ProjectSecretCreated(evt) => {
+                        project::cache::create_secret(project_cache.clone(), evt.clone()).await
+                    }
+                    Event::ResourceCreated(evt) => {
+                        resource::cache::create(resource_cache.clone(), evt.clone()).await
+                    }
+                    Event::ResourceDeleted(evt) => {
+                        resource::cache::delete(resource_cache.clone(), evt.clone()).await
+                    }
+                };
+
+                match event_application {
+                    Ok(_) => info!("Succesfully handled event {:?}", event),
+                    Err(err) => error!(
+                        error = err.to_string(),
+                        "Failed to handle event: {:?}", event
+                    ),
                 }
-                Err(error) => {
-                    error!(?error, "fail to convert message to event");
-                    consumer.commit_message(&message, CommitMode::Async)?;
-                }
-            },
+                consumer.commit_message(&message, CommitMode::Async)?;
+            }
+            Err(error) => {
+                error!(?error, "fail to convert message to event");
+                consumer.commit_message(&message, CommitMode::Async)?;
+            }
         };
     }
 }
