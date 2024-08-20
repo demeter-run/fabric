@@ -27,6 +27,9 @@ pub async fn sync_usage(
     let end = Utc::now();
 
     let resources = usage.find_metrics(cursor, end).await?;
+    if resources.is_empty() {
+        return Ok(());
+    }
 
     let evt = UsageCreated {
         id: Uuid::new_v4().to_string(),

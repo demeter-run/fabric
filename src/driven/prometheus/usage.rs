@@ -21,7 +21,7 @@ impl UsageDriven for PrometheusUsageDriven {
         let since = (end - start).num_seconds();
 
         let query = format!(
-            "sum by (resource_name) (increase(usage{{tier!~\"0\"}}[{since}s] @ {}))",
+            "sum by (resource_name) (increase(usage{{tier!~\"0\"}}[{since}s] @ {})) > 0",
             end.timestamp_millis() / 1000
         );
 
