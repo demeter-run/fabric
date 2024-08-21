@@ -10,16 +10,16 @@ use crate::domain::{
 };
 
 #[async_trait::async_trait]
-pub trait UsageDriven: Send + Sync {
+pub trait UsageDrivenCluster: Send + Sync {
     async fn find_metrics(
         &self,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
-    ) -> Result<HashMap<String, f64>>;
+    ) -> Result<HashMap<String, i64>>;
 }
 
 pub async fn sync_usage(
-    usage: Arc<dyn UsageDriven>,
+    usage: Arc<dyn UsageDrivenCluster>,
     event: Arc<dyn EventDrivenBridge>,
     cluster_id: &str,
     cursor: DateTime<Utc>,
@@ -59,8 +59,8 @@ mod tests {
         pub FakeUsageDriven { }
 
         #[async_trait::async_trait]
-        impl UsageDriven for FakeUsageDriven {
-            async fn find_metrics(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> Result<HashMap<String, f64>>;
+        impl UsageDrivenCluster for FakeUsageDriven {
+            async fn find_metrics(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> Result<HashMap<String, i64>>;
         }
     }
     mock! {

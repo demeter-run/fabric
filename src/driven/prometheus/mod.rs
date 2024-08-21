@@ -19,7 +19,7 @@ impl PrometheusUsageDriven {
     }
 }
 
-fn deserialize_value<'de, D>(deserializer: D) -> Result<f64, D::Error>
+fn deserialize_value<'de, D>(deserializer: D) -> Result<i64, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -27,6 +27,6 @@ where
     Ok(value.into_iter().as_slice()[1]
         .as_str()
         .unwrap()
-        .parse::<f64>()
+        .parse::<i64>()
         .unwrap())
 }

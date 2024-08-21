@@ -7,9 +7,10 @@ use std::{borrow::Borrow, collections::HashMap, path::Path, sync::Arc};
 use tracing::{error, info};
 
 use crate::{
-    domain::{event::Event, project, resource},
+    domain::{event::Event, project, resource, usage},
     driven::cache::{
-        project::SqliteProjectDrivenCache, resource::SqliteResourceDrivenCache, SqliteCache,
+        project::SqliteProjectDrivenCache, resource::SqliteResourceDrivenCache,
+        usage::SqliteUsageDrivenCache, SqliteCache,
     },
 };
 
@@ -19,6 +20,7 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
 
     let project_cache = Arc::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
     let resource_cache = Arc::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
+    let usage_cache = Arc::new(SqliteUsageDrivenCache::new(sqlite_cache.clone()));
 
     let mut client_config = ClientConfig::new();
     for (k, v) in config.kafka.iter() {
@@ -51,8 +53,8 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                     Event::ResourceDeleted(evt) => {
                         resource::cache::delete(resource_cache.clone(), evt.clone()).await
                     }
-                    Event::UsageCreated(_evt) => {
-                        todo!("Persist cache")
+                    Event::UsageCreated(evt) => {
+                        usage::cache::create(usage_cache.clone(), evt.clone()).await
                     }
                 };
 

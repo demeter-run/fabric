@@ -5,23 +5,23 @@ use serde::Deserialize;
 use tracing::error;
 
 use crate::{
-    domain::{error::Error, usage::cluster::UsageDriven, Result},
+    domain::{error::Error, usage::cluster::UsageDrivenCluster, Result},
     driven::prometheus::deserialize_value,
 };
 
 use super::PrometheusUsageDriven;
 
 #[async_trait::async_trait]
-impl UsageDriven for PrometheusUsageDriven {
+impl UsageDrivenCluster for PrometheusUsageDriven {
     async fn find_metrics(
         &self,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
-    ) -> Result<HashMap<String, f64>> {
+    ) -> Result<HashMap<String, i64>> {
         let since = (end - start).num_seconds();
 
         let query = format!(
-            "sum by (resource_name) (increase(usage{{tier!~\"0\"}}[{since}s] @ {})) > 0",
+            "round(sum by (resource_name) (increase(usage{{tier!~\"0\"}}[{since}s] @ {})) > 0)",
             end.timestamp_millis() / 1000
         );
 
@@ -42,7 +42,7 @@ impl UsageDriven for PrometheusUsageDriven {
 
         let response: PrometheusResponse = response.json().await?;
 
-        let resources: HashMap<String, f64> = response
+        let resources: HashMap<String, i64> = response
             .data
             .result
             .iter()
@@ -66,7 +66,7 @@ struct PrometheusData {
 struct PrometheusUsageResult {
     metric: PrometheusUsageMetric,
     #[serde(deserialize_with = "deserialize_value")]
-    value: f64,
+    value: i64,
 }
 #[derive(Debug, Deserialize)]
 pub struct PrometheusUsageMetric {

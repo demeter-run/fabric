@@ -4,6 +4,7 @@ use anyhow::Result;
 use dotenv::dotenv;
 use fabric::drivers::{cache::CacheConfig, grpc::GrpcConfig};
 use serde::Deserialize;
+use tokio::try_join;
 use tracing::Level;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -23,11 +24,10 @@ async fn main() -> Result<()> {
 
     let config = Config::new()?;
 
-    futures::future::try_join(
-        fabric::drivers::grpc::server(config.clone().into()),
-        fabric::drivers::cache::subscribe(config.clone().into()),
-    )
-    .await?;
+    let grpc = fabric::drivers::grpc::server(config.clone().into());
+    let subscribe = fabric::drivers::cache::subscribe(config.clone().into());
+
+    try_join!(grpc, subscribe)?;
 
     Ok(())
 }

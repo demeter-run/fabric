@@ -68,7 +68,7 @@ into_event!(ResourceDeleted);
 pub struct UsageCreated {
     pub id: String,
     pub cluster_id: String,
-    pub resources: HashMap<String, f64>,
+    pub resources: HashMap<String, i64>,
     pub created_at: DateTime<Utc>,
 }
 into_event!(UsageCreated);
