@@ -1,6 +1,7 @@
 use dmtri::demeter::ops::v1alpha as proto;
 use std::sync::Arc;
 use tonic::{async_trait, Status};
+use tracing::error;
 
 use crate::domain::{
     auth::Credential,
@@ -50,6 +51,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
+
     async fn create_project(
         &self,
         request: tonic::Request<proto::CreateProjectRequest>,
@@ -69,6 +71,37 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             id: cmd.id,
             name: cmd.name,
             namespace: cmd.namespace,
+        };
+
+        Ok(tonic::Response::new(message))
+    }
+
+    async fn update_project(
+        &self,
+        request: tonic::Request<proto::UpdateProjectRequest>,
+    ) -> Result<tonic::Response<proto::UpdateProjectResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+        let cmd = project::command::UpdateCmd::new(credential, req.id, req.name);
+        let updated =
+            match project::command::update(self.cache.clone(), self.event.clone(), cmd.clone())
+                .await
+            {
+                Ok(project) => project,
+                Err(err) => {
+                    error!(
+                        error = err.to_string(),
+                        "Unexpected error while performing project update."
+                    );
+                    return Err(Status::internal("Error running update."));
+                }
+            };
+        let message = proto::UpdateProjectResponse {
+            updated: Some(updated.into()),
         };
 
         Ok(tonic::Response::new(message))

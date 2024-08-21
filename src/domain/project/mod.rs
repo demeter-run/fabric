@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 
 use super::{
     error::Error,
-    event::{ProjectCreated, ProjectSecretCreated},
+    event::{ProjectCreated, ProjectSecretCreated, ProjectUpdated},
 };
 
 pub mod cache;
@@ -32,6 +32,29 @@ impl TryFrom<ProjectCreated> for Project {
             owner: value.owner,
             status: value.status.parse()?,
             created_at: value.created_at,
+            updated_at: value.updated_at,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ProjectUpdate {
+    pub id: String,
+    pub name: Option<String>,
+    pub status: Option<ProjectStatus>,
+    pub updated_at: DateTime<Utc>,
+}
+impl TryFrom<ProjectUpdated> for ProjectUpdate {
+    type Error = Error;
+
+    fn try_from(value: ProjectUpdated) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
+            id: value.id,
+            name: value.name,
+            status: match value.status {
+                Some(status) => Some(status.parse()?),
+                None => None,
+            },
             updated_at: value.updated_at,
         })
     }
