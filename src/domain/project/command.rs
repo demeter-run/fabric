@@ -63,14 +63,8 @@ pub async fn update(
 
     let evt = ProjectUpdated {
         id: cmd.id.clone(),
-        name: cmd.name.clone(),
-        status: match cmd.status {
-            Some(new_status) => match new_status.parse() {
-                Ok(parsed) => Some(parsed),
-                Err(_) => return Err(Error::CommandMalformed("Invalid status".into())),
-            },
-            None => None,
-        },
+        name: Some(cmd.name.clone()),
+        status: None,
         updated_at: Utc::now(),
     };
 
@@ -261,21 +255,14 @@ impl CreateCmd {
 pub struct UpdateCmd {
     pub credential: Credential,
     pub id: String,
-    pub name: Option<String>,
-    pub status: Option<String>,
+    pub name: String,
 }
 impl UpdateCmd {
-    pub fn new(
-        credential: Credential,
-        id: String,
-        name: Option<String>,
-        status: Option<String>,
-    ) -> Self {
+    pub fn new(credential: Credential, id: String, name: String) -> Self {
         Self {
             credential,
             id,
             name,
-            status,
         }
     }
 }
@@ -368,8 +355,7 @@ mod tests {
             Self {
                 credential: Credential::Auth0("user id".into()),
                 id: Uuid::new_v4().to_string(),
-                name: Some("Other name".into()),
-                status: None,
+                name: "Other name".into(),
             }
         }
     }

@@ -86,7 +86,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         };
 
         let req = request.into_inner();
-        let cmd = project::command::UpdateCmd::new(credential, req.id, req.name, req.status);
+        let cmd = project::command::UpdateCmd::new(credential, req.id, req.name);
         let updated =
             match project::command::update(self.cache.clone(), self.event.clone(), cmd.clone())
                 .await
