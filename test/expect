@@ -126,7 +126,9 @@ RESOURCE_ID=$(echo $OUTPUT | jq -r '.id')
 
 # Update resource
 echo "Updating resource..."
-./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"id": "'"$RESOURCE_ID"'", "spec_patch": "{\"throughputTier\":\"1\""}}' "$NODE_IP:30950" demeter.ops.v1alpha.ResourceService.UpdateResource
+./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" \
+  -d '{"id": "'"$RESOURCE_ID"'", "spec_patch": "{\"throughputTier\":\"1\"}"}' \
+  "$NODE_IP:30950" demeter.ops.v1alpha.ResourceService.UpdateResource
 
 sleep 1
 OUTPUT=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"resource_id": "'"$RESOURCE_ID"'", "project_id": "'"$PROJECT_ID"'" }' "$NODE_IP:30950" demeter.ops.v1alpha.ResourceService.FetchResourcesById | jq )
