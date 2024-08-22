@@ -55,12 +55,13 @@ impl FetchCmd {
 
 #[cfg(test)]
 mod tests {
+    use chrono::{DateTime, Utc};
     use mockall::mock;
     use uuid::Uuid;
 
     use super::*;
     use crate::domain::{
-        project::{Project, ProjectSecret, ProjectUser},
+        project::{Project, ProjectSecret, ProjectUpdate, ProjectUser},
         usage::Usage,
     };
 
@@ -73,6 +74,8 @@ mod tests {
             async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
             async fn create(&self, project: &Project) -> Result<()>;
+            async fn update(&self, project: &ProjectUpdate) -> Result<()>;
+            async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
             async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
             async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
             async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
