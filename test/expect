@@ -117,7 +117,7 @@ fi
 # Create resource
 echo "Creating resource..."
 OUTPUT=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" \
-  -d '{"project_id": "'"$PROJECT_ID"'","kind": "CardanoNodePort","spec": "{\"throughputTier\":\"0\", \"authToken\":\"token\",\"network\":\"preview\",\"version\":\"stable\"}"}'
+  -d '{"project_id": "'"$PROJECT_ID"'","kind": "CardanoNodePort","spec": "{\"throughputTier\":\"0\", \"authToken\":\"token\",\"network\":\"preview\",\"version\":\"stable\"}"}' \
   "$NODE_IP:30950" demeter.ops.v1alpha.ResourceService.CreateResource | jq )
 
 echo "CreateResource output:"
@@ -129,7 +129,7 @@ echo "Updating resource..."
 ./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"id": "'"$RESOURCE_ID"'", "spec_patch": "{\"throughputTier\":\"1\""}}' "$NODE_IP:30950" demeter.ops.v1alpha.ResourceService.UpdateResource
 
 sleep 1
-OUTPUT=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"resource_id": "'"$RESOURCE_ID"'", "project_id": "'"$PROJECT_ID"'" }' "$NODE_IP:30950" demeter.ops.v1alpha.ResourceService.FetchResourceById | jq )
+OUTPUT=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"resource_id": "'"$RESOURCE_ID"'", "project_id": "'"$PROJECT_ID"'" }' "$NODE_IP:30950" demeter.ops.v1alpha.ResourceService.FetchResourcesById | jq )
 echo $OUTPUT
 
 NEW_TIER=$(echo $OUTPUT | jq -r '.records[0].spec' | jq -r '.throughputTier')
