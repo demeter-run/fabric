@@ -47,8 +47,6 @@ pub async fn sync_usage(
         created_at: Utc::now(),
     };
 
-    dbg!(&evt);
-
     event.dispatch(evt.into()).await?;
     info!(
         cursor = cursor.to_string(),
