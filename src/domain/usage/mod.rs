@@ -5,6 +5,7 @@ use super::event::UsageCreated;
 
 pub mod cache;
 pub mod cluster;
+pub mod command;
 
 pub struct Usage {
     pub id: String,
@@ -36,6 +37,15 @@ pub struct UsageUnit {
     pub tier: String,
 }
 
+pub struct UsageReport {
+    pub resource_id: String,
+    pub resource_kind: String,
+    pub resource_spec: String,
+    pub tier: String,
+    pub units: i64,
+    pub period: String,
+}
+
 #[cfg(test)]
 mod tests {
     use uuid::Uuid;
@@ -51,6 +61,21 @@ mod tests {
                 units: 120,
                 tier: "0".into(),
                 created_at: Utc::now(),
+            }
+        }
+    }
+
+    impl Default for UsageReport {
+        fn default() -> Self {
+            Self {
+                resource_id: Uuid::new_v4().to_string(),
+                resource_kind: "CardanoNodePort".into(),
+                resource_spec:
+                    "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
+                        .into(),
+                units: 120,
+                tier: "0".into(),
+                period: "08-2024".into(),
             }
         }
     }

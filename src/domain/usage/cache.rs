@@ -2,11 +2,16 @@ use std::sync::Arc;
 
 use crate::domain::{event::UsageCreated, Result};
 
-use super::Usage;
+use super::{Usage, UsageReport};
 
 #[async_trait::async_trait]
 pub trait UsageDrivenCache: Send + Sync {
-    //async fn find(&self) -> Result<()>;
+    async fn find_report(
+        &self,
+        project_id: &str,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<Vec<UsageReport>>;
     async fn create(&self, usage: Vec<Usage>) -> Result<()>;
 }
 
@@ -25,7 +30,7 @@ mod tests {
 
         #[async_trait::async_trait]
         impl UsageDrivenCache for FakeUsageDrivenCache {
-            //async fn find(&self) -> Result<()>;
+            async fn find_report(&self, project_id: &str, page: &u32, page_size: &u32,) -> Result<Vec<UsageReport>>;
             async fn create(&self, usage: Vec<Usage>) -> Result<()>;
         }
     }

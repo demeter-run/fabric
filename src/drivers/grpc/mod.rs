@@ -1,6 +1,7 @@
 use anyhow::Result;
 use dmtri::demeter::ops::v1alpha::metadata_service_server::MetadataServiceServer;
 use dmtri::demeter::ops::v1alpha::resource_service_server::ResourceServiceServer;
+use dmtri::demeter::ops::v1alpha::usage_service_server::UsageServiceServer;
 use middlewares::auth::AuthenticatorImpl;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -17,6 +18,7 @@ use crate::domain::error::Error;
 use crate::driven::auth::Auth0Provider;
 use crate::driven::cache::project::SqliteProjectDrivenCache;
 use crate::driven::cache::resource::SqliteResourceDrivenCache;
+use crate::driven::cache::usage::SqliteUsageDrivenCache;
 use crate::driven::cache::SqliteCache;
 use crate::driven::kafka::KafkaProducer;
 use crate::driven::metadata::MetadataCrd;
@@ -25,11 +27,13 @@ mod metadata;
 mod middlewares;
 mod project;
 mod resource;
+mod usage;
 
 pub async fn server(config: GrpcConfig) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     let project_cache = Arc::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
     let resource_cache = Arc::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
+    let usage_cache = Arc::new(SqliteUsageDrivenCache::new(sqlite_cache.clone()));
 
     let event_bridge = Arc::new(KafkaProducer::new(&config.topic, &config.kafka)?);
 
@@ -64,6 +68,9 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
     let metadata_inner = metadata::MetadataServiceImpl::new(metadata.clone());
     let metadata_service = MetadataServiceServer::new(metadata_inner);
 
+    let usage_inner = usage::UsageServiceImpl::new(project_cache.clone(), usage_cache.clone());
+    let usage_service = UsageServiceServer::with_interceptor(usage_inner, auth.clone());
+
     let address = SocketAddr::from_str(&config.addr)?;
 
     info!(address = config.addr, "Server running");
@@ -73,6 +80,7 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         .add_service(project_service)
         .add_service(resource_service)
         .add_service(metadata_service)
+        .add_service(usage_service)
         .serve(address)
         .await?;
 
