@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
@@ -7,6 +8,7 @@ use crate::domain::{
         cache::ProjectDrivenCache, Project, ProjectSecret, ProjectStatus, ProjectUpdate,
         ProjectUser,
     },
+    resource::ResourceStatus,
     Result,
 };
 
@@ -203,6 +205,42 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
             (None, None) => Ok(()),
         }
     }
+
+    async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()> {
+        let status = ProjectStatus::Deleted.to_string();
+
+        let mut tx = self.sqlite.db.begin().await?;
+        sqlx::query!(
+            r#"
+                UPDATE project
+                SET status=$2, updated_at=$3
+                WHERE id=$1;
+            "#,
+            id,
+            status,
+            deleted_at
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let status = ResourceStatus::Deleted.to_string();
+        sqlx::query!(
+            r#"
+                UPDATE resource
+                SET status=$2, updated_at=$3
+                WHERE project_id=$1;
+            "#,
+            id,
+            status,
+            deleted_at
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
     async fn create_secret(&self, secret: &ProjectSecret) -> Result<()> {
         sqlx::query!(
             r#"

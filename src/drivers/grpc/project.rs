@@ -107,6 +107,23 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         Ok(tonic::Response::new(message))
     }
 
+    async fn delete_project(
+        &self,
+        request: tonic::Request<proto::DeleteProjectRequest>,
+    ) -> Result<tonic::Response<proto::DeleteProjectResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+        let cmd = project::command::DeleteCmd::new(credential, req.id);
+        project::command::delete(self.cache.clone(), self.event.clone(), cmd.clone()).await?;
+        let message = proto::DeleteProjectResponse {};
+
+        Ok(tonic::Response::new(message))
+    }
+
     async fn create_project_secret(
         &self,
         request: tonic::Request<proto::CreateProjectSecretRequest>,

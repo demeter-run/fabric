@@ -40,6 +40,27 @@ impl ProjectDrivenCluster for K8sCluster {
 
         Ok(())
     }
+
+    async fn delete(&self, namespace: &Namespace) -> Result<()> {
+        let api: Api<Namespace> = Api::all(self.client.clone());
+        if let Err(err) = api
+            .delete(&namespace.name_any(), &DeleteParams::default())
+            .await
+        {
+            match &err {
+                Error::Api(error_response) => {
+                    if error_response.reason == "NotFound" {
+                        info!("Resource not found in cluster, skipping.")
+                    } else {
+                        return Err(err.into());
+                    }
+                }
+                _ => return Err(err.into()),
+            }
+        };
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]

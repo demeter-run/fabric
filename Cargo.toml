@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-dmtri = { version = "0.1.0", git = "https://github.com/demeter-run/specs.git", branch = "chore/add_update_resource_protos" }
+dmtri = { version = "0.1.0", git = "https://github.com/demeter-run/specs.git", branch = "chore/add_delete_project_protos" }
 # dmtri = { version = "0.1.0", path = "../specs/gen/rust" }
 # dmtri = { version = "0.1.0", path = "../fabric-specs/gen/rust" }
 
