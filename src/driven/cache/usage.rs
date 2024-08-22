@@ -38,7 +38,7 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                 FROM "usage" u 
                 INNER JOIN resource r ON r.id == u.resource_id
                 WHERE STRFTIME('%m-%Y', u.created_at) = STRFTIME('%m-%Y', 'now') AND r.project_id = $1 
-                GROUP BY resource_id
+                GROUP BY resource_id, tier 
                 ORDER BY units DESC
                 LIMIT $2
                 OFFSET $3;
@@ -144,15 +144,51 @@ mod tests {
         let project = mock_project(sqlite_cache.clone()).await;
         let resource = mock_resource(sqlite_cache.clone(), &project.id).await;
 
-        let usage = Usage {
-            resource_id: resource.id,
-            ..Default::default()
-        };
-        cache.create(vec![usage]).await.unwrap();
+        let usages = vec![
+            Usage {
+                resource_id: resource.id.clone(),
+                ..Default::default()
+            },
+            Usage {
+                resource_id: resource.id.clone(),
+                ..Default::default()
+            },
+        ];
+
+        cache.create(usages).await.unwrap();
 
         let result = cache.find_report(&project.id, &1, &12).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 1);
+    }
+
+    #[tokio::test]
+    async fn it_should_find_usage_report_after_tier_updated() {
+        let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
+        let cache = SqliteUsageDrivenCache::new(sqlite_cache.clone());
+
+        let project = mock_project(sqlite_cache.clone()).await;
+        let resource = mock_resource(sqlite_cache.clone(), &project.id).await;
+
+        let usages = vec![
+            Usage {
+                resource_id: resource.id.clone(),
+                tier: "0".into(),
+                ..Default::default()
+            },
+            Usage {
+                resource_id: resource.id.clone(),
+                tier: "1".into(),
+                ..Default::default()
+            },
+        ];
+
+        cache.create(usages).await.unwrap();
+
+        let result = cache.find_report(&project.id, &1, &12).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().len() == 2);
     }
 }
