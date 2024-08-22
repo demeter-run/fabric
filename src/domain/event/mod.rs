@@ -28,6 +28,23 @@ pub struct ProjectCreated {
 into_event!(ProjectCreated);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectUpdated {
+    pub id: String,
+    pub name: Option<String>,
+    pub status: Option<String>,
+    pub updated_at: DateTime<Utc>,
+}
+into_event!(ProjectUpdated);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectDeleted {
+    pub id: String,
+    pub namespace: String,
+    pub deleted_at: DateTime<Utc>,
+}
+into_event!(ProjectDeleted);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectSecretCreated {
     pub id: String,
     pub project_id: String,
@@ -50,6 +67,17 @@ pub struct ResourceCreated {
     pub updated_at: DateTime<Utc>,
 }
 into_event!(ResourceCreated);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceUpdated {
+    pub id: String,
+    pub project_id: String,
+    pub project_namespace: String,
+    pub kind: String,
+    pub spec_patch: String,
+    pub updated_at: DateTime<Utc>,
+}
+into_event!(ResourceUpdated);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceDeleted {
@@ -82,8 +110,11 @@ into_event!(UsageCreated);
 #[allow(clippy::enum_variant_names)]
 pub enum Event {
     ProjectCreated(ProjectCreated),
+    ProjectUpdated(ProjectUpdated),
+    ProjectDeleted(ProjectDeleted),
     ProjectSecretCreated(ProjectSecretCreated),
     ResourceCreated(ResourceCreated),
+    ResourceUpdated(ResourceUpdated),
     ResourceDeleted(ResourceDeleted),
     UsageCreated(UsageCreated),
 }
@@ -91,8 +122,11 @@ impl Event {
     pub fn key(&self) -> String {
         match self {
             Event::ProjectCreated(_) => "ProjectCreated".into(),
+            Event::ProjectUpdated(_) => "ProjectUpdated".into(),
+            Event::ProjectDeleted(_) => "ProjectDeleted".into(),
             Event::ProjectSecretCreated(_) => "ProjectSecretCreated".into(),
             Event::ResourceCreated(_) => "ResourceCreated".into(),
+            Event::ResourceUpdated(_) => "ResourceUpdated".into(),
             Event::ResourceDeleted(_) => "ResourceDeleted".into(),
             Event::UsageCreated(_) => "UsageCreated".into(),
         }
@@ -100,10 +134,13 @@ impl Event {
     pub fn from_key(key: &str, payload: &[u8]) -> Result<Self> {
         match key {
             "ProjectCreated" => Ok(Self::ProjectCreated(serde_json::from_slice(payload)?)),
+            "ProjectUpdated" => Ok(Self::ProjectUpdated(serde_json::from_slice(payload)?)),
+            "ProjectDeleted" => Ok(Self::ProjectDeleted(serde_json::from_slice(payload)?)),
             "ProjectSecretCreated" => {
                 Ok(Self::ProjectSecretCreated(serde_json::from_slice(payload)?))
             }
             "ResourceCreated" => Ok(Self::ResourceCreated(serde_json::from_slice(payload)?)),
+            "ResourceUpdated" => Ok(Self::ResourceUpdated(serde_json::from_slice(payload)?)),
             "ResourceDeleted" => Ok(Self::ResourceDeleted(serde_json::from_slice(payload)?)),
             "UsageCreated" => Ok(Self::UsageCreated(serde_json::from_slice(payload)?)),
             _ => Err(Error::Unexpected(format!(

@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 dmtri = { version = "0.1.0", git = "https://github.com/demeter-run/specs.git" }
 # dmtri = { version = "0.1.0", path = "../specs/gen/rust" }
+# dmtri = { version = "0.1.0", path = "../fabric-specs/gen/rust" }
 
 anyhow = "1.0.86"
 async-trait = "0.1.80"
@@ -34,6 +35,7 @@ argon2 = "0.5.3"
 chrono = "0.4.38"
 thiserror = "1.0.63"
 base64 = "0.22.1"
+json-patch = "2.0.0"
 
 [dev-dependencies]
 mockall = "0.12.1"

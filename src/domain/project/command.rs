@@ -13,7 +13,9 @@ use uuid::Uuid;
 use crate::domain::{
     auth::{Credential, UserId},
     error::Error,
-    event::{EventDrivenBridge, ProjectCreated, ProjectSecretCreated},
+    event::{
+        EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated,
+    },
     project::ProjectStatus,
     utils, Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
@@ -49,6 +51,56 @@ pub async fn create(
 
     event.dispatch(evt.into()).await?;
     info!(project = cmd.namespace, "new project created");
+
+    Ok(())
+}
+
+pub async fn update(
+    cache: Arc<dyn ProjectDrivenCache>,
+    event: Arc<dyn EventDrivenBridge>,
+    cmd: UpdateCmd,
+) -> Result<Project> {
+    assert_credential(&cmd.credential)?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.id).await?;
+
+    let evt = ProjectUpdated {
+        id: cmd.id.clone(),
+        name: Some(cmd.name.clone()),
+        status: None,
+        updated_at: Utc::now(),
+    };
+
+    event.dispatch(evt.into()).await?;
+    info!(project = &cmd.id, "project updated");
+
+    let Some(project) = cache.find_by_id(&cmd.id).await? else {
+        return Err(Error::CommandMalformed("Missing project".into()));
+    };
+
+    Ok(project)
+}
+
+pub async fn delete(
+    cache: Arc<dyn ProjectDrivenCache>,
+    event: Arc<dyn EventDrivenBridge>,
+    cmd: DeleteCmd,
+) -> Result<()> {
+    assert_credential(&cmd.credential)?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.id).await?;
+
+    let project = match cache.find_by_id(&cmd.id).await? {
+        Some(project) => project,
+        None => return Err(Error::Unexpected("Failed to locate project.".into())),
+    };
+
+    let evt = ProjectDeleted {
+        id: cmd.id.clone(),
+        namespace: project.namespace,
+        deleted_at: Utc::now(),
+    };
+
+    event.dispatch(evt.into()).await?;
+    info!(project = &cmd.id, "project updated");
 
     Ok(())
 }
@@ -227,6 +279,33 @@ impl CreateCmd {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpdateCmd {
+    pub credential: Credential,
+    pub id: String,
+    pub name: String,
+}
+impl UpdateCmd {
+    pub fn new(credential: Credential, id: String, name: String) -> Self {
+        Self {
+            credential,
+            id,
+            name,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DeleteCmd {
+    pub credential: Credential,
+    pub id: String,
+}
+impl DeleteCmd {
+    pub fn new(credential: Credential, id: String) -> Self {
+        Self { credential, id }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct CreateSecretCmd {
     pub credential: Credential,
     pub secret: String,
@@ -255,13 +334,14 @@ pub struct VerifySecretCmd {
 
 #[cfg(test)]
 mod tests {
+    use chrono::DateTime;
     use mockall::mock;
     use uuid::Uuid;
 
     use super::*;
     use crate::domain::{
         event::Event,
-        project::ProjectUser,
+        project::{ProjectUpdate, ProjectUser},
         tests::{INVALID_HRP_KEY, INVALID_KEY, KEY, SECRET},
     };
 
@@ -274,6 +354,8 @@ mod tests {
             async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
             async fn create(&self, project: &Project) -> Result<()>;
+            async fn update(&self, project: &ProjectUpdate) -> Result<()>;
+            async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
             async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
             async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
             async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
@@ -305,6 +387,15 @@ mod tests {
                 id: Uuid::new_v4().to_string(),
                 name: "New Project".into(),
                 namespace: "sonic-vegas".into(),
+            }
+        }
+    }
+    impl Default for UpdateCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                id: Uuid::new_v4().to_string(),
+                name: "Other name".into(),
             }
         }
     }
@@ -354,6 +445,29 @@ mod tests {
         let result = create(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_ok());
     }
+
+    #[tokio::test]
+    async fn it_should_update_project() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+        cache
+            .expect_find_secret_by_project_id()
+            .return_once(|_| Ok(Vec::new()));
+
+        let mut event = MockFakeEventDrivenBridge::new();
+        event.expect_dispatch().return_once(|_| Ok(()));
+
+        let cmd = UpdateCmd::default();
+
+        let result = update(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_ok());
+    }
+
     #[tokio::test]
     async fn it_should_fail_create_project_when_namespace_exists() {
         let mut cache = MockFakeProjectDrivenCache::new();

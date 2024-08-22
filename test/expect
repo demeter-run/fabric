@@ -77,7 +77,11 @@ fi
 # Create namespace using grpcurl
 echo "Creating namespace"
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-NAMESPACE=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"name": "New Namespace"}' "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.CreateProject | jq -r '.namespace')
+OUTPUT=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"name": "New Namespace"}' "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.CreateProject | jq)
+echo "CreateProject output:"
+echo $OUTPUT
+PROJECT_ID=$(echo $OUTPUT | jq -r '.id')
+NAMESPACE=$(echo $OUTPUT | jq -r '.namespace')
 
 # Check if namespace is created
 echo "Checking if namespace $NAMESPACE exists"
@@ -94,4 +98,60 @@ done
 if ! kubectl get namespace "$NAMESPACE" &> /dev/null; then
     echo "Error: Namespace $NAMESPACE not found after 120 attempts."
     exit 1
+fi
+
+# Change project name
+echo "Updating project..."
+./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"id": "'"$PROJECT_ID"'","name": "New name"}' "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.UpdateProject
+
+sleep 1
+OUTPUT=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.FetchProjects | jq )
+NEW_NAME=$(echo $OUTPUT | jq -r '.records[0].name' )
+if [[ "$NEW_NAME" == "New name" ]]; then
+  echo "Succesfuly updated project"
+else
+  echo "Failed to update project"
+  exit 1
+fi
+
+# Create resource
+echo "Creating resource..."
+OUTPUT=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" \
+  -d '{"project_id": "'"$PROJECT_ID"'","kind": "CardanoNodePort","spec": "{\"throughputTier\":\"0\", \"authToken\":\"token\",\"network\":\"preview\",\"version\":\"stable\"}"}' \
+  "$NODE_IP:30950" demeter.ops.v1alpha.ResourceService.CreateResource | jq )
+
+echo "CreateResource output:"
+echo $OUTPUT
+RESOURCE_ID=$(echo $OUTPUT | jq -r '.id')
+
+# Update resource
+echo "Updating resource..."
+./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" \
+  -d '{"id": "'"$RESOURCE_ID"'", "spec_patch": "{\"throughputTier\":\"1\"}"}' \
+  "$NODE_IP:30950" demeter.ops.v1alpha.ResourceService.UpdateResource
+
+sleep 1
+OUTPUT=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"resource_id": "'"$RESOURCE_ID"'", "project_id": "'"$PROJECT_ID"'" }' "$NODE_IP:30950" demeter.ops.v1alpha.ResourceService.FetchResourcesById | jq )
+echo $OUTPUT
+
+NEW_TIER=$(echo $OUTPUT | jq -r '.records[0].spec' | jq -r '.throughputTier')
+if [[ "$NEW_TIER" == "1" ]]; then
+  echo "Succesfuly updated resource"
+else
+  echo "Failed to update resource"
+  exit 1
+fi
+
+# Delete project
+echo "Deleting project..."
+./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"id": "'"$PROJECT_ID"'"}' "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.DeleteProject
+
+OUTPUT=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.FetchProjects | jq )
+echo "FetchProjects output:"
+echo $OUTPUT
+if echo "$OUTPUT" | jq '. == []'; then
+  echo "Succesfuly deleted project"
+else
+  echo "Failed to delete project"
+  exit 1
 fi

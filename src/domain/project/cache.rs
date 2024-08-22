@@ -1,9 +1,10 @@
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
-use crate::domain::event::{ProjectCreated, ProjectSecretCreated};
+use crate::domain::event::{ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated};
 use crate::domain::Result;
 
-use super::{Project, ProjectSecret, ProjectUser};
+use super::{Project, ProjectSecret, ProjectUpdate, ProjectUser};
 
 #[async_trait::async_trait]
 pub trait ProjectDrivenCache: Send + Sync {
@@ -11,6 +12,8 @@ pub trait ProjectDrivenCache: Send + Sync {
     async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>>;
     async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
     async fn create(&self, project: &Project) -> Result<()>;
+    async fn update(&self, project: &ProjectUpdate) -> Result<()>;
+    async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
     async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
     async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
     async fn find_user_permission(
@@ -31,6 +34,14 @@ pub async fn create_secret(
     cache.create_secret(&evt.into()).await
 }
 
+pub async fn update(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectUpdated) -> Result<()> {
+    cache.update(&evt.try_into()?).await
+}
+
+pub async fn delete(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectDeleted) -> Result<()> {
+    cache.delete(&evt.id, &evt.deleted_at).await
+}
+
 #[cfg(test)]
 mod tests {
     use mockall::mock;
@@ -46,6 +57,8 @@ mod tests {
             async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
             async fn create(&self, project: &Project) -> Result<()>;
+            async fn update(&self, project: &ProjectUpdate) -> Result<()>;
+            async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
             async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
             async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
             async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;

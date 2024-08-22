@@ -44,6 +44,12 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                     Event::ProjectCreated(evt) => {
                         project::cache::create(project_cache.clone(), evt.clone()).await
                     }
+                    Event::ProjectUpdated(evt) => {
+                        project::cache::update(project_cache.clone(), evt.clone()).await
+                    }
+                    Event::ProjectDeleted(evt) => {
+                        project::cache::delete(project_cache.clone(), evt.clone()).await
+                    }
                     Event::ProjectSecretCreated(evt) => {
                         project::cache::create_secret(project_cache.clone(), evt.clone()).await
                     }
@@ -55,6 +61,9 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                     }
                     Event::UsageCreated(evt) => {
                         usage::cache::create(usage_cache.clone(), evt.clone()).await
+                    }
+                    Event::ResourceUpdated(evt) => {
+                        resource::cache::update(resource_cache.clone(), evt.clone()).await
                     }
                 };
 

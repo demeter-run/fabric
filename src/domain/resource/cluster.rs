@@ -7,13 +7,14 @@ use kube::{
 use tracing::info;
 
 use crate::domain::{
-    event::{ResourceCreated, ResourceDeleted},
+    event::{ResourceCreated, ResourceDeleted, ResourceUpdated},
     Result,
 };
 
 #[async_trait::async_trait]
 pub trait ResourceDrivenCluster: Send + Sync {
     async fn create(&self, obj: &DynamicObject) -> Result<()>;
+    async fn update(&self, obj: &DynamicObject) -> Result<()>;
     async fn delete(&self, obj: &DynamicObject) -> Result<()>;
 }
 pub async fn apply_manifest(
@@ -39,6 +40,30 @@ pub async fn apply_manifest(
 
     Ok(())
 }
+
+pub async fn patch_manifest(
+    cluster: Arc<dyn ResourceDrivenCluster>,
+    evt: ResourceUpdated,
+) -> Result<()> {
+    let api = build_api_resource(&evt.kind);
+    let mut obj = DynamicObject::new(&evt.id, &api);
+    obj.metadata = ObjectMeta {
+        name: Some(evt.id),
+        namespace: Some(evt.project_namespace),
+        ..Default::default()
+    };
+
+    let spec = serde_json::from_str(&evt.spec_patch)?;
+    obj.data = serde_json::json!({ "spec": serde_json::Value::Object(spec) });
+
+    cluster.update(&obj).await?;
+
+    //TODO: create event to update cache
+    info!(resource = obj.name_any(), "resource updated");
+
+    Ok(())
+}
+
 pub async fn delete_manifest(
     cluster: Arc<dyn ResourceDrivenCluster>,
     evt: ResourceDeleted,
@@ -81,6 +106,7 @@ mod tests {
         #[async_trait::async_trait]
         impl ResourceDrivenCluster for FakeResourceDrivenCluster {
             async fn create(&self, obj: &DynamicObject) -> Result<()>;
+            async fn update(&self, obj: &DynamicObject) -> Result<()>;
             async fn delete(&self, obj: &DynamicObject) -> Result<()>;
         }
     }

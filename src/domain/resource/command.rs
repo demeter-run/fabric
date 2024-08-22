@@ -14,7 +14,7 @@ use crate::domain::{
     event::{EventDrivenBridge, ResourceCreated, ResourceDeleted},
     metadata::{KnownField, MetadataDriven},
     project::{cache::ProjectDrivenCache, Project},
-    resource::ResourceStatus,
+    resource::{ResourceStatus, ResourceUpdated},
     utils::get_schema_from_crd,
     Result, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
@@ -108,6 +108,40 @@ pub async fn create(
     info!(resource = cmd.kind, "new resource created");
 
     Ok(())
+}
+
+pub async fn update(
+    project_cache: Arc<dyn ProjectDrivenCache>,
+    resource_cache: Arc<dyn ResourceDrivenCache>,
+    event: Arc<dyn EventDrivenBridge>,
+    cmd: UpdateCmd,
+) -> Result<Resource> {
+    let Some(resource) = resource_cache.find_by_id(&cmd.id).await? else {
+        return Err(Error::CommandMalformed("invalid resource id".into()));
+    };
+
+    assert_permission(project_cache.clone(), &cmd.credential, &resource.project_id).await?;
+    let Some(project) = project_cache.find_by_id(&resource.project_id).await? else {
+        return Err(Error::CommandMalformed("invalid project id".into()));
+    };
+
+    let evt = ResourceUpdated {
+        id: cmd.id.clone(),
+        project_id: project.id,
+        project_namespace: project.namespace,
+        kind: resource.kind,
+        spec_patch: serde_json::to_string(&cmd.spec)?,
+        updated_at: Utc::now(),
+    };
+
+    event.dispatch(evt.into()).await?;
+    info!(resource = cmd.id, "resource updated");
+
+    let Some(resource) = resource_cache.find_by_id(&cmd.id).await? else {
+        return Err(Error::CommandMalformed("Missing resource".into()));
+    };
+
+    Ok(resource)
 }
 
 pub async fn delete(
@@ -233,6 +267,22 @@ impl CreateCmd {
 }
 
 #[derive(Debug, Clone)]
+pub struct UpdateCmd {
+    pub credential: Credential,
+    pub id: String,
+    pub spec: Spec,
+}
+impl UpdateCmd {
+    pub fn new(credential: Credential, id: String, spec: Spec) -> Self {
+        Self {
+            credential,
+            id,
+            spec,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct DeleteCmd {
     pub credential: Credential,
     pub project_id: String,
@@ -248,7 +298,8 @@ mod tests {
 
     use crate::domain::event::Event;
     use crate::domain::metadata::tests::mock_crd;
-    use crate::domain::project::{Project, ProjectSecret, ProjectUser};
+    use crate::domain::project::{Project, ProjectSecret, ProjectUpdate, ProjectUser};
+    use crate::domain::resource::ResourceUpdate;
 
     use super::*;
 
@@ -261,6 +312,8 @@ mod tests {
             async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
             async fn create(&self, project: &Project) -> Result<()>;
+            async fn update(&self, project: &ProjectUpdate) -> Result<()>;
+            async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
             async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
             async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
             async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
@@ -275,6 +328,7 @@ mod tests {
             async fn find(&self,project_id: &str,page: &u32,page_size: &u32) -> Result<Vec<Resource>>;
             async fn find_by_id(&self, id: &str) -> Result<Option<Resource>>;
             async fn create(&self, resource: &Resource) -> Result<()>;
+            async fn update(&self, resource: &ResourceUpdate) -> Result<()>;
             async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
         }
     }

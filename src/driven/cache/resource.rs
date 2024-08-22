@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::domain::{
     error::Error,
-    resource::{cache::ResourceDrivenCache, Resource, ResourceStatus},
+    resource::{cache::ResourceDrivenCache, Resource, ResourceStatus, ResourceUpdate},
     Result,
 };
 
@@ -100,6 +100,50 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
 
         Ok(())
     }
+
+    async fn update(&self, resource_update: &ResourceUpdate) -> Result<()> {
+        let resource = match self.find_by_id(&resource_update.id).await? {
+            Some(resource) => resource,
+            None => {
+                return Err(Error::Unexpected(format!(
+                    "Resource not found: {}",
+                    resource_update.id
+                )))
+            }
+        };
+
+        let mut parsed = match serde_json::from_str(&resource.spec) {
+            Ok(parsed) => parsed,
+            Err(_) => {
+                return Err(Error::Unexpected(format!(
+                    "Invalid spec found on resource: {}",
+                    resource.id
+                )))
+            }
+        };
+
+        json_patch::merge(
+            &mut parsed,
+            &serde_json::from_str(&resource_update.spec_patch)?,
+        );
+
+        let updated_spec = parsed.to_string();
+        sqlx::query!(
+            r#"
+                UPDATE resource 
+                SET spec = $1, updated_at = $2
+                WHERE id = $3
+            "#,
+            updated_spec,
+            resource_update.updated_at,
+            resource.id,
+        )
+        .execute(&self.sqlite.db)
+        .await?;
+
+        Ok(())
+    }
+
     async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()> {
         let status = ResourceStatus::Deleted.to_string();
 

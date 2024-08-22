@@ -1,9 +1,14 @@
+use chrono::{DateTime, Utc};
 use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
 use crate::domain::{
     error::Error,
-    project::{cache::ProjectDrivenCache, Project, ProjectSecret, ProjectStatus, ProjectUser},
+    project::{
+        cache::ProjectDrivenCache, Project, ProjectSecret, ProjectStatus, ProjectUpdate,
+        ProjectUser,
+    },
+    resource::ResourceStatus,
     Result,
 };
 
@@ -143,6 +148,99 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         Ok(())
     }
+
+    async fn update(&self, project_update: &ProjectUpdate) -> Result<()> {
+        match (&project_update.name, &project_update.status) {
+            (Some(new_name), Some(new_status)) => {
+                let new_status = new_status.to_string();
+                sqlx::query!(
+                    r#"
+                        UPDATE project
+                        SET name = $1, status = $2, updated_at = $3
+                        WHERE id = $4
+                    "#,
+                    new_name,
+                    new_status,
+                    project_update.updated_at,
+                    project_update.id,
+                )
+                .execute(&self.sqlite.db)
+                .await?;
+
+                Ok(())
+            }
+            (Some(new_name), None) => {
+                sqlx::query!(
+                    r#"
+                        UPDATE project
+                        SET name = $1, updated_at = $2
+                        WHERE id = $3
+                    "#,
+                    new_name,
+                    project_update.updated_at,
+                    project_update.id,
+                )
+                .execute(&self.sqlite.db)
+                .await?;
+
+                Ok(())
+            }
+            (None, Some(new_status)) => {
+                let new_status = new_status.to_string();
+                sqlx::query!(
+                    r#"
+                        UPDATE project
+                        SET status = $1, updated_at = $2
+                        WHERE id = $3
+                    "#,
+                    new_status,
+                    project_update.updated_at,
+                    project_update.id,
+                )
+                .execute(&self.sqlite.db)
+                .await?;
+
+                Ok(())
+            }
+            (None, None) => Ok(()),
+        }
+    }
+
+    async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()> {
+        let status = ProjectStatus::Deleted.to_string();
+
+        let mut tx = self.sqlite.db.begin().await?;
+        sqlx::query!(
+            r#"
+                UPDATE project
+                SET status=$2, updated_at=$3
+                WHERE id=$1;
+            "#,
+            id,
+            status,
+            deleted_at
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let status = ResourceStatus::Deleted.to_string();
+        sqlx::query!(
+            r#"
+                UPDATE resource
+                SET status=$2, updated_at=$3
+                WHERE project_id=$1;
+            "#,
+            id,
+            status,
+            deleted_at
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
     async fn create_secret(&self, secret: &ProjectSecret) -> Result<()> {
         sqlx::query!(
             r#"
