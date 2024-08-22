@@ -38,9 +38,6 @@ impl TryFrom<ResourceCreated> for Resource {
 
 pub struct ResourceUpdate {
     pub id: String,
-    pub project_id: String,
-    pub project_namespace: String,
-    pub kind: String,
     pub spec_patch: String,
     pub updated_at: DateTime<Utc>,
 }
@@ -50,9 +47,6 @@ impl TryFrom<ResourceUpdated> for ResourceUpdate {
     fn try_from(value: ResourceUpdated) -> Result<Self, Self::Error> {
         Ok(Self {
             id: value.id,
-            project_id: value.project_id,
-            project_namespace: value.project_namespace,
-            kind: value.kind,
             spec_patch: value.spec_patch,
             updated_at: value.updated_at,
         })

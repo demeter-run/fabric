@@ -131,10 +131,11 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
         sqlx::query!(
             r#"
                 UPDATE resource 
-                SET spec = $1
-                WHERE id = $2
+                SET spec = $1, updated_at = $2
+                WHERE id = $3
             "#,
             updated_spec,
+            resource_update.updated_at,
             resource.id,
         )
         .execute(&self.sqlite.db)
