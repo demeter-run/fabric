@@ -39,15 +39,17 @@ else
     echo "User ${rpc_username} already exist"
 fi
 
-# Define ACLs for daemon users, only read with a particular username
+# Define ACLs for daemon users
 %{ for user in daemon_users }
 if ! acl_exists "User:${user.name}"; then
     echo "Creating ACLs for ${user.name}"
     rpk $RPK_PARAMS acl user create ${user.name} -p '${user.password}' --mechanism SCRAM-SHA-256
     rpk $RPK_PARAMS acl create \
       --allow-principal User:${user.name} \
-      --operation read --topic ${events_topic} \
-      --operation read --group ${user.consumer_name}
+      --operation all --topic ${events_topic}
+    rpk $RPK_PARAMS acl create \
+      --allow-principal User:${user.name} \
+      --operation all --group '${user.consumer_name}-*' --resource-pattern-type prefixed
 else
     echo "User ${user.name} already exist"
 fi
