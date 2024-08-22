@@ -36,6 +36,10 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
                                 resource::cluster::apply_manifest(cluster.clone(), evt.clone())
                                     .await
                             }
+                            Event::ResourceUpdated(evt) => {
+                                resource::cluster::patch_manifest(cluster.clone(), evt.clone())
+                                    .await
+                            }
                             Event::ResourceDeleted(evt) => {
                                 resource::cluster::delete_manifest(cluster.clone(), evt.clone())
                                     .await

@@ -61,6 +61,17 @@ pub struct ResourceCreated {
 into_event!(ResourceCreated);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceUpdated {
+    pub id: String,
+    pub project_id: String,
+    pub project_namespace: String,
+    pub kind: String,
+    pub spec_patch: String,
+    pub updated_at: DateTime<Utc>,
+}
+into_event!(ResourceUpdated);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceDeleted {
     pub id: String,
     pub kind: String,
@@ -79,6 +90,7 @@ pub enum Event {
     ProjectUpdated(ProjectUpdated),
     ProjectSecretCreated(ProjectSecretCreated),
     ResourceCreated(ResourceCreated),
+    ResourceUpdated(ResourceUpdated),
     ResourceDeleted(ResourceDeleted),
 }
 impl Event {
@@ -88,6 +100,7 @@ impl Event {
             Event::ProjectUpdated(_) => "ProjectUpdated".into(),
             Event::ProjectSecretCreated(_) => "ProjectSecretCreated".into(),
             Event::ResourceCreated(_) => "ResourceCreated".into(),
+            Event::ResourceUpdated(_) => "ResourceUpdated".into(),
             Event::ResourceDeleted(_) => "ResourceDeleted".into(),
         }
     }
@@ -99,6 +112,7 @@ impl Event {
                 Ok(Self::ProjectSecretCreated(serde_json::from_slice(payload)?))
             }
             "ResourceCreated" => Ok(Self::ResourceCreated(serde_json::from_slice(payload)?)),
+            "ResourceUpdated" => Ok(Self::ResourceUpdated(serde_json::from_slice(payload)?)),
             "ResourceDeleted" => Ok(Self::ResourceDeleted(serde_json::from_slice(payload)?)),
             _ => Err(Error::Unexpected(format!(
                 "Event key '{}' not implemented",

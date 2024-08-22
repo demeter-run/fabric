@@ -2,7 +2,10 @@ use std::{fmt::Display, str::FromStr};
 
 use chrono::{DateTime, Utc};
 
-use super::{error::Error, event::ResourceCreated};
+use super::{
+    error::Error,
+    event::{ResourceCreated, ResourceUpdated},
+};
 
 pub mod cache;
 pub mod cluster;
@@ -28,6 +31,23 @@ impl TryFrom<ResourceCreated> for Resource {
             spec: value.spec,
             status: value.status.parse()?,
             created_at: value.created_at,
+            updated_at: value.updated_at,
+        })
+    }
+}
+
+pub struct ResourceUpdate {
+    pub id: String,
+    pub spec_patch: String,
+    pub updated_at: DateTime<Utc>,
+}
+impl TryFrom<ResourceUpdated> for ResourceUpdate {
+    type Error = Error;
+
+    fn try_from(value: ResourceUpdated) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: value.id,
+            spec_patch: value.spec_patch,
             updated_at: value.updated_at,
         })
     }
