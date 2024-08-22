@@ -147,7 +147,9 @@ echo "Deleting project..."
 ./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"id": "'"$PROJECT_ID"'"}' "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.DeleteProject
 
 OUTPUT=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.FetchProjects | jq )
-if [[ echo $OUTPUT | jq '. == []' ]]; then
+echo "FetchProjects output:"
+echo $OUTPUT
+if echo "$OUTPUT" | jq '. == []'; then
   echo "Succesfuly deleted project"
 else
   echo "Failed to delete project"
