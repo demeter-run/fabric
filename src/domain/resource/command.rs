@@ -120,7 +120,7 @@ pub async fn update(
         return Err(Error::CommandMalformed("invalid resource id".into()));
     };
 
-    assert_permission(project_cache.clone(), &cmd.credential, &resource.project_id).await?;
+    assert_project_permission(project_cache.clone(), &cmd.credential, &resource.project_id).await?;
     let Some(project) = project_cache.find_by_id(&resource.project_id).await? else {
         return Err(Error::CommandMalformed("invalid project id".into()));
     };
