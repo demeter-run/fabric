@@ -33,14 +33,16 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                     resource_id,
                     event_id,
                     units,
+                    tier,
                     created_at
                 )
-                VALUES ($1, $2, $3, $4, $5)
+                VALUES ($1, $2, $3, $4, $5, $6)
             "#,
                 usage.id,
                 usage.resource_id,
                 usage.event_id,
                 usage.units,
+                usage.tier,
                 usage.created_at,
             )
             .execute(&mut *tx)
@@ -60,6 +62,7 @@ impl FromRow<'_, SqliteRow> for Usage {
             event_id: row.try_get("event_id")?,
             resource_id: row.try_get("resource_id")?,
             units: row.try_get("units")?,
+            tier: row.try_get("tier")?,
             created_at: row.try_get("created_at")?,
         })
     }

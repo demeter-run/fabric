@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS usage (
   event_id TEXT NOT NULL,
   resource_id TEXT NOT NULL,
   units INT NOT NULL,
+  tier TEXT NOT NULL,
   created_at DATETIME NOT NULL,
   FOREIGN KEY(resource_id) REFERENCES resource(id)
 );

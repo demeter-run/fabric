@@ -1,11 +1,13 @@
-use std::collections::HashMap;
-
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use tracing::error;
 
 use crate::{
-    domain::{error::Error, usage::cluster::UsageDrivenCluster, Result},
+    domain::{
+        error::Error,
+        usage::{cluster::UsageDrivenCluster, UsageUnit},
+        Result,
+    },
     driven::prometheus::deserialize_value,
 };
 
@@ -17,11 +19,11 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
         &self,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
-    ) -> Result<HashMap<String, i64>> {
+    ) -> Result<Vec<UsageUnit>> {
         let since = (end - start).num_seconds();
 
         let query = format!(
-            "round(sum by (resource_name) (increase(usage{{tier!~\"0\"}}[{since}s] @ {})) > 0)",
+            "round(sum by (resource_name, tier) (increase(usage{{tier!~\"0\"}}[{since}s] @ {})) > 0)",
             end.timestamp_millis() / 1000
         );
 
@@ -42,14 +44,18 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
 
         let response: PrometheusResponse = response.json().await?;
 
-        let resources: HashMap<String, i64> = response
+        let usage_units: Vec<UsageUnit> = response
             .data
             .result
             .iter()
-            .map(|r| (r.metric.resource_name.clone(), r.value))
+            .map(|r| UsageUnit {
+                resource_id: r.metric.resource_name.clone(),
+                units: r.value,
+                tier: r.metric.tier.clone(),
+            })
             .collect();
 
-        Ok(resources)
+        Ok(usage_units)
     }
 }
 
@@ -71,4 +77,5 @@ struct PrometheusUsageResult {
 #[derive(Debug, Deserialize)]
 pub struct PrometheusUsageMetric {
     resource_name: String,
+    tier: String,
 }

@@ -1,13 +1,15 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use tracing::info;
 use uuid::Uuid;
 
 use crate::domain::{
-    event::{EventDrivenBridge, UsageCreated},
+    event::{EventDrivenBridge, UsageCreated, UsageUnitCreated},
     Result,
 };
+
+use super::UsageUnit;
 
 #[async_trait::async_trait]
 pub trait UsageDrivenCluster: Send + Sync {
@@ -15,7 +17,7 @@ pub trait UsageDrivenCluster: Send + Sync {
         &self,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
-    ) -> Result<HashMap<String, i64>>;
+    ) -> Result<Vec<UsageUnit>>;
 }
 
 pub async fn sync_usage(
@@ -26,17 +28,26 @@ pub async fn sync_usage(
 ) -> Result<()> {
     let end = Utc::now();
 
-    let resources = usage.find_metrics(cursor, end).await?;
-    if resources.is_empty() {
+    let usages = usage.find_metrics(cursor, end).await?;
+    if usages.is_empty() {
         return Ok(());
     }
 
     let evt = UsageCreated {
         id: Uuid::new_v4().to_string(),
         cluster_id: cluster_id.into(),
-        resources,
+        usages: usages
+            .into_iter()
+            .map(|u| UsageUnitCreated {
+                resource_id: u.resource_id,
+                units: u.units,
+                tier: u.tier,
+            })
+            .collect(),
         created_at: Utc::now(),
     };
+
+    dbg!(&evt);
 
     event.dispatch(evt.into()).await?;
     info!(
@@ -60,7 +71,7 @@ mod tests {
 
         #[async_trait::async_trait]
         impl UsageDrivenCluster for FakeUsageDriven {
-            async fn find_metrics(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> Result<HashMap<String, i64>>;
+            async fn find_metrics(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> Result<Vec<UsageUnit>>;
         }
     }
     mock! {

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -65,10 +63,16 @@ pub struct ResourceDeleted {
 into_event!(ResourceDeleted);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageUnitCreated {
+    pub resource_id: String,
+    pub tier: String,
+    pub units: i64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsageCreated {
     pub id: String,
     pub cluster_id: String,
-    pub resources: HashMap<String, i64>,
+    pub usages: Vec<UsageUnitCreated>,
     pub created_at: DateTime<Utc>,
 }
 into_event!(UsageCreated);
@@ -184,7 +188,11 @@ mod tests {
             Self {
                 id: Uuid::new_v4().to_string(),
                 cluster_id: Uuid::new_v4().to_string(),
-                resources: HashMap::default(),
+                usages: vec![UsageUnitCreated {
+                    resource_id: Uuid::new_v4().to_string(),
+                    units: 120,
+                    tier: "0".into(),
+                }],
                 created_at: Utc::now(),
             }
         }
