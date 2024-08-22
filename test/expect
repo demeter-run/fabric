@@ -104,7 +104,9 @@ fi
 echo "Updating project..."
 ./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"id": "'"$PROJECT_ID"'","name": "New name"}' "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.UpdateProject
 
-NEW_NAME=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.FetchProjects | jq '.records[0].name' )
+sleep 1
+OUTPUT=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.FetchProjects | jq )
+NEW_NAME=$(echo $OUTPUT | jq -r '.records[0].name' )
 if [[ "$NEW_NAME" == "New name" ]]; then
   echo "Succesfuly updated project"
 else
@@ -126,7 +128,7 @@ RESOURCE_ID=$(echo $OUTPUT | jq -r '.id')
 echo "Updating resource..."
 ./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"id": "'"$RESOURCE_ID"'", "spec_patch": "{\"throughputTier\":\"1\""}}' "$NODE_IP:30950" demeter.ops.v1alpha.ResourceService.UpdateResource
 
-
+sleep 1
 OUTPUT=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"resource_id": "'"$RESOURCE_ID"'", "project_id": "'"$PROJECT_ID"'" }' "$NODE_IP:30950" demeter.ops.v1alpha.ResourceService.FetchResourceById | jq )
 echo $OUTPUT
 
