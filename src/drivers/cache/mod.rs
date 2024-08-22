@@ -54,6 +54,9 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                     Event::ResourceDeleted(evt) => {
                         resource::cache::delete(resource_cache.clone(), evt.clone()).await
                     }
+                    Event::ResourceUpdated(evt) => {
+                        resource::cache::update(resource_cache.clone(), evt.clone()).await
+                    }
                 };
 
                 match event_application {

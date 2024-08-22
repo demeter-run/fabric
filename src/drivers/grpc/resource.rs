@@ -117,6 +117,42 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
+
+    async fn update_resource(
+        &self,
+        request: tonic::Request<proto::UpdateResourceRequest>,
+    ) -> Result<tonic::Response<proto::UpdateResourceResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let value = serde_json::from_str(&req.spec_patch)
+            .map_err(|_| Status::failed_precondition("spec must be a json"))?;
+        let spec = match value {
+            serde_json::Value::Object(v) => Ok(v),
+            _ => Err(Status::failed_precondition("invalid spec json")),
+        }?;
+
+        let cmd = command::UpdateCmd::new(credential, req.id, spec);
+
+        let updated = command::update(
+            self.project_cache.clone(),
+            self.resource_cache.clone(),
+            self.event.clone(),
+            cmd.clone(),
+        )
+        .await?;
+
+        let message = proto::UpdateResourceResponse {
+            updated: Some(updated.into()),
+        };
+
+        Ok(tonic::Response::new(message))
+    }
+
     async fn delete_resource(
         &self,
         request: tonic::Request<proto::DeleteResourceRequest>,

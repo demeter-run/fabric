@@ -1,7 +1,7 @@
 use anyhow::Result as AnyhowResult;
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{
-    api::{DeleteParams, DynamicObject, PostParams},
+    api::{DeleteParams, DynamicObject, Patch, PatchParams, PostParams},
     discovery, Api, Client, Error, ResourceExt,
 };
 use tracing::{info, warn};
@@ -70,6 +70,30 @@ impl ResourceDrivenCluster for K8sCluster {
                 _ => return Err(err.into()),
             }
         };
+        Ok(())
+    }
+
+    async fn update(&self, obj: &DynamicObject) -> Result<()> {
+        let apigroup = discovery::group(&self.client, "demeter.run").await?;
+        let kind = &obj.types.as_ref().unwrap().kind;
+        let (ar, _caps) = match apigroup.recommended_kind(kind) {
+            Some((ar, _caps)) => (ar, _caps),
+            None => {
+                warn!(kind = kind, "Coundnt find kind in cluster, skipping.");
+                return Ok(());
+            }
+        };
+
+        let api: Api<DynamicObject> =
+            Api::namespaced_with(self.client.clone(), &obj.namespace().unwrap(), &ar);
+
+        api.patch(
+            &obj.name_any(),
+            &PatchParams::default(),
+            &Patch::Merge(obj.data.clone()),
+        )
+        .await?;
+
         Ok(())
     }
 
