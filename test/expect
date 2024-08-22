@@ -141,3 +141,17 @@ else
   echo "Failed to update resource"
   exit 1
 fi
+
+# Delete project
+echo "Deleting project..."
+./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"id": "'"$PROJECT_ID"'"}' "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.DeleteProject
+
+OUTPUT=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" "$NODE_IP:30950" demeter.ops.v1alpha.ProjectService.FetchProjects | jq )
+echo "FetchProjects output:"
+echo $OUTPUT
+if echo "$OUTPUT" | jq '. == []'; then
+  echo "Succesfuly deleted project"
+else
+  echo "Failed to delete project"
+  exit 1
+fi
