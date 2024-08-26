@@ -186,22 +186,9 @@ impl FromRow<'_, SqliteRow> for Resource {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        domain::project::{cache::ProjectDrivenCache, Project},
-        driven::cache::project::SqliteProjectDrivenCache,
-    };
+    use crate::driven::cache::tests::mock_project;
 
     use super::*;
-
-    async fn mock_project(sqlite_cache: Arc<SqliteCache>) -> Project {
-        let cache: Box<dyn ProjectDrivenCache> =
-            Box::new(SqliteProjectDrivenCache::new(sqlite_cache));
-
-        let project = Project::default();
-        cache.create(&project).await.unwrap();
-
-        project
-    }
 
     #[tokio::test]
     async fn it_should_find_project_resources() {

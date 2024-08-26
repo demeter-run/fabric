@@ -6,6 +6,7 @@ pub mod event;
 pub mod metadata;
 pub mod project;
 pub mod resource;
+pub mod usage;
 pub mod utils;
 
 pub const PAGE_SIZE_DEFAULT: u32 = 12;

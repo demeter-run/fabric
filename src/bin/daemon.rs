@@ -1,9 +1,10 @@
-use std::{collections::HashMap, env};
+use std::{collections::HashMap, env, time::Duration};
 
 use anyhow::Result;
 use dotenv::dotenv;
-use fabric::drivers::monitor::MonitorConfig;
-use serde::Deserialize;
+use fabric::drivers::{monitor::MonitorConfig, usage::UsageConfig};
+use serde::{de::Visitor, Deserialize, Deserializer};
+use tokio::try_join;
 use tracing::Level;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -23,11 +24,21 @@ async fn main() -> Result<()> {
 
     let config = Config::new()?;
 
-    fabric::drivers::monitor::subscribe(config.into()).await
+    let schedule = fabric::drivers::usage::schedule(config.clone().into());
+    let subscribe = fabric::drivers::monitor::subscribe(config.clone().into());
+
+    try_join!(schedule, subscribe)?;
+
+    Ok(())
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct Config {
+    cluster_id: String,
+    prometheus_url: String,
+    #[serde(deserialize_with = "deserialize_duration")]
+    #[serde(rename(deserialize = "delay_sec"))]
+    delay: Duration,
     topic: String,
     kafka: HashMap<String, String>,
 }
@@ -52,5 +63,40 @@ impl From<Config> for MonitorConfig {
             kafka: value.kafka,
             topic: value.topic,
         }
+    }
+}
+
+impl From<Config> for UsageConfig {
+    fn from(value: Config) -> Self {
+        Self {
+            cluster_id: value.cluster_id,
+            prometheus_url: value.prometheus_url,
+            delay: value.delay,
+            kafka: value.kafka,
+            topic: value.topic,
+        }
+    }
+}
+
+fn deserialize_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserializer.deserialize_map(DurationVisitor)
+}
+
+struct DurationVisitor;
+impl<'de> Visitor<'de> for DurationVisitor {
+    type Value = Duration;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("This Visitor expects to receive i64 seconds")
+    }
+
+    fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(Duration::from_secs(v as u64))
     }
 }

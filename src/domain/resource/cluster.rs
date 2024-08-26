@@ -17,7 +17,6 @@ pub trait ResourceDrivenCluster: Send + Sync {
     async fn update(&self, obj: &DynamicObject) -> Result<()>;
     async fn delete(&self, obj: &DynamicObject) -> Result<()>;
 }
-
 pub async fn apply_manifest(
     cluster: Arc<dyn ResourceDrivenCluster>,
     evt: ResourceCreated,

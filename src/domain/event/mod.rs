@@ -91,6 +91,21 @@ pub struct ResourceDeleted {
 into_event!(ResourceDeleted);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageUnitCreated {
+    pub resource_id: String,
+    pub tier: String,
+    pub units: i64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageCreated {
+    pub id: String,
+    pub cluster_id: String,
+    pub usages: Vec<UsageUnitCreated>,
+    pub created_at: DateTime<Utc>,
+}
+into_event!(UsageCreated);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 #[allow(clippy::enum_variant_names)]
 pub enum Event {
@@ -101,6 +116,7 @@ pub enum Event {
     ResourceCreated(ResourceCreated),
     ResourceUpdated(ResourceUpdated),
     ResourceDeleted(ResourceDeleted),
+    UsageCreated(UsageCreated),
 }
 impl Event {
     pub fn key(&self) -> String {
@@ -112,6 +128,7 @@ impl Event {
             Event::ResourceCreated(_) => "ResourceCreated".into(),
             Event::ResourceUpdated(_) => "ResourceUpdated".into(),
             Event::ResourceDeleted(_) => "ResourceDeleted".into(),
+            Event::UsageCreated(_) => "UsageCreated".into(),
         }
     }
     pub fn from_key(key: &str, payload: &[u8]) -> Result<Self> {
@@ -125,6 +142,7 @@ impl Event {
             "ResourceCreated" => Ok(Self::ResourceCreated(serde_json::from_slice(payload)?)),
             "ResourceUpdated" => Ok(Self::ResourceUpdated(serde_json::from_slice(payload)?)),
             "ResourceDeleted" => Ok(Self::ResourceDeleted(serde_json::from_slice(payload)?)),
+            "UsageCreated" => Ok(Self::UsageCreated(serde_json::from_slice(payload)?)),
             _ => Err(Error::Unexpected(format!(
                 "Event key '{}' not implemented",
                 key
@@ -199,6 +217,20 @@ mod tests {
                 project_id: Uuid::new_v4().to_string(),
                 project_namespace: "prj-test".into(),
                 deleted_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for UsageCreated {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                cluster_id: Uuid::new_v4().to_string(),
+                usages: vec![UsageUnitCreated {
+                    resource_id: Uuid::new_v4().to_string(),
+                    units: 120,
+                    tier: "0".into(),
+                }],
+                created_at: Utc::now(),
             }
         }
     }
