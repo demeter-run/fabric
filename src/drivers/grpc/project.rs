@@ -2,6 +2,7 @@ use dmtri::demeter::ops::v1alpha as proto;
 use std::sync::Arc;
 use tonic::{async_trait, Status};
 use tracing::error;
+use uuid::Uuid;
 
 use crate::domain::{
     auth::Credential,
@@ -150,6 +151,113 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             id: cmd.id,
             name: cmd.name,
             key,
+        };
+
+        Ok(tonic::Response::new(message))
+    }
+    async fn fetch_project_secrets(
+        &self,
+        request: tonic::Request<proto::FetchProjectSecretsRequest>,
+    ) -> Result<tonic::Response<proto::FetchProjectSecretsResponse>, tonic::Status> {
+        let _credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let message = proto::FetchProjectSecretsResponse {
+            records: vec![proto::ProjectSecret {
+                id: Uuid::new_v4().to_string(),
+                name: "Secret Name".into(),
+                project_id: req.project_id,
+                ..Default::default()
+            }],
+        };
+
+        Ok(tonic::Response::new(message))
+    }
+
+    async fn create_project_payment(
+        &self,
+        request: tonic::Request<proto::CreateProjectPaymentRequest>,
+    ) -> Result<tonic::Response<proto::CreateProjectPaymentResponse>, tonic::Status> {
+        let _credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let message = proto::CreateProjectPaymentResponse {
+            id: Uuid::new_v4().to_string(),
+            project_id: req.project_id,
+            provider: "stripe".into(),
+            provider_id: "provider id".into(),
+            subscription_id: Some("subscription id".into()),
+        };
+
+        Ok(tonic::Response::new(message))
+    }
+    async fn fetch_project_payment(
+        &self,
+        request: tonic::Request<proto::FetchProjectPaymentRequest>,
+    ) -> Result<tonic::Response<proto::FetchProjectPaymentResponse>, tonic::Status> {
+        let _credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let message = proto::FetchProjectPaymentResponse {
+            records: vec![proto::ProjectPayment {
+                id: Uuid::new_v4().to_string(),
+                project_id: req.project_id,
+                provider: "stripe".into(),
+                provider_id: "provider id".into(),
+                subscription_id: Some("subscription id".into()),
+                ..Default::default()
+            }],
+        };
+
+        Ok(tonic::Response::new(message))
+    }
+
+    async fn create_project_invite(
+        &self,
+        request: tonic::Request<proto::CreateProjectInviteRequest>,
+    ) -> Result<tonic::Response<proto::CreateProjectInviteResponse>, tonic::Status> {
+        let _credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let _req = request.into_inner();
+
+        let message = proto::CreateProjectInviteResponse {};
+
+        Ok(tonic::Response::new(message))
+    }
+    async fn fetch_project_users(
+        &self,
+        request: tonic::Request<proto::FetchProjectUsersRequest>,
+    ) -> Result<tonic::Response<proto::FetchProjectUsersResponse>, tonic::Status> {
+        let _credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let message = proto::FetchProjectUsersResponse {
+            records: vec![proto::ProjectUser {
+                id: Uuid::new_v4().to_string(),
+                project_id: req.project_id,
+                user_id: "auth0 id".into(),
+                role: "owner".into(),
+                ..Default::default()
+            }],
         };
 
         Ok(tonic::Response::new(message))
