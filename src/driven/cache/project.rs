@@ -308,6 +308,26 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         Ok(project_user)
     }
+    async fn find_payment(&self, project_id: &str) -> Result<Option<ProjectPayment>> {
+        let project_payment = sqlx::query_as::<_, ProjectPayment>(
+            r#"
+                SELECT 
+                    py.id, 
+                    py.project_id, 
+                    py.provider, 
+                    py.provider_id, 
+                    py.subscription_id, 
+                    py.created_at
+                FROM project_payment py
+                WHERE py.project_id = $1;
+            "#,
+        )
+        .bind(project_id)
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        Ok(project_payment)
+    }
     async fn create_payment(&self, payment: &ProjectPayment) -> Result<()> {
         sqlx::query!(
             r#"
@@ -371,6 +391,19 @@ impl FromRow<'_, SqliteRow> for ProjectUser {
         Ok(Self {
             user_id: row.try_get("user_id")?,
             project_id: row.try_get("project_id")?,
+            created_at: row.try_get("created_at")?,
+        })
+    }
+}
+
+impl FromRow<'_, SqliteRow> for ProjectPayment {
+    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            project_id: row.try_get("project_id")?,
+            provider: row.try_get("provider")?,
+            provider_id: row.try_get("provider_id")?,
+            subscription_id: row.try_get("subscription_id")?,
             created_at: row.try_get("created_at")?,
         })
     }
@@ -546,5 +579,31 @@ mod tests {
         let result = cache.create_payment(&payment).await;
 
         assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_find_project_payment() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let payment = ProjectPayment {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_payment(&payment).await.unwrap();
+
+        let result = cache.find_payment(&project.id).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_project_payment() {
+        let cache = get_cache().await;
+        let result = cache.find_payment(Default::default()).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
     }
 }

@@ -21,7 +21,7 @@ use crate::domain::{
     utils, Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
-use super::{cache::ProjectDrivenCache, Project, ProjectSecret};
+use super::{cache::ProjectDrivenCache, Project, ProjectPayment, ProjectSecret};
 
 pub async fn fetch(cache: Arc<dyn ProjectDrivenCache>, cmd: FetchCmd) -> Result<Vec<Project>> {
     let user_id = assert_credential(&cmd.credential)?;
@@ -163,32 +163,6 @@ pub async fn create_secret(
 
     Ok(key)
 }
-pub async fn create_payment(
-    cache: Arc<dyn ProjectDrivenCache>,
-    event: Arc<dyn EventDrivenBridge>,
-    cmd: CreatePaymentCmd,
-) -> Result<()> {
-    assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
-
-    let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
-        return Err(Error::CommandMalformed("invalid project id".into()));
-    };
-
-    let evt = ProjectPaymentCreated {
-        id: cmd.id,
-        project_id: project.id,
-        provider: cmd.provider,
-        provider_id: cmd.provider_id,
-        subscription_id: cmd.subscription_id,
-        created_at: Utc::now(),
-    };
-
-    event.dispatch(evt.into()).await?;
-    info!("new project payment created");
-
-    Ok(())
-}
 
 pub async fn verify_secret(
     cache: Arc<dyn ProjectDrivenCache>,
@@ -232,6 +206,48 @@ pub async fn verify_secret(
     };
 
     Ok(secret)
+}
+
+pub async fn fetch_payment(
+    cache: Arc<dyn ProjectDrivenCache>,
+    cmd: FetchPaymentCmd,
+) -> Result<Option<ProjectPayment>> {
+    assert_credential(&cmd.credential)?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
+
+    cache.find_payment(&cmd.project_id).await
+}
+pub async fn create_payment(
+    cache: Arc<dyn ProjectDrivenCache>,
+    event: Arc<dyn EventDrivenBridge>,
+    cmd: CreatePaymentCmd,
+) -> Result<()> {
+    assert_credential(&cmd.credential)?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
+
+    let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
+        return Err(Error::CommandMalformed("invalid project id".into()));
+    };
+
+    if cache.find_payment(&cmd.project_id).await?.is_some() {
+        return Err(Error::CommandMalformed(
+            "project already has a payment created".into(),
+        ));
+    }
+
+    let evt = ProjectPaymentCreated {
+        id: cmd.id,
+        project_id: project.id,
+        provider: cmd.provider,
+        provider_id: cmd.provider_id,
+        subscription_id: cmd.subscription_id,
+        created_at: Utc::now(),
+    };
+
+    event.dispatch(evt.into()).await?;
+    info!("new project payment created");
+
+    Ok(())
 }
 
 fn assert_credential(credential: &Credential) -> Result<UserId> {
@@ -361,6 +377,19 @@ pub struct VerifySecretCmd {
 }
 
 #[derive(Debug, Clone)]
+pub struct FetchPaymentCmd {
+    pub credential: Credential,
+    pub project_id: String,
+}
+impl FetchPaymentCmd {
+    pub fn new(credential: Credential, project_id: String) -> Self {
+        Self {
+            credential,
+            project_id,
+        }
+    }
+}
+#[derive(Debug, Clone)]
 pub struct CreatePaymentCmd {
     pub credential: Credential,
     pub id: String,
@@ -389,6 +418,7 @@ impl CreatePaymentCmd {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use chrono::DateTime;
@@ -414,6 +444,7 @@ mod tests {
             async fn update(&self, project: &ProjectUpdate) -> Result<()>;
             async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
             async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
+            async fn find_payment(&self, project_id: &str) -> Result<Option<ProjectPayment>>;
             async fn create_payment(&self, payment: &ProjectPayment) -> Result<()>;
             async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
             async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
@@ -473,6 +504,14 @@ mod tests {
             Self {
                 project_id: Default::default(),
                 key: KEY.into(),
+            }
+        }
+    }
+    impl Default for FetchPaymentCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                project_id: Uuid::new_v4().to_string(),
             }
         }
     }
@@ -723,6 +762,7 @@ mod tests {
         cache
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
+        cache.expect_find_payment().return_once(|_| Ok(None));
 
         let mut event = MockFakeEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
@@ -739,6 +779,26 @@ mod tests {
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
         cache.expect_find_by_id().return_once(|_| Ok(None));
+
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = CreatePaymentCmd::default();
+
+        let result = create_payment(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_create_project_payment_when_payment_already_exists() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+        cache
+            .expect_find_payment()
+            .return_once(|_| Ok(Some(ProjectPayment::default())));
 
         let event = MockFakeEventDrivenBridge::new();
 
@@ -772,6 +832,49 @@ mod tests {
         let cmd = CreatePaymentCmd::default();
 
         let result = create_payment(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn it_should_fetch_project_payment() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+        cache
+            .expect_find_payment()
+            .return_once(|_| Ok(Some(ProjectPayment::default())));
+
+        let cmd = FetchPaymentCmd::default();
+
+        let result = fetch_payment(Arc::new(cache), cmd).await;
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_fail_fetch_project_payment_when_invalid_credential() {
+        let cache = MockFakeProjectDrivenCache::new();
+
+        let cmd = FetchPaymentCmd {
+            credential: Credential::ApiKey("xxxx".into()),
+            ..Default::default()
+        };
+
+        let result = fetch_payment(Arc::new(cache), cmd).await;
+        assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_fetch_project_payment_when_invalid_permission() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(None));
+
+        let cmd = FetchPaymentCmd::default();
+
+        let result = fetch_payment(Arc::new(cache), cmd).await;
         assert!(result.is_err());
     }
 }

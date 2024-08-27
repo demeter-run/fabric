@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::domain::{
     auth::Credential,
     event::EventDrivenBridge,
-    project::{self, cache::ProjectDrivenCache, Project},
+    project::{self, cache::ProjectDrivenCache, Project, ProjectPayment},
 };
 
 pub struct ProjectServiceImpl {
@@ -214,23 +214,24 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         &self,
         request: tonic::Request<proto::FetchProjectPaymentRequest>,
     ) -> Result<tonic::Response<proto::FetchProjectPaymentResponse>, tonic::Status> {
-        let _credential = match request.extensions().get::<Credential>() {
+        let credential = match request.extensions().get::<Credential>() {
             Some(credential) => credential.clone(),
             None => return Err(Status::unauthenticated("invalid credential")),
         };
 
         let req = request.into_inner();
 
-        let message = proto::FetchProjectPaymentResponse {
-            records: vec![proto::ProjectPayment {
-                id: Uuid::new_v4().to_string(),
-                project_id: req.project_id,
-                provider: "stripe".into(),
-                provider_id: "provider id".into(),
-                subscription_id: Some("subscription id".into()),
-                ..Default::default()
-            }],
-        };
+        let cmd = project::command::FetchPaymentCmd::new(credential, req.project_id);
+
+        let mut records = vec![];
+
+        if let Some(payment) =
+            project::command::fetch_payment(self.cache.clone(), cmd.clone()).await?
+        {
+            records.push(payment.into());
+        }
+
+        let message = proto::FetchProjectPaymentResponse { records };
 
         Ok(tonic::Response::new(message))
     }
@@ -284,6 +285,19 @@ impl From<Project> for proto::Project {
             namespace: value.namespace,
             created_at: value.created_at.to_rfc3339(),
             updated_at: value.updated_at.to_rfc3339(),
+        }
+    }
+}
+
+impl From<ProjectPayment> for proto::ProjectPayment {
+    fn from(value: ProjectPayment) -> Self {
+        Self {
+            id: value.id,
+            project_id: value.project_id,
+            provider: value.provider,
+            provider_id: value.provider_id,
+            subscription_id: value.subscription_id,
+            created_at: value.created_at.to_rfc3339(),
         }
     }
 }
