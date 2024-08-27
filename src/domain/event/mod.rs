@@ -56,6 +56,17 @@ pub struct ProjectSecretCreated {
 into_event!(ProjectSecretCreated);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectPaymentCreated {
+    pub id: String,
+    pub project_id: String,
+    pub provider: String,
+    pub provider_id: String,
+    pub subscription_id: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+into_event!(ProjectPaymentCreated);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceCreated {
     pub id: String,
     pub project_id: String,
@@ -113,6 +124,7 @@ pub enum Event {
     ProjectUpdated(ProjectUpdated),
     ProjectDeleted(ProjectDeleted),
     ProjectSecretCreated(ProjectSecretCreated),
+    ProjectPaymentCreated(ProjectPaymentCreated),
     ResourceCreated(ResourceCreated),
     ResourceUpdated(ResourceUpdated),
     ResourceDeleted(ResourceDeleted),
@@ -125,6 +137,7 @@ impl Event {
             Event::ProjectUpdated(_) => "ProjectUpdated".into(),
             Event::ProjectDeleted(_) => "ProjectDeleted".into(),
             Event::ProjectSecretCreated(_) => "ProjectSecretCreated".into(),
+            Event::ProjectPaymentCreated(_) => "ProjectPaymentCreated".into(),
             Event::ResourceCreated(_) => "ResourceCreated".into(),
             Event::ResourceUpdated(_) => "ResourceUpdated".into(),
             Event::ResourceDeleted(_) => "ResourceDeleted".into(),
@@ -139,6 +152,9 @@ impl Event {
             "ProjectSecretCreated" => {
                 Ok(Self::ProjectSecretCreated(serde_json::from_slice(payload)?))
             }
+            "ProjectPaymentCreated" => Ok(Self::ProjectPaymentCreated(serde_json::from_slice(
+                payload,
+            )?)),
             "ResourceCreated" => Ok(Self::ResourceCreated(serde_json::from_slice(payload)?)),
             "ResourceUpdated" => Ok(Self::ResourceUpdated(serde_json::from_slice(payload)?)),
             "ResourceDeleted" => Ok(Self::ResourceDeleted(serde_json::from_slice(payload)?)),
@@ -189,6 +205,18 @@ mod tests {
                 name: "Key 1".into(),
                 phc: PHC.into(),
                 secret: SECRET.as_bytes().to_vec(),
+                created_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ProjectPaymentCreated {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                provider: "stripe".into(),
+                provider_id: "stripe id".into(),
+                subscription_id: None,
                 created_at: Utc::now(),
             }
         }

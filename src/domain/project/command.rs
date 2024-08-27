@@ -14,7 +14,8 @@ use crate::domain::{
     auth::{Credential, UserId},
     error::Error,
     event::{
-        EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated,
+        EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectPaymentCreated,
+        ProjectSecretCreated, ProjectUpdated,
     },
     project::ProjectStatus,
     utils, Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
@@ -161,6 +162,32 @@ pub async fn create_secret(
     info!("new project secret created");
 
     Ok(key)
+}
+pub async fn create_payment(
+    cache: Arc<dyn ProjectDrivenCache>,
+    event: Arc<dyn EventDrivenBridge>,
+    cmd: CreatePaymentCmd,
+) -> Result<()> {
+    assert_credential(&cmd.credential)?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
+
+    let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
+        return Err(Error::CommandMalformed("invalid project id".into()));
+    };
+
+    let evt = ProjectPaymentCreated {
+        id: cmd.id,
+        project_id: project.id,
+        provider: cmd.provider,
+        provider_id: cmd.provider_id,
+        subscription_id: cmd.subscription_id,
+        created_at: Utc::now(),
+    };
+
+    event.dispatch(evt.into()).await?;
+    info!("new project payment created");
+
+    Ok(())
 }
 
 pub async fn verify_secret(
@@ -326,12 +353,42 @@ impl CreateSecretCmd {
         }
     }
 }
+
 #[derive(Debug, Clone)]
 pub struct VerifySecretCmd {
     pub project_id: String,
     pub key: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct CreatePaymentCmd {
+    pub credential: Credential,
+    pub id: String,
+    pub project_id: String,
+    pub provider: String,
+    pub provider_id: String,
+    pub subscription_id: Option<String>,
+}
+impl CreatePaymentCmd {
+    pub fn new(
+        credential: Credential,
+        project_id: String,
+        provider: String,
+        provider_id: String,
+        subscription_id: Option<String>,
+    ) -> Self {
+        let id = Uuid::new_v4().to_string();
+
+        Self {
+            credential,
+            id,
+            project_id,
+            provider,
+            provider_id,
+            subscription_id,
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use chrono::DateTime;
@@ -341,7 +398,7 @@ mod tests {
     use super::*;
     use crate::domain::{
         event::Event,
-        project::{ProjectUpdate, ProjectUser},
+        project::{ProjectPayment, ProjectUpdate, ProjectUser},
         tests::{INVALID_HRP_KEY, INVALID_KEY, KEY, SECRET},
     };
 
@@ -357,6 +414,7 @@ mod tests {
             async fn update(&self, project: &ProjectUpdate) -> Result<()>;
             async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
             async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
+            async fn create_payment(&self, payment: &ProjectPayment) -> Result<()>;
             async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
             async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
         }
@@ -415,6 +473,18 @@ mod tests {
             Self {
                 project_id: Default::default(),
                 key: KEY.into(),
+            }
+        }
+    }
+    impl Default for CreatePaymentCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                provider: "stripe".into(),
+                provider_id: "stripe id".into(),
+                subscription_id: None,
             }
         }
     }
@@ -641,6 +711,67 @@ mod tests {
         let cmd = VerifySecretCmd::default();
 
         let result = verify_secret(Arc::new(cache), cmd).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn it_should_create_project_payment() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let mut event = MockFakeEventDrivenBridge::new();
+        event.expect_dispatch().return_once(|_| Ok(()));
+
+        let cmd = CreatePaymentCmd::default();
+
+        let result = create_payment(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_fail_create_project_payment_when_project_doesnt_exists() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache.expect_find_by_id().return_once(|_| Ok(None));
+
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = CreatePaymentCmd::default();
+
+        let result = create_payment(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_create_project_payment_when_invalid_credential() {
+        let cache = MockFakeProjectDrivenCache::new();
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = CreatePaymentCmd {
+            credential: Credential::ApiKey("xxxx".into()),
+            ..Default::default()
+        };
+
+        let result = create_payment(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_create_project_payment_when_invalid_permission() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(None));
+
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = CreatePaymentCmd::default();
+
+        let result = create_payment(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_err());
     }
 }

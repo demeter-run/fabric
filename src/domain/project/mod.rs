@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 
 use super::{
     error::Error,
-    event::{ProjectCreated, ProjectSecretCreated, ProjectUpdated},
+    event::{ProjectCreated, ProjectPaymentCreated, ProjectSecretCreated, ProjectUpdated},
 };
 
 pub mod cache;
@@ -114,6 +114,28 @@ impl From<ProjectSecretCreated> for ProjectSecret {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ProjectPayment {
+    pub id: String,
+    pub project_id: String,
+    pub provider: String,
+    pub provider_id: String,
+    pub subscription_id: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+impl From<ProjectPaymentCreated> for ProjectPayment {
+    fn from(value: ProjectPaymentCreated) -> Self {
+        Self {
+            id: value.id,
+            project_id: value.project_id,
+            provider: value.provider,
+            provider_id: value.provider_id,
+            subscription_id: value.subscription_id,
+            created_at: value.created_at,
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub struct ProjectUser {
     pub user_id: String,
@@ -159,6 +181,18 @@ mod tests {
             Self {
                 user_id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
+                created_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ProjectPayment {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                provider: "stripe".into(),
+                provider_id: "stripe id".into(),
+                subscription_id: None,
                 created_at: Utc::now(),
             }
         }

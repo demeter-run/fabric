@@ -65,6 +65,9 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                     Event::ResourceUpdated(evt) => {
                         resource::cache::update(resource_cache.clone(), evt.clone()).await
                     }
+                    Event::ProjectPaymentCreated(evt) => {
+                        project::cache::create_payment(project_cache.clone(), evt.clone()).await
+                    }
                 };
 
                 match event_application {

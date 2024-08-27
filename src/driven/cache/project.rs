@@ -5,8 +5,8 @@ use std::sync::Arc;
 use crate::domain::{
     error::Error,
     project::{
-        cache::ProjectDrivenCache, Project, ProjectSecret, ProjectStatus, ProjectUpdate,
-        ProjectUser,
+        cache::ProjectDrivenCache, Project, ProjectPayment, ProjectSecret, ProjectStatus,
+        ProjectUpdate, ProjectUser,
     },
     resource::ResourceStatus,
     Result,
@@ -308,6 +308,31 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         Ok(project_user)
     }
+    async fn create_payment(&self, payment: &ProjectPayment) -> Result<()> {
+        sqlx::query!(
+            r#"
+                INSERT INTO project_payment (
+                    id,
+                    project_id, 
+                    provider, 
+                    provider_id, 
+                    subscription_id,
+                    created_at
+                )
+                VALUES ($1, $2, $3, $4, $5, $6)
+            "#,
+            payment.id,
+            payment.project_id,
+            payment.provider,
+            payment.provider_id,
+            payment.subscription_id,
+            payment.created_at
+        )
+        .execute(&self.sqlite.db)
+        .await?;
+
+        Ok(())
+    }
 }
 
 impl FromRow<'_, SqliteRow> for Project {
@@ -505,5 +530,21 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn it_should_create_project_payment() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let payment = ProjectPayment {
+            project_id: project.id,
+            ..Default::default()
+        };
+        let result = cache.create_payment(&payment).await;
+
+        assert!(result.is_ok());
     }
 }

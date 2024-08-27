@@ -182,19 +182,30 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         &self,
         request: tonic::Request<proto::CreateProjectPaymentRequest>,
     ) -> Result<tonic::Response<proto::CreateProjectPaymentResponse>, tonic::Status> {
-        let _credential = match request.extensions().get::<Credential>() {
+        let credential = match request.extensions().get::<Credential>() {
             Some(credential) => credential.clone(),
             None => return Err(Status::unauthenticated("invalid credential")),
         };
 
         let req = request.into_inner();
 
+        let cmd = project::command::CreatePaymentCmd::new(
+            credential,
+            req.project_id.clone(),
+            req.provider.clone(),
+            req.provider_id.clone(),
+            req.subscription_id.clone(),
+        );
+
+        project::command::create_payment(self.cache.clone(), self.event.clone(), cmd.clone())
+            .await?;
+
         let message = proto::CreateProjectPaymentResponse {
             id: Uuid::new_v4().to_string(),
             project_id: req.project_id,
-            provider: "stripe".into(),
-            provider_id: "provider id".into(),
-            subscription_id: Some("subscription id".into()),
+            provider: req.provider,
+            provider_id: req.provider_id,
+            subscription_id: req.subscription_id,
         };
 
         Ok(tonic::Response::new(message))
