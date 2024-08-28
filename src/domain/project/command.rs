@@ -11,7 +11,7 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::domain::{
-    auth::{Credential, UserId},
+    auth::{Auth0Driven, Credential, UserId},
     error::Error,
     event::{
         EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated,
@@ -20,7 +20,7 @@ use crate::domain::{
     utils, Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
-use super::{cache::ProjectDrivenCache, Project, ProjectSecret};
+use super::{cache::ProjectDrivenCache, Project, ProjectSecret, StripeDriven};
 
 pub async fn fetch(cache: Arc<dyn ProjectDrivenCache>, cmd: FetchCmd) -> Result<Vec<Project>> {
     let user_id = assert_credential(&cmd.credential)?;
@@ -31,6 +31,8 @@ pub async fn fetch(cache: Arc<dyn ProjectDrivenCache>, cmd: FetchCmd) -> Result<
 pub async fn create(
     cache: Arc<dyn ProjectDrivenCache>,
     event: Arc<dyn EventDrivenBridge>,
+    auth0: Arc<dyn Auth0Driven>,
+    stripe: Arc<dyn StripeDriven>,
     cmd: CreateCmd,
 ) -> Result<()> {
     let user_id = assert_credential(&cmd.credential)?;
@@ -39,12 +41,18 @@ pub async fn create(
         return Err(Error::CommandMalformed("invalid project namespace".into()));
     }
 
+    let (name, email) = auth0.find_info().await?;
+    let billing_provider_id = stripe.create_customer(&name, &email).await?;
+
     let evt = ProjectCreated {
         id: cmd.id,
         namespace: cmd.namespace.clone(),
         name: cmd.name,
         owner: user_id,
         status: ProjectStatus::Active.to_string(),
+        billing_provider: "stripe".into(),
+        billing_provider_id,
+        billing_subscription_id: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };

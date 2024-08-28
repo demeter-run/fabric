@@ -5,14 +5,16 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::domain::{
-    auth::Credential,
+    auth::{Auth0Driven, Credential},
     event::EventDrivenBridge,
-    project::{self, cache::ProjectDrivenCache, Project},
+    project::{self, cache::ProjectDrivenCache, Project, StripeDriven},
 };
 
 pub struct ProjectServiceImpl {
     pub cache: Arc<dyn ProjectDrivenCache>,
     pub event: Arc<dyn EventDrivenBridge>,
+    pub auth0: Arc<dyn Auth0Driven>,
+    pub stripe: Arc<dyn StripeDriven>,
     pub secret: String,
 }
 
@@ -20,11 +22,15 @@ impl ProjectServiceImpl {
     pub fn new(
         cache: Arc<dyn ProjectDrivenCache>,
         event: Arc<dyn EventDrivenBridge>,
+        auth0: Arc<dyn Auth0Driven>,
+        stripe: Arc<dyn StripeDriven>,
         secret: String,
     ) -> Self {
         Self {
             cache,
             event,
+            auth0,
+            stripe,
             secret,
         }
     }
@@ -66,7 +72,14 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let cmd = project::command::CreateCmd::new(credential, req.name);
 
-        project::command::create(self.cache.clone(), self.event.clone(), cmd.clone()).await?;
+        project::command::create(
+            self.cache.clone(),
+            self.event.clone(),
+            self.auth0.clone(),
+            self.stripe.clone(),
+            cmd.clone(),
+        )
+        .await?;
 
         let message = proto::CreateProjectResponse {
             id: cmd.id,

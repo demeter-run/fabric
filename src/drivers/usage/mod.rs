@@ -11,7 +11,7 @@ use crate::{
 };
 
 pub async fn schedule(config: UsageConfig) -> Result<()> {
-    let prometheus_driven = Arc::new(PrometheusUsageDriven::new(&config.prometheus_url).await?);
+    let prometheus_driven = Arc::new(PrometheusUsageDriven::new(&config.prometheus_url));
     let event_bridge = Arc::new(KafkaProducer::new(&config.topic, &config.kafka)?);
 
     let mut cursor = Utc::now();

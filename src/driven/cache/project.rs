@@ -35,6 +35,9 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     p.name, 
                     p.owner, 
                     p.status, 
+                    p.billing_provider,
+                    p.billing_provider_id,
+                    p.billing_subscription_id,
                     p.created_at, 
                     p.updated_at
                 FROM project_user pu 
@@ -63,6 +66,9 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     p.name, 
                     p.owner, 
                     p.status, 
+                    p.billing_provider,
+                    p.billing_provider_id,
+                    p.billing_subscription_id,
                     p.created_at, 
                     p.updated_at
                 FROM project p
@@ -85,6 +91,9 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     p.name, 
                     p.owner, 
                     p.status, 
+                    p.billing_provider,
+                    p.billing_provider_id,
+                    p.billing_subscription_id,
                     p.created_at, 
                     p.updated_at
                 FROM project p 
@@ -112,16 +121,22 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     name,
                     owner,
                     status,
+                    billing_provider,
+                    billing_provider_id,
+                    billing_subscription_id,
                     created_at,
                     updated_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             "#,
             project.id,
             project.namespace,
             project.name,
             project.owner,
             status,
+            project.billing_provider,
+            project.billing_provider_id,
+            project.billing_subscription_id,
             project.created_at,
             project.updated_at
         )
@@ -322,6 +337,9 @@ impl FromRow<'_, SqliteRow> for Project {
             status: status
                 .parse()
                 .map_err(|err: Error| sqlx::Error::Decode(err.into()))?,
+            billing_provider: row.try_get("billing_provider")?,
+            billing_provider_id: row.try_get("billing_provider_id")?,
+            billing_subscription_id: row.try_get("billing_subscription_id")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         })

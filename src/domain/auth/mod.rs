@@ -4,6 +4,12 @@ use super::{error::Error, project::cache::ProjectDrivenCache};
 
 use crate::domain::Result;
 
+#[async_trait::async_trait]
+pub trait Auth0Driven: Send + Sync {
+    fn verify(&self, token: &str) -> Result<String>;
+    async fn find_info(&self) -> Result<(String, String)>;
+}
+
 pub type UserId = String;
 pub type SecretId = String;
 
