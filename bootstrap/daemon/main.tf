@@ -11,6 +11,10 @@ variable "image" {
   type = string
 }
 
+variable "cluster_id" {
+  type = string
+}
+
 variable "broker_urls" {
   type        = string
   description = "Comma separated values of the queue broker urls."
@@ -36,6 +40,18 @@ variable "kafka_topic" {
 variable "replicas" {
   type    = number
   default = 1
+}
+
+variable "prometheus_url" {
+  type        = string
+  description = "URL where to query prometheus to report usage metrics."
+  default     = "http://prometheus-operated.demeter-system.svc.cluster.local:9090/api/v1"
+}
+
+variable "prometheus_delay_sec" {
+  type        = number
+  description = "Delay between usage report loops."
+  default     = 60
 }
 
 variable "tolerations" {

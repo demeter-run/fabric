@@ -5,6 +5,7 @@ resource "kubernetes_config_map_v1" "fabric_rpc_crds" {
   }
 
   data = {
-    "utxorpcport.json" = "${file("${path.module}/utxorpcport.json")}"
+    "utxorpcport.json" = "${file("${path.module}/crds/utxorpcport.json")}"
+    "frontends.json"   = "${file("${path.module}/crds/frontends.json")}"
   }
 }
