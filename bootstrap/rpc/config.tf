@@ -8,7 +8,7 @@ resource "kubernetes_config_map_v1" "fabric_rpc_config" {
     "rpc.toml" = "${templatefile(
       "${path.module}/rpc.toml.tftpl",
       {
-        port           = local.port,
+        port = local.port,
         // If we change the consumer, we must rebuild the cache.
         db_path        = "/var/cache/${var.consumer_name}.db",
         broker_urls    = var.broker_urls

@@ -1,0 +1,137 @@
+{
+  "apiVersion": "apiextensions.k8s.io/v1",
+  "kind": "CustomResourceDefinition",
+  "metadata": {
+    "name": "frontends.demeter.run"
+  },
+  "spec": {
+    "group": "demeter.run",
+    "names": {
+      "kind": "Frontend",
+      "plural": "frontends",
+      "shortNames": [
+        "fnd"
+      ],
+      "singular": "frontend"
+    },
+    "scope": "Namespaced",
+    "versions": [
+      {
+        "name": "v1alpha1",
+        "schema": {
+          "openAPIV3Schema": {
+            "type": "object",
+            "properties": {
+              "spec": {
+                "type": "object",
+                "properties": {
+                  "givenName": {
+                    "type": "string"
+                  },
+                  "image": {
+                    "type": "string"
+                  },
+                  "replicas": {
+                    "type": "number"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "args": {
+                    "type": "string"
+                  },
+                  "tenancy": {
+                    "type": "string",
+                    "pattern": "^(\\b(cluster|project|proxy)\\b)$"
+                  },
+                  "envVars": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "annotations": {
+                    "type": "object",
+                    "x-kubernetes-preserve-unknown-fields": true
+                  },
+                  "computeClass": {
+                    "type": "string"
+                  }
+                }
+              },
+              "status": {
+                "type": "object",
+                "properties": {
+                  "runningStatus": {
+                    "type": "string"
+                  },
+                  "availableReplicas": {
+                    "type": "number"
+                  },
+                  "observedGeneration": {
+                    "type": "number"
+                  },
+                  "availableEnvVars": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "startTime": {
+                    "type": "number"
+                  },
+                  "storageDCUPerMin": {
+                    "type": "number"
+                  },
+                  "computeDCUPerMin": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "additionalPrinterColumns": [
+          {
+            "name": "Enabled",
+            "type": "boolean",
+            "jsonPath": ".spec.enabled"
+          },
+          {
+            "name": "Replicas",
+            "type": "number",
+            "jsonPath": ".spec.replicas"
+          },
+          {
+            "name": "Compute Class",
+            "type": "string",
+            "jsonPath": ".spec.computeClass"
+          },
+          {
+            "name": "Compute DCU/min",
+            "type": "number",
+            "jsonPath": ".status.computeDCUPerMin"
+          },
+          {
+            "name": "Storage DCU/min",
+            "type": "number",
+            "jsonPath": ".status.storageDCUPerMin"
+          }
+        ],
+        "served": true,
+        "storage": true,
+        "subresources": {
+          "status": {}
+        }
+      }
+    ]
+  }
+}
