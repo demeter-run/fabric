@@ -1,6 +1,7 @@
 use anyhow::Result as AnyhowResult;
 use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet};
 use jsonwebtoken::{decode, decode_header, DecodingKey, Validation};
+use reqwest::header::{HeaderValue, AUTHORIZATION};
 use reqwest::Client;
 use serde::Deserialize;
 use tracing::error;
@@ -64,10 +65,14 @@ impl Auth0Driven for Auth0DrivenImpl {
         Ok(decoded_token.claims.sub)
     }
 
-    async fn find_info(&self) -> Result<(String, String)> {
+    async fn find_info(&self, token: &str) -> Result<(String, String)> {
         let response = self
             .client
-            .get(format!("{}/info", &self.url))
+            .get(format!("{}/userinfo", &self.url))
+            .header(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+            )
             .send()
             .await?;
 
@@ -83,11 +88,19 @@ impl Auth0Driven for Auth0DrivenImpl {
             )));
         }
 
-        todo!()
+        let profile: Profile = response.json().await?;
+
+        Ok((profile.name, profile.email))
     }
 }
 
 #[derive(Deserialize)]
 struct Claims {
     sub: String,
+}
+
+#[derive(Deserialize)]
+struct Profile {
+    name: String,
+    email: String,
 }

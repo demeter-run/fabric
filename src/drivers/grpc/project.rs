@@ -191,52 +191,6 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         Ok(tonic::Response::new(message))
     }
 
-    async fn create_project_payment(
-        &self,
-        request: tonic::Request<proto::CreateProjectPaymentRequest>,
-    ) -> Result<tonic::Response<proto::CreateProjectPaymentResponse>, tonic::Status> {
-        let _credential = match request.extensions().get::<Credential>() {
-            Some(credential) => credential.clone(),
-            None => return Err(Status::unauthenticated("invalid credential")),
-        };
-
-        let req = request.into_inner();
-
-        let message = proto::CreateProjectPaymentResponse {
-            id: Uuid::new_v4().to_string(),
-            project_id: req.project_id,
-            provider: "stripe".into(),
-            provider_id: "provider id".into(),
-            subscription_id: Some("subscription id".into()),
-        };
-
-        Ok(tonic::Response::new(message))
-    }
-    async fn fetch_project_payment(
-        &self,
-        request: tonic::Request<proto::FetchProjectPaymentRequest>,
-    ) -> Result<tonic::Response<proto::FetchProjectPaymentResponse>, tonic::Status> {
-        let _credential = match request.extensions().get::<Credential>() {
-            Some(credential) => credential.clone(),
-            None => return Err(Status::unauthenticated("invalid credential")),
-        };
-
-        let req = request.into_inner();
-
-        let message = proto::FetchProjectPaymentResponse {
-            records: vec![proto::ProjectPayment {
-                id: Uuid::new_v4().to_string(),
-                project_id: req.project_id,
-                provider: "stripe".into(),
-                provider_id: "provider id".into(),
-                subscription_id: Some("subscription id".into()),
-                ..Default::default()
-            }],
-        };
-
-        Ok(tonic::Response::new(message))
-    }
-
     async fn create_project_invite(
         &self,
         request: tonic::Request<proto::CreateProjectInviteRequest>,
@@ -284,6 +238,9 @@ impl From<Project> for proto::Project {
             name: value.name,
             status: value.status.to_string(),
             namespace: value.namespace,
+            billing_provider: value.billing_provider,
+            billing_provider_id: value.billing_provider_id,
+            billing_subscription_id: value.billing_subscription_id,
             created_at: value.created_at.to_rfc3339(),
             updated_at: value.updated_at.to_rfc3339(),
         }

@@ -11,7 +11,7 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::domain::{
-    auth::{Auth0Driven, Credential, UserId},
+    auth::{Auth0Driven, Credential, Token, UserId},
     error::Error,
     event::{
         EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated,
@@ -23,7 +23,7 @@ use crate::domain::{
 use super::{cache::ProjectDrivenCache, Project, ProjectSecret, StripeDriven};
 
 pub async fn fetch(cache: Arc<dyn ProjectDrivenCache>, cmd: FetchCmd) -> Result<Vec<Project>> {
-    let user_id = assert_credential(&cmd.credential)?;
+    let (user_id, _) = assert_credential(&cmd.credential)?;
 
     cache.find(&user_id, &cmd.page, &cmd.page_size).await
 }
@@ -35,13 +35,13 @@ pub async fn create(
     stripe: Arc<dyn StripeDriven>,
     cmd: CreateCmd,
 ) -> Result<()> {
-    let user_id = assert_credential(&cmd.credential)?;
+    let (user_id, token) = assert_credential(&cmd.credential)?;
 
     if cache.find_by_namespace(&cmd.namespace).await?.is_some() {
         return Err(Error::CommandMalformed("invalid project namespace".into()));
     }
 
-    let (name, email) = auth0.find_info().await?;
+    let (name, email) = auth0.find_info(&token).await?;
     let billing_provider_id = stripe.create_customer(&name, &email).await?;
 
     let evt = ProjectCreated {
@@ -215,9 +215,9 @@ pub async fn verify_secret(
     Ok(secret)
 }
 
-fn assert_credential(credential: &Credential) -> Result<UserId> {
+fn assert_credential(credential: &Credential) -> Result<(UserId, Token)> {
     match credential {
-        Credential::Auth0(user_id) => Ok(user_id.into()),
+        Credential::Auth0(user_id, token) => Ok((user_id.into(), token.into())),
         Credential::ApiKey(_) => Err(Error::Unauthorized(
             "project rpc doesnt support secret".into(),
         )),
@@ -229,7 +229,7 @@ async fn assert_permission(
     project_id: &str,
 ) -> Result<()> {
     match credential {
-        Credential::Auth0(user_id) => {
+        Credential::Auth0(user_id, _) => {
             let result = cache.find_user_permission(user_id, project_id).await?;
             if result.is_none() {
                 return Err(Error::Unauthorized("user doesnt have permission".into()));
@@ -379,10 +379,29 @@ mod tests {
         }
     }
 
+    mock! {
+        pub FakeAuth0Driven { }
+
+        #[async_trait::async_trait]
+        impl Auth0Driven for FakeAuth0Driven {
+            fn verify(&self, token: &str) -> Result<String>;
+            async fn find_info(&self, token: &str) -> Result<(String, String)>;
+        }
+    }
+
+    mock! {
+        pub FakeStripeDriven { }
+
+        #[async_trait::async_trait]
+        impl StripeDriven for FakeStripeDriven {
+            async fn create_customer(&self, name: &str, email: &str) -> Result<String>;
+        }
+    }
+
     impl Default for FetchCmd {
         fn default() -> Self {
             Self {
-                credential: Credential::Auth0("user id".into()),
+                credential: Credential::Auth0("user id".into(), "token".into()),
                 page: 1,
                 page_size: 12,
             }
@@ -391,7 +410,7 @@ mod tests {
     impl Default for CreateCmd {
         fn default() -> Self {
             Self {
-                credential: Credential::Auth0("user id".into()),
+                credential: Credential::Auth0("user id".into(), "token".into()),
                 id: Uuid::new_v4().to_string(),
                 name: "New Project".into(),
                 namespace: "sonic-vegas".into(),
@@ -401,7 +420,7 @@ mod tests {
     impl Default for UpdateCmd {
         fn default() -> Self {
             Self {
-                credential: Credential::Auth0("user id".into()),
+                credential: Credential::Auth0("user id".into(), "token".into()),
                 id: Uuid::new_v4().to_string(),
                 name: "Other name".into(),
             }
@@ -410,7 +429,7 @@ mod tests {
     impl Default for CreateSecretCmd {
         fn default() -> Self {
             Self {
-                credential: Credential::Auth0("user id".into()),
+                credential: Credential::Auth0("user id".into(), "token".into()),
                 id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
                 name: "Key 1".into(),
@@ -445,13 +464,79 @@ mod tests {
         let mut cache = MockFakeProjectDrivenCache::new();
         cache.expect_find_by_namespace().return_once(|_| Ok(None));
 
+        let mut auth0 = MockFakeAuth0Driven::new();
+        auth0
+            .expect_find_info()
+            .return_once(|_| Ok(("user name".into(), "user email".into())));
+
+        let mut stripe = MockFakeStripeDriven::new();
+        stripe
+            .expect_create_customer()
+            .return_once(|_, _| Ok("stripe id".into()));
+
         let mut event = MockFakeEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
 
         let cmd = CreateCmd::default();
 
-        let result = create(Arc::new(cache), Arc::new(event), cmd).await;
+        let result = create(
+            Arc::new(cache),
+            Arc::new(event),
+            Arc::new(auth0),
+            Arc::new(stripe),
+            cmd,
+        )
+        .await;
+
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_fail_create_project_when_namespace_exists() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_by_namespace()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let auth0 = MockFakeAuth0Driven::new();
+        let stripe = MockFakeStripeDriven::new();
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = CreateCmd::default();
+
+        let result = create(
+            Arc::new(cache),
+            Arc::new(event),
+            Arc::new(auth0),
+            Arc::new(stripe),
+            cmd,
+        )
+        .await;
+
+        assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_create_project_when_invalid_permission() {
+        let cache = MockFakeProjectDrivenCache::new();
+        let auth0 = MockFakeAuth0Driven::new();
+        let stripe = MockFakeStripeDriven::new();
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = CreateCmd {
+            credential: Credential::ApiKey("xxxx".into()),
+            ..Default::default()
+        };
+
+        let result = create(
+            Arc::new(cache),
+            Arc::new(event),
+            Arc::new(auth0),
+            Arc::new(stripe),
+            cmd,
+        )
+        .await;
+
+        assert!(result.is_err());
     }
 
     #[tokio::test]
@@ -474,34 +559,6 @@ mod tests {
 
         let result = update(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn it_should_fail_create_project_when_namespace_exists() {
-        let mut cache = MockFakeProjectDrivenCache::new();
-        cache
-            .expect_find_by_namespace()
-            .return_once(|_| Ok(Some(Project::default())));
-
-        let event = MockFakeEventDrivenBridge::new();
-
-        let cmd = CreateCmd::default();
-
-        let result = create(Arc::new(cache), Arc::new(event), cmd).await;
-        assert!(result.is_err());
-    }
-    #[tokio::test]
-    async fn it_should_fail_create_project_when_invalid_permission() {
-        let cache = MockFakeProjectDrivenCache::new();
-        let event = MockFakeEventDrivenBridge::new();
-
-        let cmd = CreateCmd {
-            credential: Credential::ApiKey("xxxx".into()),
-            ..Default::default()
-        };
-
-        let result = create(Arc::new(cache), Arc::new(event), cmd).await;
-        assert!(result.is_err());
     }
 
     #[tokio::test]

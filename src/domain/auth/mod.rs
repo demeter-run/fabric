@@ -7,15 +7,16 @@ use crate::domain::Result;
 #[async_trait::async_trait]
 pub trait Auth0Driven: Send + Sync {
     fn verify(&self, token: &str) -> Result<String>;
-    async fn find_info(&self) -> Result<(String, String)>;
+    async fn find_info(&self, token: &str) -> Result<(String, String)>;
 }
 
 pub type UserId = String;
+pub type Token = String;
 pub type SecretId = String;
 
 #[derive(Debug, Clone)]
 pub enum Credential {
-    Auth0(UserId),
+    Auth0(UserId, Token),
     ApiKey(SecretId),
 }
 
@@ -25,7 +26,7 @@ pub async fn assert_project_permission(
     project_id: &str,
 ) -> Result<()> {
     match credential {
-        Credential::Auth0(user_id) => {
+        Credential::Auth0(user_id, _) => {
             let result = project_cache
                 .find_user_permission(user_id, project_id)
                 .await?;

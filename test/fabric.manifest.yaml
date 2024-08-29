@@ -111,6 +111,10 @@ data:
 
     [auth]
     url="https://dev-dflg0ssi.us.auth0.com"
+
+    [stripe]
+    url = "https://api.stripe.com/v1"
+    api_key = ""
 ---
 apiVersion: v1
 kind: ConfigMap

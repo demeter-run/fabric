@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
-use reqwest::{
-    header::{HeaderValue, AUTHORIZATION},
-    Client,
-};
+use reqwest::Client;
+use serde::Deserialize;
 use tracing::error;
 
 use crate::domain::{error::Error, project::StripeDriven, Result};
@@ -37,7 +35,7 @@ impl StripeDriven for StripeDrivenImpl {
         let response = self
             .client
             .post(format!("{}/customers", &self.url))
-            .header(AUTHORIZATION, HeaderValue::from_str(&self.api_key).unwrap())
+            .basic_auth(&self.api_key, Some(""))
             .form(&params)
             .send()
             .await?;
@@ -49,18 +47,18 @@ impl StripeDriven for StripeDrivenImpl {
                 "request status code fail to create stripe customer"
             );
             return Err(Error::Unexpected(format!(
-                "Stripe create customer request error. Status: {}",
+                "stripe create customer request error. Status: {}",
                 status
             )));
         }
 
-        let response: serde_json::Value = response.json().await?;
-        let Some(customer_id) = response.get("id") else {
-            return Err(Error::Unexpected(
-                "Stripe customer response doesnt have id".into(),
-            ));
-        };
+        let customer: StripeCustomer = response.json().await?;
 
-        Ok(customer_id.to_string())
+        Ok(customer.id)
     }
+}
+
+#[derive(Deserialize)]
+struct StripeCustomer {
+    id: String,
 }

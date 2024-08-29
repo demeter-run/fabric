@@ -95,7 +95,7 @@ mod tests {
     impl Default for FetchCmd {
         fn default() -> Self {
             Self {
-                credential: Credential::Auth0("user id".into()),
+                credential: Credential::Auth0("user id".into(), "token".into()),
                 project_id: Uuid::new_v4().to_string(),
                 page: 1,
                 page_size: 12,
