@@ -116,7 +116,7 @@ metadata:
     app: api
 spec:
   selector:
-    app: api
+    app: fake-api
   type: ClusterIP
   ports:
     - port: 80

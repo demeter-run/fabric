@@ -3,6 +3,7 @@
 RPC_IMAGE="rpc:1.0"
 DAEMON_IMAGE="daemon:1.0"
 CLUSTER_NAME="k8scluster"
+MOCK_NAMESPACE="demeter-mock"
 KAFKA_NAMESPACE="demeter-kafka"
 FABRIC_NAMESPACE="demeter-rpc"
 DAEMON_NAMESPACE="demeter-daemon"
@@ -53,9 +54,10 @@ wait_for_pods() {
 build_and_load_image $RPC_IMAGE docker/dockerfile.rpc
 build_and_load_image $DAEMON_IMAGE docker/dockerfile.daemon
 
-# Apply Kafka manifest
-kubectl apply -f ./test/kafka.manifest.yaml
+# Apply Dependences manifest
+kubectl apply -f ./test/dependences.manifest.yaml
 wait_for_pods $KAFKA_NAMESPACE "Kafka"
+wait_for_pods $MOCK_NAMESPACE "Mock"
 
 # Apply Fabric manifest
 kubectl apply -f ./test/fabric.manifest.yaml
