@@ -113,8 +113,8 @@ data:
     url="https://dev-dflg0ssi.us.auth0.com"
 
     [stripe]
-    url = "https://api.stripe.com/v1"
-    api_key = ""
+    url = "http://api.demeter-mock.svc.cluster.local/stripe"
+    api_key = "test"
 ---
 apiVersion: v1
 kind: ConfigMap
