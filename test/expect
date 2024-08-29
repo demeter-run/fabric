@@ -70,7 +70,16 @@ tar -zxvf "./grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz" grpcurl
 
 # Get Auth0 access token
 echo "Getting Auth0 access token"
-TOKEN=$(curl --silent --request POST --url $AUTH0_URL --header 'content-type: application/json' --data "$TEST_CREDENTIAL" | jq -r '.access_token')
+TOKEN=$(curl --location $AUTH0_URL \
+--header 'content-type: application/x-www-form-urlencoded' \
+--data-urlencode "grant_type=password" \
+--data-urlencode "username=githubci@txpipe.io" \
+--data-urlencode "audience=demeter-api" \
+--data-urlencode "scope=profile openid email" \
+--data-urlencode "client_id=f6y19wTU92tkVAasM5VubeEOsDSES56X" \
+--data-urlencode "password=$PASSWORD" \
+--data-urlencode "client_secret=$CLIENT_SECRET" | jq -r '.access_token')
+
 if [ -z "$TOKEN" ]; then
     echo "Error: Failed to get Auth0 access token"
     exit 1
