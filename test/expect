@@ -51,16 +51,17 @@ wait_for_pods() {
 }
 
 # Build and load image
-build_and_load_image $RPC_IMAGE docker/dockerfile.rpc
-build_and_load_image $DAEMON_IMAGE docker/dockerfile.daemon
-
-# Apply Dependences manifest
-kubectl apply -f ./test/dependences.manifest.yaml
-wait_for_pods $KAFKA_NAMESPACE "Kafka"
-wait_for_pods $MOCK_NAMESPACE "Mock"
+# build_and_load_image $RPC_IMAGE docker/dockerfile.rpc
+# build_and_load_image $DAEMON_IMAGE docker/dockerfile.daemon
+#
+# # Apply Dependences manifest
+# kubectl apply -f ./test/dependences.manifest.yaml
+# wait_for_pods $KAFKA_NAMESPACE "Kafka"
+# wait_for_pods $MOCK_NAMESPACE "Mock"
 
 # Apply Fabric manifest
-kubectl apply -f ./test/fabric.manifest.yaml
+envsubst < ./test/fabric.manifest.yaml > fabric.manifest-with-env.yaml
+kubectl apply -f ./fabric.manifest-with-env.yaml
 wait_for_pods $FABRIC_NAMESPACE "Fabric"
 wait_for_pods $DAEMON_NAMESPACE "Daemon"
 

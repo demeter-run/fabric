@@ -22,7 +22,8 @@ automountServiceAccountToken: true
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
-metadata: name: kube-rs-binding
+metadata:
+  name: kube-rs-binding
   namespace: demeter-daemon
 subjects:
   - kind: ServiceAccount
@@ -111,7 +112,7 @@ data:
     [auth]
     url="https://dev-dflg0ssi.us.auth0.com"
     client_id="f6y19wTU92tkVAasM5VubeEOsDSES56X"
-    client_secret="patRt3znUO-1rjuNbt5Vrm6_xITzrqtMYbKcou1-kMwnYb6mwZ5aaSSerP-YJkOe"
+    client_secret="${CLIENT_SECRET}"
     audience="https://dev-dflg0ssi.us.auth0.com/api/v2/"
 
     [stripe]
