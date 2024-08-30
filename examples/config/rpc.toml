@@ -13,6 +13,9 @@ topic="events"
 
 [auth]
 url="https://txpipe.us.auth0.com"
+client_id=""
+client_secret=""
+audience=""
 
 [stripe]
 url = "https://api.stripe.com/v1"

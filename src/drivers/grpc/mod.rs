@@ -40,7 +40,15 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
 
     let metadata = Arc::new(MetadataCrd::new(&config.crds_path)?);
 
-    let auth0 = Arc::new(Auth0DrivenImpl::try_new(&config.auth_url).await?);
+    let auth0 = Arc::new(
+        Auth0DrivenImpl::try_new(
+            &config.auth_url,
+            &config.auth_client_id,
+            &config.auth_client_secret,
+            &config.auth_audience,
+        )
+        .await?,
+    );
     let stripe = Arc::new(StripeDrivenImpl::new(
         &config.stripe_url,
         &config.stripe_api_key,
@@ -100,6 +108,9 @@ pub struct GrpcConfig {
     pub db_path: String,
     pub crds_path: PathBuf,
     pub auth_url: String,
+    pub auth_client_id: String,
+    pub auth_client_secret: String,
+    pub auth_audience: String,
     pub stripe_url: String,
     pub stripe_api_key: String,
     pub secret: String,

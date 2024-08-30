@@ -355,7 +355,7 @@ mod tests {
     impl Default for FetchCmd {
         fn default() -> Self {
             Self {
-                credential: Credential::Auth0("user id".into(), "token".into()),
+                credential: Credential::Auth0("user id".into()),
                 project_id: Uuid::new_v4().to_string(),
                 page: 1,
                 page_size: 12,
@@ -365,7 +365,7 @@ mod tests {
     impl Default for FetchByIdCmd {
         fn default() -> Self {
             Self {
-                credential: Credential::Auth0("user id".into(), "token".into()),
+                credential: Credential::Auth0("user id".into()),
                 project_id: Uuid::new_v4().to_string(),
                 resource_id: Uuid::new_v4().to_string(),
             }
@@ -374,7 +374,7 @@ mod tests {
     impl Default for CreateCmd {
         fn default() -> Self {
             Self {
-                credential: Credential::Auth0("user id".into(), "token".into()),
+                credential: Credential::Auth0("user id".into()),
                 id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
                 kind: "CardanoNodePort".into(),
@@ -385,7 +385,7 @@ mod tests {
     impl Default for DeleteCmd {
         fn default() -> Self {
             Self {
-                credential: Credential::Auth0("user id".into(), "token".into()),
+                credential: Credential::Auth0("user id".into()),
                 resource_id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
             }

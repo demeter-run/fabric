@@ -34,7 +34,7 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
             let token = token.replace("Bearer ", "");
             return match self.auth0.verify(&token) {
                 Ok(user_id) => {
-                    let credential = Credential::Auth0(user_id, token);
+                    let credential = Credential::Auth0(user_id);
                     request.extensions_mut().insert(credential);
                     Ok(request)
                 }

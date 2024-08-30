@@ -35,6 +35,9 @@ async fn main() -> Result<()> {
 #[derive(Debug, Clone, Deserialize)]
 struct Auth {
     url: String,
+    client_id: String,
+    client_secret: String,
+    audience: String,
 }
 #[derive(Debug, Clone, Deserialize)]
 struct Stripe {
@@ -75,6 +78,9 @@ impl From<Config> for GrpcConfig {
             db_path: value.db_path,
             crds_path: value.crds_path,
             auth_url: value.auth.url,
+            auth_client_id: value.auth.client_id,
+            auth_client_secret: value.auth.client_secret,
+            auth_audience: value.auth.audience,
             stripe_url: value.stripe.url,
             stripe_api_key: value.stripe.api_key,
             secret: value.secret,
