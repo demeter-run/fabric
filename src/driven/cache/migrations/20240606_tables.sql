@@ -4,6 +4,9 @@ CREATE TABLE IF NOT EXISTS project (
   name TEXT NOT NULL,
   owner TEXT NOT NULL,
   status TEXT NOT NULL,
+  billing_provider TEXT NOT NULL,
+  billing_provider_id TEXT NOT NULL,
+  billing_subscription_id TEXT,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
 );
@@ -35,4 +38,14 @@ CREATE TABLE IF NOT EXISTS project_secret (
   secret BLOB NOT NULL,
   created_at DATETIME NOT NULL,
   FOREIGN KEY(project_id) REFERENCES project(id)
+);
+
+CREATE TABLE IF NOT EXISTS usage (
+  id TEXT PRIMARY KEY NOT NULL,
+  event_id TEXT NOT NULL,
+  resource_id TEXT NOT NULL,
+  units INT NOT NULL,
+  tier TEXT NOT NULL,
+  created_at DATETIME NOT NULL,
+  FOREIGN KEY(resource_id) REFERENCES resource(id)
 );

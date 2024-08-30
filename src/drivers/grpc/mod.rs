@@ -15,13 +15,14 @@ use tracing::{error, info};
 use dmtri::demeter::ops::v1alpha::project_service_server::ProjectServiceServer;
 
 use crate::domain::error::Error;
-use crate::driven::auth::Auth0Provider;
+use crate::driven::auth0::Auth0DrivenImpl;
 use crate::driven::cache::project::SqliteProjectDrivenCache;
 use crate::driven::cache::resource::SqliteResourceDrivenCache;
 use crate::driven::cache::usage::SqliteUsageDrivenCache;
 use crate::driven::cache::SqliteCache;
 use crate::driven::kafka::KafkaProducer;
 use crate::driven::metadata::MetadataCrd;
+use crate::driven::stripe::StripeDrivenImpl;
 
 mod metadata;
 mod middlewares;
@@ -39,23 +40,29 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
 
     let metadata = Arc::new(MetadataCrd::new(&config.crds_path)?);
 
+    let auth0 = Arc::new(Auth0DrivenImpl::try_new(&config.auth_url).await?);
+    let stripe = Arc::new(StripeDrivenImpl::new(
+        &config.stripe_url,
+        &config.stripe_api_key,
+    ));
+
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(dmtri::demeter::ops::v1alpha::FILE_DESCRIPTOR_SET)
         .register_encoded_file_descriptor_set(protoc_wkt::google::protobuf::FILE_DESCRIPTOR_SET)
         .build()
         .unwrap();
 
-    let auth = AuthenticatorImpl::new(
-        Arc::new(Auth0Provider::try_new(&config.auth_url).await?),
-        project_cache.clone(),
-    );
+    let auth_interceptor = AuthenticatorImpl::new(auth0.clone(), project_cache.clone());
 
     let project_inner = project::ProjectServiceImpl::new(
         project_cache.clone(),
         event_bridge.clone(),
+        auth0.clone(),
+        stripe.clone(),
         config.secret.clone(),
     );
-    let project_service = ProjectServiceServer::with_interceptor(project_inner, auth.clone());
+    let project_service =
+        ProjectServiceServer::with_interceptor(project_inner, auth_interceptor.clone());
 
     let resource_inner = resource::ResourceServiceImpl::new(
         project_cache.clone(),
@@ -63,13 +70,14 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         event_bridge.clone(),
         metadata.clone(),
     );
-    let resource_service = ResourceServiceServer::with_interceptor(resource_inner, auth.clone());
+    let resource_service =
+        ResourceServiceServer::with_interceptor(resource_inner, auth_interceptor.clone());
 
     let metadata_inner = metadata::MetadataServiceImpl::new(metadata.clone());
     let metadata_service = MetadataServiceServer::new(metadata_inner);
 
     let usage_inner = usage::UsageServiceImpl::new(project_cache.clone(), usage_cache.clone());
-    let usage_service = UsageServiceServer::with_interceptor(usage_inner, auth.clone());
+    let usage_service = UsageServiceServer::with_interceptor(usage_inner, auth_interceptor.clone());
 
     let address = SocketAddr::from_str(&config.addr)?;
 
@@ -92,6 +100,8 @@ pub struct GrpcConfig {
     pub db_path: String,
     pub crds_path: PathBuf,
     pub auth_url: String,
+    pub stripe_url: String,
+    pub stripe_api_key: String,
     pub secret: String,
     pub topic: String,
     pub kafka: HashMap<String, String>,

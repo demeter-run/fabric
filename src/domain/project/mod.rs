@@ -5,11 +5,17 @@ use chrono::{DateTime, Utc};
 use super::{
     error::Error,
     event::{ProjectCreated, ProjectSecretCreated, ProjectUpdated},
+    Result,
 };
 
 pub mod cache;
 pub mod cluster;
 pub mod command;
+
+#[async_trait::async_trait]
+pub trait StripeDriven: Send + Sync {
+    async fn create_customer(&self, name: &str, email: &str) -> Result<String>;
+}
 
 #[derive(Debug, Clone)]
 pub struct Project {
@@ -18,6 +24,9 @@ pub struct Project {
     pub namespace: String,
     pub owner: String,
     pub status: ProjectStatus,
+    pub billing_provider: String,
+    pub billing_provider_id: String,
+    pub billing_subscription_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -31,6 +40,9 @@ impl TryFrom<ProjectCreated> for Project {
             name: value.name,
             owner: value.owner,
             status: value.status.parse()?,
+            billing_provider: value.billing_provider,
+            billing_provider_id: value.billing_provider_id,
+            billing_subscription_id: value.billing_subscription_id,
             created_at: value.created_at,
             updated_at: value.updated_at,
         })
@@ -137,6 +149,9 @@ mod tests {
                 namespace: "sonic-vegas".into(),
                 owner: "user id".into(),
                 status: ProjectStatus::Active,
+                billing_provider: "stripe".into(),
+                billing_provider_id: "stripe id".into(),
+                billing_subscription_id: None,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             }

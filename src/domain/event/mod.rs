@@ -22,6 +22,10 @@ pub struct ProjectCreated {
     pub namespace: String,
     pub owner: String,
     pub status: String,
+    pub billing_provider: String,
+    pub billing_provider_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub billing_subscription_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -30,7 +34,9 @@ into_event!(ProjectCreated);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectUpdated {
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
     pub updated_at: DateTime<Utc>,
 }
@@ -176,6 +182,9 @@ mod tests {
                 namespace: "sonic-vegas".into(),
                 owner: "user id".into(),
                 status: ProjectStatus::Active.to_string(),
+                billing_provider: "stripe".into(),
+                billing_provider_id: "stripe id".into(),
+                billing_subscription_id: None,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             }

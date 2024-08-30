@@ -13,3 +13,7 @@ topic="events"
 
 [auth]
 url="https://txpipe.us.auth0.com"
+
+[stripe]
+url = "https://api.stripe.com/v1"
+api_key = ""

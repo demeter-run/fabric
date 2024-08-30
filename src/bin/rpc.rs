@@ -37,11 +37,17 @@ struct Auth {
     url: String,
 }
 #[derive(Debug, Clone, Deserialize)]
+struct Stripe {
+    url: String,
+    api_key: String,
+}
+#[derive(Debug, Clone, Deserialize)]
 struct Config {
     addr: String,
     db_path: String,
     crds_path: PathBuf,
     auth: Auth,
+    stripe: Stripe,
     secret: String,
     topic: String,
     kafka_producer: HashMap<String, String>,
@@ -69,6 +75,8 @@ impl From<Config> for GrpcConfig {
             db_path: value.db_path,
             crds_path: value.crds_path,
             auth_url: value.auth.url,
+            stripe_url: value.stripe.url,
+            stripe_api_key: value.stripe.api_key,
             secret: value.secret,
             kafka: value.kafka_producer,
             topic: value.topic,

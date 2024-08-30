@@ -1,4 +1,3 @@
-use anyhow::Result as AnyhowResult;
 use reqwest::Client;
 use serde::{Deserialize, Deserializer};
 
@@ -11,11 +10,11 @@ pub struct PrometheusUsageDriven {
     url: String,
 }
 impl PrometheusUsageDriven {
-    pub async fn new(url: &str) -> AnyhowResult<Self> {
+    pub fn new(url: &str) -> Self {
         let client = Client::new();
         let url = url.to_string();
 
-        Ok(Self { client, url })
+        Self { client, url }
     }
 }
 

@@ -1,20 +1,17 @@
 use std::sync::Arc;
 
-use crate::{
-    domain::{
-        auth::Credential,
-        project::{self, cache::ProjectDrivenCache},
-    },
-    driven::auth::Auth0Provider,
+use crate::domain::{
+    auth::{Auth0Driven, Credential},
+    project::{self, cache::ProjectDrivenCache},
 };
 
 #[derive(Clone)]
 pub struct AuthenticatorImpl {
-    auth0: Arc<Auth0Provider>,
+    auth0: Arc<dyn Auth0Driven>,
     cache: Arc<dyn ProjectDrivenCache>,
 }
 impl AuthenticatorImpl {
-    pub fn new(auth0: Arc<Auth0Provider>, cache: Arc<dyn ProjectDrivenCache>) -> Self {
+    pub fn new(auth0: Arc<dyn Auth0Driven>, cache: Arc<dyn ProjectDrivenCache>) -> Self {
         Self { auth0, cache }
     }
 }
@@ -37,7 +34,7 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
             let token = token.replace("Bearer ", "");
             return match self.auth0.verify(&token) {
                 Ok(user_id) => {
-                    let credential = Credential::Auth0(user_id);
+                    let credential = Credential::Auth0(user_id, token);
                     request.extensions_mut().insert(credential);
                     Ok(request)
                 }

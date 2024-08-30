@@ -5,14 +5,16 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::domain::{
-    auth::Credential,
+    auth::{Auth0Driven, Credential},
     event::EventDrivenBridge,
-    project::{self, cache::ProjectDrivenCache, Project},
+    project::{self, cache::ProjectDrivenCache, Project, StripeDriven},
 };
 
 pub struct ProjectServiceImpl {
     pub cache: Arc<dyn ProjectDrivenCache>,
     pub event: Arc<dyn EventDrivenBridge>,
+    pub auth0: Arc<dyn Auth0Driven>,
+    pub stripe: Arc<dyn StripeDriven>,
     pub secret: String,
 }
 
@@ -20,11 +22,15 @@ impl ProjectServiceImpl {
     pub fn new(
         cache: Arc<dyn ProjectDrivenCache>,
         event: Arc<dyn EventDrivenBridge>,
+        auth0: Arc<dyn Auth0Driven>,
+        stripe: Arc<dyn StripeDriven>,
         secret: String,
     ) -> Self {
         Self {
             cache,
             event,
+            auth0,
+            stripe,
             secret,
         }
     }
@@ -66,7 +72,14 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let cmd = project::command::CreateCmd::new(credential, req.name);
 
-        project::command::create(self.cache.clone(), self.event.clone(), cmd.clone()).await?;
+        project::command::create(
+            self.cache.clone(),
+            self.event.clone(),
+            self.auth0.clone(),
+            self.stripe.clone(),
+            cmd.clone(),
+        )
+        .await?;
 
         let message = proto::CreateProjectResponse {
             id: cmd.id,
@@ -178,52 +191,6 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         Ok(tonic::Response::new(message))
     }
 
-    async fn create_project_payment(
-        &self,
-        request: tonic::Request<proto::CreateProjectPaymentRequest>,
-    ) -> Result<tonic::Response<proto::CreateProjectPaymentResponse>, tonic::Status> {
-        let _credential = match request.extensions().get::<Credential>() {
-            Some(credential) => credential.clone(),
-            None => return Err(Status::unauthenticated("invalid credential")),
-        };
-
-        let req = request.into_inner();
-
-        let message = proto::CreateProjectPaymentResponse {
-            id: Uuid::new_v4().to_string(),
-            project_id: req.project_id,
-            provider: "stripe".into(),
-            provider_id: "provider id".into(),
-            subscription_id: Some("subscription id".into()),
-        };
-
-        Ok(tonic::Response::new(message))
-    }
-    async fn fetch_project_payment(
-        &self,
-        request: tonic::Request<proto::FetchProjectPaymentRequest>,
-    ) -> Result<tonic::Response<proto::FetchProjectPaymentResponse>, tonic::Status> {
-        let _credential = match request.extensions().get::<Credential>() {
-            Some(credential) => credential.clone(),
-            None => return Err(Status::unauthenticated("invalid credential")),
-        };
-
-        let req = request.into_inner();
-
-        let message = proto::FetchProjectPaymentResponse {
-            records: vec![proto::ProjectPayment {
-                id: Uuid::new_v4().to_string(),
-                project_id: req.project_id,
-                provider: "stripe".into(),
-                provider_id: "provider id".into(),
-                subscription_id: Some("subscription id".into()),
-                ..Default::default()
-            }],
-        };
-
-        Ok(tonic::Response::new(message))
-    }
-
     async fn create_project_invite(
         &self,
         request: tonic::Request<proto::CreateProjectInviteRequest>,
@@ -271,6 +238,9 @@ impl From<Project> for proto::Project {
             name: value.name,
             status: value.status.to_string(),
             namespace: value.namespace,
+            billing_provider: value.billing_provider,
+            billing_provider_id: value.billing_provider_id,
+            billing_subscription_id: value.billing_subscription_id,
             created_at: value.created_at.to_rfc3339(),
             updated_at: value.updated_at.to_rfc3339(),
         }

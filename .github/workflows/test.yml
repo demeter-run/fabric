@@ -37,6 +37,7 @@ jobs:
 
       - name: Run Integration Tests
         env:
-          TEST_CREDENTIAL: ${{ secrets.TEST_CREDENTIAL }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
         run: ./test/expect
       
