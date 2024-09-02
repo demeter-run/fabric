@@ -111,6 +111,9 @@ data:
 
     [auth]
     url="https://dev-dflg0ssi.us.auth0.com"
+    client_id="f6y19wTU92tkVAasM5VubeEOsDSES56X"
+    client_secret="${CLIENT_SECRET}"
+    audience="https://dev-dflg0ssi.us.auth0.com/api/v2/"
 
     [stripe]
     url = "http://api.demeter-mock.svc.cluster.local/stripe"

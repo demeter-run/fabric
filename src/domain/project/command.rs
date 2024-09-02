@@ -11,7 +11,7 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::domain::{
-    auth::{Auth0Driven, Credential, Token, UserId},
+    auth::{Auth0Driven, Credential, UserId},
     error::Error,
     event::{
         EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated,
@@ -23,7 +23,7 @@ use crate::domain::{
 use super::{cache::ProjectDrivenCache, Project, ProjectSecret, StripeDriven};
 
 pub async fn fetch(cache: Arc<dyn ProjectDrivenCache>, cmd: FetchCmd) -> Result<Vec<Project>> {
-    let (user_id, _) = assert_credential(&cmd.credential)?;
+    let user_id = assert_credential(&cmd.credential)?;
 
     cache.find(&user_id, &cmd.page, &cmd.page_size).await
 }
@@ -35,13 +35,13 @@ pub async fn create(
     stripe: Arc<dyn StripeDriven>,
     cmd: CreateCmd,
 ) -> Result<()> {
-    let (user_id, token) = assert_credential(&cmd.credential)?;
+    let user_id = assert_credential(&cmd.credential)?;
 
     if cache.find_by_namespace(&cmd.namespace).await?.is_some() {
         return Err(Error::CommandMalformed("invalid project namespace".into()));
     }
 
-    let (name, email) = auth0.find_info(&token).await?;
+    let (name, email) = auth0.find_info(&user_id).await?;
     let billing_provider_id = stripe.create_customer(&name, &email).await?;
 
     let evt = ProjectCreated {
@@ -215,9 +215,9 @@ pub async fn verify_secret(
     Ok(secret)
 }
 
-fn assert_credential(credential: &Credential) -> Result<(UserId, Token)> {
+fn assert_credential(credential: &Credential) -> Result<UserId> {
     match credential {
-        Credential::Auth0(user_id, token) => Ok((user_id.into(), token.into())),
+        Credential::Auth0(user_id) => Ok(user_id.into()),
         Credential::ApiKey(_) => Err(Error::Unauthorized(
             "project rpc doesnt support secret".into(),
         )),
@@ -229,7 +229,7 @@ async fn assert_permission(
     project_id: &str,
 ) -> Result<()> {
     match credential {
-        Credential::Auth0(user_id, _) => {
+        Credential::Auth0(user_id) => {
             let result = cache.find_user_permission(user_id, project_id).await?;
             if result.is_none() {
                 return Err(Error::Unauthorized("user doesnt have permission".into()));
@@ -401,7 +401,7 @@ mod tests {
     impl Default for FetchCmd {
         fn default() -> Self {
             Self {
-                credential: Credential::Auth0("user id".into(), "token".into()),
+                credential: Credential::Auth0("user id".into()),
                 page: 1,
                 page_size: 12,
             }
@@ -410,7 +410,7 @@ mod tests {
     impl Default for CreateCmd {
         fn default() -> Self {
             Self {
-                credential: Credential::Auth0("user id".into(), "token".into()),
+                credential: Credential::Auth0("user id".into()),
                 id: Uuid::new_v4().to_string(),
                 name: "New Project".into(),
                 namespace: "sonic-vegas".into(),
@@ -420,7 +420,7 @@ mod tests {
     impl Default for UpdateCmd {
         fn default() -> Self {
             Self {
-                credential: Credential::Auth0("user id".into(), "token".into()),
+                credential: Credential::Auth0("user id".into()),
                 id: Uuid::new_v4().to_string(),
                 name: "Other name".into(),
             }
@@ -429,7 +429,7 @@ mod tests {
     impl Default for CreateSecretCmd {
         fn default() -> Self {
             Self {
-                credential: Credential::Auth0("user id".into(), "token".into()),
+                credential: Credential::Auth0("user id".into()),
                 id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
                 name: "Key 1".into(),
