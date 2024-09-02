@@ -62,6 +62,17 @@ pub struct ProjectSecretCreated {
 into_event!(ProjectSecretCreated);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectUserInviteCreated {
+    pub id: String,
+    pub project_id: String,
+    pub email: String,
+    pub code: String,
+    pub expire_in: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+}
+into_event!(ProjectUserInviteCreated);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceCreated {
     pub id: String,
     pub project_id: String,
@@ -119,6 +130,7 @@ pub enum Event {
     ProjectUpdated(ProjectUpdated),
     ProjectDeleted(ProjectDeleted),
     ProjectSecretCreated(ProjectSecretCreated),
+    ProjectUserInviteCreated(ProjectUserInviteCreated),
     ResourceCreated(ResourceCreated),
     ResourceUpdated(ResourceUpdated),
     ResourceDeleted(ResourceDeleted),
@@ -131,6 +143,7 @@ impl Event {
             Event::ProjectUpdated(_) => "ProjectUpdated".into(),
             Event::ProjectDeleted(_) => "ProjectDeleted".into(),
             Event::ProjectSecretCreated(_) => "ProjectSecretCreated".into(),
+            Event::ProjectUserInviteCreated(_) => "ProjectUserInviteCreated".into(),
             Event::ResourceCreated(_) => "ResourceCreated".into(),
             Event::ResourceUpdated(_) => "ResourceUpdated".into(),
             Event::ResourceDeleted(_) => "ResourceDeleted".into(),
@@ -145,6 +158,9 @@ impl Event {
             "ProjectSecretCreated" => {
                 Ok(Self::ProjectSecretCreated(serde_json::from_slice(payload)?))
             }
+            "ProjectUserInviteCreated" => Ok(Self::ProjectUserInviteCreated(
+                serde_json::from_slice(payload)?,
+            )),
             "ResourceCreated" => Ok(Self::ResourceCreated(serde_json::from_slice(payload)?)),
             "ResourceUpdated" => Ok(Self::ResourceUpdated(serde_json::from_slice(payload)?)),
             "ResourceDeleted" => Ok(Self::ResourceDeleted(serde_json::from_slice(payload)?)),

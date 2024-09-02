@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 
 use super::{
     error::Error,
-    event::{ProjectCreated, ProjectSecretCreated, ProjectUpdated},
+    event::{ProjectCreated, ProjectSecretCreated, ProjectUpdated, ProjectUserInviteCreated},
     Result,
 };
 
@@ -15,6 +15,11 @@ pub mod command;
 #[async_trait::async_trait]
 pub trait StripeDriven: Send + Sync {
     async fn create_customer(&self, name: &str, email: &str) -> Result<String>;
+}
+
+#[async_trait::async_trait]
+pub trait ProjectEmailDriven: Send + Sync {
+    async fn send_invite(&self, email: &str, code: &str, expire_in: &DateTime<Utc>) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -126,6 +131,28 @@ impl From<ProjectSecretCreated> for ProjectSecret {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ProjectUserInvite {
+    pub id: String,
+    pub project_id: String,
+    pub email: String,
+    pub code: String,
+    pub expire_in: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+}
+impl From<ProjectUserInviteCreated> for ProjectUserInvite {
+    fn from(value: ProjectUserInviteCreated) -> Self {
+        Self {
+            id: value.id,
+            project_id: value.project_id,
+            email: value.email,
+            code: value.code,
+            expire_in: value.expire_in,
+            created_at: value.created_at,
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub struct ProjectUser {
     pub user_id: String,
@@ -135,6 +162,8 @@ pub struct ProjectUser {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use uuid::Uuid;
 
     use crate::domain::tests::{PHC, SECRET};
@@ -174,6 +203,18 @@ mod tests {
             Self {
                 user_id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
+                created_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ProjectUserInvite {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                email: "p@txpipe.io".into(),
+                code: "123".into(),
+                expire_in: Utc::now() + Duration::from_secs(15 * 60),
                 created_at: Utc::now(),
             }
         }
