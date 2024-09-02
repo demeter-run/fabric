@@ -136,20 +136,24 @@ pub struct ProjectUserInvite {
     pub id: String,
     pub project_id: String,
     pub email: String,
+    pub role: ProjectUserRole,
     pub code: String,
     pub expire_in: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
 }
-impl From<ProjectUserInviteCreated> for ProjectUserInvite {
-    fn from(value: ProjectUserInviteCreated) -> Self {
-        Self {
+impl TryFrom<ProjectUserInviteCreated> for ProjectUserInvite {
+    type Error = Error;
+
+    fn try_from(value: ProjectUserInviteCreated) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
             id: value.id,
             project_id: value.project_id,
             email: value.email,
+            role: value.role.parse()?,
             code: value.code,
             expire_in: value.expire_in,
             created_at: value.created_at,
-        }
+        })
     }
 }
 
@@ -158,6 +162,34 @@ pub struct ProjectUser {
     pub user_id: String,
     pub project_id: String,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ProjectUserRole {
+    Owner,
+    Member,
+}
+impl FromStr for ProjectUserRole {
+    type Err = Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "owner" => Ok(ProjectUserRole::Owner),
+            "member" => Ok(ProjectUserRole::Member),
+            _ => Err(Error::Unexpected(format!(
+                "project user role not supported: {}",
+                s
+            ))),
+        }
+    }
+}
+impl Display for ProjectUserRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProjectUserRole::Owner => write!(f, "owner"),
+            ProjectUserRole::Member => write!(f, "member"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -213,6 +245,7 @@ mod tests {
                 id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
                 email: "p@txpipe.io".into(),
+                role: ProjectUserRole::Owner,
                 code: "123".into(),
                 expire_in: Utc::now() + Duration::from_secs(15 * 60),
                 created_at: Utc::now(),

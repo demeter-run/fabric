@@ -6,7 +6,7 @@ use crate::domain::{
     error::Error,
     project::{
         cache::ProjectDrivenCache, Project, ProjectSecret, ProjectStatus, ProjectUpdate,
-        ProjectUser,
+        ProjectUser, ProjectUserInvite,
     },
     resource::ResourceStatus,
     Result,
@@ -322,6 +322,10 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         .await?;
 
         Ok(project_user)
+    }
+
+    async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>> {
+        todo!()
     }
 }
 

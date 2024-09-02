@@ -56,6 +56,9 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                     Event::ProjectUserInviteCreated(_evt) => {
                         todo!()
                     }
+                    Event::ProjectUserInviteAccepted(_evt) => {
+                        todo!()
+                    }
                     Event::ResourceCreated(evt) => {
                         resource::cache::create(resource_cache.clone(), evt.clone()).await
                     }

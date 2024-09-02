@@ -66,11 +66,22 @@ pub struct ProjectUserInviteCreated {
     pub id: String,
     pub project_id: String,
     pub email: String,
+    pub role: String,
     pub code: String,
     pub expire_in: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
 }
 into_event!(ProjectUserInviteCreated);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectUserInviteAccepted {
+    pub id: String,
+    pub project_id: String,
+    pub user_id: String,
+    pub role: String,
+    pub created_at: DateTime<Utc>,
+}
+into_event!(ProjectUserInviteAccepted);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceCreated {
@@ -124,13 +135,13 @@ into_event!(UsageCreated);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-#[allow(clippy::enum_variant_names)]
 pub enum Event {
     ProjectCreated(ProjectCreated),
     ProjectUpdated(ProjectUpdated),
     ProjectDeleted(ProjectDeleted),
     ProjectSecretCreated(ProjectSecretCreated),
     ProjectUserInviteCreated(ProjectUserInviteCreated),
+    ProjectUserInviteAccepted(ProjectUserInviteAccepted),
     ResourceCreated(ResourceCreated),
     ResourceUpdated(ResourceUpdated),
     ResourceDeleted(ResourceDeleted),
@@ -144,6 +155,7 @@ impl Event {
             Event::ProjectDeleted(_) => "ProjectDeleted".into(),
             Event::ProjectSecretCreated(_) => "ProjectSecretCreated".into(),
             Event::ProjectUserInviteCreated(_) => "ProjectUserInviteCreated".into(),
+            Event::ProjectUserInviteAccepted(_) => "ProjectUserInviteAccepted".into(),
             Event::ResourceCreated(_) => "ResourceCreated".into(),
             Event::ResourceUpdated(_) => "ResourceUpdated".into(),
             Event::ResourceDeleted(_) => "ResourceDeleted".into(),
@@ -159,6 +171,9 @@ impl Event {
                 Ok(Self::ProjectSecretCreated(serde_json::from_slice(payload)?))
             }
             "ProjectUserInviteCreated" => Ok(Self::ProjectUserInviteCreated(
+                serde_json::from_slice(payload)?,
+            )),
+            "ProjectUserInviteAccepted" => Ok(Self::ProjectUserInviteAccepted(
                 serde_json::from_slice(payload)?,
             )),
             "ResourceCreated" => Ok(Self::ResourceCreated(serde_json::from_slice(payload)?)),

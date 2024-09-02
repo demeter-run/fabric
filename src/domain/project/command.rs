@@ -16,13 +16,16 @@ use crate::domain::{
     error::Error,
     event::{
         EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated,
-        ProjectUserInviteCreated,
+        ProjectUserInviteAccepted, ProjectUserInviteCreated,
     },
     project::ProjectStatus,
     utils, Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
-use super::{cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret, StripeDriven};
+use super::{
+    cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret, ProjectUserRole,
+    StripeDriven,
+};
 
 pub async fn fetch(cache: Arc<dyn ProjectDrivenCache>, cmd: FetchCmd) -> Result<Vec<Project>> {
     let user_id = assert_credential(&cmd.credential)?;
@@ -244,13 +247,47 @@ pub async fn create_user_invite(
         id: cmd.id,
         project_id: project.id,
         email: cmd.email,
+        role: cmd.role.to_string(),
         code,
-        expire_in: expire_in.clone(),
+        expire_in,
         created_at: Utc::now(),
     };
 
     event.dispatch(evt.into()).await?;
     info!(?expire_in, "new project invite created");
+
+    Ok(())
+}
+
+pub async fn accept_user_invite(
+    cache: Arc<dyn ProjectDrivenCache>,
+    auth0: Arc<dyn Auth0Driven>,
+    event: Arc<dyn EventDrivenBridge>,
+    cmd: AcceptUserInviteCmd,
+) -> Result<()> {
+    let user_id = assert_credential(&cmd.credential)?;
+
+    let Some(user_invite) = cache.find_user_invite_by_code(&cmd.code).await? else {
+        return Err(Error::CommandMalformed("invalid invite code".into()));
+    };
+
+    let (_, email) = auth0.find_info(&user_id).await?;
+    if user_invite.email != email {
+        return Err(Error::CommandMalformed(
+            "user email doesnt match with invite".into(),
+        ));
+    }
+
+    let evt = ProjectUserInviteAccepted {
+        id: cmd.id,
+        project_id: user_invite.project_id,
+        user_id,
+        role: user_invite.role.to_string(),
+        created_at: Utc::now(),
+    };
+
+    event.dispatch(evt.into()).await?;
+    info!("new project invite accepted");
 
     Ok(())
 }
@@ -387,17 +424,43 @@ pub struct CreateUserInviteCmd {
     pub id: String,
     pub project_id: String,
     pub email: String,
+    pub role: ProjectUserRole,
 }
 impl CreateUserInviteCmd {
-    pub fn new(credential: Credential, ttl: Duration, project_id: String, email: String) -> Self {
+    pub fn try_new(
+        credential: Credential,
+        ttl: Duration,
+        project_id: String,
+        email: String,
+        role: ProjectUserRole,
+    ) -> Result<Self> {
         let id = Uuid::new_v4().to_string();
 
-        Self {
+        Ok(Self {
             credential,
             ttl,
             id,
             project_id,
             email,
+            role,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AcceptUserInviteCmd {
+    pub credential: Credential,
+    pub id: String,
+    pub code: String,
+}
+impl AcceptUserInviteCmd {
+    pub fn new(credential: Credential, code: String) -> Self {
+        let id = Uuid::new_v4().to_string();
+
+        Self {
+            credential,
+            id,
+            code,
         }
     }
 }
@@ -411,7 +474,7 @@ mod tests {
     use super::*;
     use crate::domain::{
         event::Event,
-        project::{ProjectUpdate, ProjectUser},
+        project::{ProjectUpdate, ProjectUser, ProjectUserInvite},
         tests::{INVALID_HRP_KEY, INVALID_KEY, KEY, SECRET},
     };
 
@@ -429,6 +492,7 @@ mod tests {
             async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
             async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
             async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
+            async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
         }
     }
 
@@ -524,6 +588,16 @@ mod tests {
                 id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
                 email: "p@txpipe.io".into(),
+                role: ProjectUserRole::Owner,
+            }
+        }
+    }
+    impl Default for AcceptUserInviteCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                id: Uuid::new_v4().to_string(),
+                code: "123".into(),
             }
         }
     }
@@ -860,6 +934,84 @@ mod tests {
 
         let result =
             create_user_invite(Arc::new(cache), Arc::new(email), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn it_should_accept_project_user_invite() {
+        let invite = ProjectUserInvite::default();
+        let invite_email = invite.email.clone();
+
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_invite_by_code()
+            .return_once(|_| Ok(Some(invite)));
+
+        let mut auth0 = MockFakeAuth0Driven::new();
+        auth0
+            .expect_find_info()
+            .return_once(|_| Ok(("user name".into(), invite_email)));
+
+        let mut event = MockFakeEventDrivenBridge::new();
+        event.expect_dispatch().return_once(|_| Ok(()));
+
+        let cmd = AcceptUserInviteCmd::default();
+
+        let result =
+            accept_user_invite(Arc::new(cache), Arc::new(auth0), Arc::new(event), cmd).await;
+
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_fail_accept_project_user_invite_when_invalid_code() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_invite_by_code()
+            .return_once(|_| Ok(None));
+
+        let auth0 = MockFakeAuth0Driven::new();
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = AcceptUserInviteCmd::default();
+
+        let result =
+            accept_user_invite(Arc::new(cache), Arc::new(auth0), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_accept_project_user_invite_when_invalid_credential() {
+        let cache = MockFakeProjectDrivenCache::new();
+        let auth0 = MockFakeAuth0Driven::new();
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = AcceptUserInviteCmd {
+            credential: Credential::ApiKey("xxxx".into()),
+            ..Default::default()
+        };
+
+        let result =
+            accept_user_invite(Arc::new(cache), Arc::new(auth0), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_accept_project_user_invite_when_email_doesnt_match() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_find_user_invite_by_code()
+            .return_once(|_| Ok(Some(ProjectUserInvite::default())));
+
+        let mut auth0 = MockFakeAuth0Driven::new();
+        auth0
+            .expect_find_info()
+            .return_once(|_| Ok(("user name".into(), "user email".into())));
+
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = AcceptUserInviteCmd::default();
+
+        let result =
+            accept_user_invite(Arc::new(cache), Arc::new(auth0), Arc::new(event), cmd).await;
+
         assert!(result.is_err());
     }
 }

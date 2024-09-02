@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::domain::event::{ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated};
 use crate::domain::Result;
 
-use super::{Project, ProjectSecret, ProjectUpdate, ProjectUser};
+use super::{Project, ProjectSecret, ProjectUpdate, ProjectUser, ProjectUserInvite};
 
 #[async_trait::async_trait]
 pub trait ProjectDrivenCache: Send + Sync {
@@ -21,6 +21,7 @@ pub trait ProjectDrivenCache: Send + Sync {
         user_id: &str,
         project_id: &str,
     ) -> Result<Option<ProjectUser>>;
+    async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
 }
 
 pub async fn create(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectCreated) -> Result<()> {
@@ -62,6 +63,7 @@ mod tests {
             async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
             async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
             async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
+            async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
         }
     }
 
