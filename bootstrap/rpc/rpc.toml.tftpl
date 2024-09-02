@@ -6,6 +6,13 @@ crds_path = "/fabric/crds"
 
 [auth]
 url = "https://txpipe.us.auth0.com"
+client_id="${auth0_client_id}"
+client_secret="${auth0_client_secret}"
+audience="${auth0_audience}"
+
+[stripe]
+url = "https://api.stripe.com/v1"
+api_key = "${stripe_api_key}"
 
 [kafka_producer]
 "bootstrap.servers" = "${broker_urls}"
