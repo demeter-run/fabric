@@ -4,7 +4,10 @@ use chrono::{DateTime, Utc};
 
 use super::{
     error::Error,
-    event::{ProjectCreated, ProjectSecretCreated, ProjectUpdated, ProjectUserInviteCreated},
+    event::{
+        ProjectCreated, ProjectSecretCreated, ProjectUpdated, ProjectUserInviteAccepted,
+        ProjectUserInviteCreated,
+    },
     Result,
 };
 
@@ -136,10 +139,12 @@ pub struct ProjectUserInvite {
     pub id: String,
     pub project_id: String,
     pub email: String,
-    pub role: ProjectUserRole,
     pub code: String,
+    pub role: ProjectUserRole,
+    pub status: ProjectUserInviteStatus,
     pub expire_in: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 impl TryFrom<ProjectUserInviteCreated> for ProjectUserInvite {
     type Error = Error;
@@ -151,17 +156,59 @@ impl TryFrom<ProjectUserInviteCreated> for ProjectUserInvite {
             email: value.email,
             role: value.role.parse()?,
             code: value.code,
+            status: ProjectUserInviteStatus::Sent,
             expire_in: value.expire_in,
             created_at: value.created_at,
+            updated_at: value.created_at,
         })
     }
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProjectUserInviteStatus {
+    Sent,
+    Accepted,
+}
+impl FromStr for ProjectUserInviteStatus {
+    type Err = Error;
 
-#[allow(dead_code)]
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "sent" => Ok(ProjectUserInviteStatus::Sent),
+            "accepted" => Ok(ProjectUserInviteStatus::Accepted),
+            _ => Err(Error::Unexpected(format!(
+                "project user invite status not supported: {}",
+                s
+            ))),
+        }
+    }
+}
+impl Display for ProjectUserInviteStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProjectUserInviteStatus::Sent => write!(f, "sent"),
+            ProjectUserInviteStatus::Accepted => write!(f, "accepted"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ProjectUser {
     pub user_id: String,
     pub project_id: String,
+    pub role: ProjectUserRole,
     pub created_at: DateTime<Utc>,
+}
+impl TryFrom<ProjectUserInviteAccepted> for ProjectUser {
+    type Error = Error;
+
+    fn try_from(value: ProjectUserInviteAccepted) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
+            project_id: value.project_id,
+            user_id: value.user_id,
+            role: value.role.parse()?,
+            created_at: value.created_at,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -235,6 +282,7 @@ mod tests {
             Self {
                 user_id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
+                role: ProjectUserRole::Owner,
                 created_at: Utc::now(),
             }
         }
@@ -247,8 +295,10 @@ mod tests {
                 email: "p@txpipe.io".into(),
                 role: ProjectUserRole::Owner,
                 code: "123".into(),
+                status: ProjectUserInviteStatus::Sent,
                 expire_in: Utc::now() + Duration::from_secs(15 * 60),
                 created_at: Utc::now(),
+                updated_at: Utc::now(),
             }
         }
     }

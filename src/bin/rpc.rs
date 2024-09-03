@@ -1,9 +1,9 @@
-use std::{collections::HashMap, env, path::PathBuf};
+use std::{collections::HashMap, env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use dotenv::dotenv;
 use fabric::drivers::{cache::CacheConfig, grpc::GrpcConfig};
-use serde::Deserialize;
+use serde::{de::Visitor, Deserialize, Deserializer};
 use tokio::try_join;
 use tracing::Level;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -55,6 +55,9 @@ struct Config {
     topic: String,
     kafka_producer: HashMap<String, String>,
     kafka_consumer: HashMap<String, String>,
+    #[serde(deserialize_with = "deserialize_duration")]
+    #[serde(rename(deserialize = "invite_ttl_min"))]
+    invite_ttl: Duration,
 }
 impl Config {
     pub fn new() -> Result<Self> {
@@ -86,6 +89,7 @@ impl From<Config> for GrpcConfig {
             secret: value.secret,
             kafka: value.kafka_producer,
             topic: value.topic,
+            invite_ttl: value.invite_ttl,
         }
     }
 }
@@ -97,5 +101,28 @@ impl From<Config> for CacheConfig {
             db_path: value.db_path,
             topic: value.topic,
         }
+    }
+}
+
+fn deserialize_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserializer.deserialize_map(DurationVisitor)
+}
+
+struct DurationVisitor;
+impl<'de> Visitor<'de> for DurationVisitor {
+    type Value = Duration;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("This Visitor expects to receive i64 minutes")
+    }
+
+    fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(Duration::from_secs(v as u64))
     }
 }

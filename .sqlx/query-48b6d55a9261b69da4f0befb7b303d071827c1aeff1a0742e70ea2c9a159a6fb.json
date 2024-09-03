@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                UPDATE project_user_invite \n                SET status = $1, updated_at = $2\n                WHERE id = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "48b6d55a9261b69da4f0befb7b303d071827c1aeff1a0742e70ea2c9a159a6fb"
+}

@@ -53,11 +53,15 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                     Event::ProjectSecretCreated(evt) => {
                         project::cache::create_secret(project_cache.clone(), evt.clone()).await
                     }
-                    Event::ProjectUserInviteCreated(_evt) => {
-                        todo!()
+                    Event::ProjectUserInviteCreated(evt) => {
+                        project::cache::create_user_invite(project_cache.clone(), evt.clone()).await
                     }
-                    Event::ProjectUserInviteAccepted(_evt) => {
-                        todo!()
+                    Event::ProjectUserInviteAccepted(evt) => {
+                        project::cache::create_user_invite_acceptance(
+                            project_cache.clone(),
+                            evt.clone(),
+                        )
+                        .await
                     }
                     Event::ResourceCreated(evt) => {
                         resource::cache::create(resource_cache.clone(), evt.clone()).await

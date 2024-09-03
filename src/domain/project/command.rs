@@ -18,7 +18,7 @@ use crate::domain::{
         EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated,
         ProjectUserInviteAccepted, ProjectUserInviteCreated,
     },
-    project::ProjectStatus,
+    project::{ProjectStatus, ProjectUserInviteStatus},
     utils, Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
@@ -271,6 +271,12 @@ pub async fn accept_user_invite(
         return Err(Error::CommandMalformed("invalid invite code".into()));
     };
 
+    if user_invite.status != ProjectUserInviteStatus::Sent {
+        return Err(Error::CommandMalformed(
+            "invite is not available anymore".into(),
+        ));
+    }
+
     let (_, email) = auth0.find_info(&user_id).await?;
     if user_invite.email != email {
         return Err(Error::CommandMalformed(
@@ -493,6 +499,8 @@ mod tests {
             async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
             async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
             async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
+            async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()>;
+            async fn create_user_acceptance(&self, invite_id: &str, user: &ProjectUser) -> Result<()>;
         }
     }
 
@@ -1005,6 +1013,26 @@ mod tests {
             .expect_find_info()
             .return_once(|_| Ok(("user name".into(), "user email".into())));
 
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = AcceptUserInviteCmd::default();
+
+        let result =
+            accept_user_invite(Arc::new(cache), Arc::new(auth0), Arc::new(event), cmd).await;
+
+        assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_accept_project_user_invite_when_invite_has_already_been_accepted() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache.expect_find_user_invite_by_code().return_once(|_| {
+            Ok(Some(ProjectUserInvite {
+                status: ProjectUserInviteStatus::Accepted,
+                ..Default::default()
+            }))
+        });
+
+        let auth0 = MockFakeAuth0Driven::new();
         let event = MockFakeEventDrivenBridge::new();
 
         let cmd = AcceptUserInviteCmd::default();

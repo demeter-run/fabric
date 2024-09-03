@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
 use std::{path::Path, sync::Arc};
 use tonic::transport::Server;
 use tonic::Status;
@@ -22,6 +23,7 @@ use crate::driven::cache::usage::SqliteUsageDrivenCache;
 use crate::driven::cache::SqliteCache;
 use crate::driven::kafka::KafkaProducer;
 use crate::driven::metadata::MetadataCrd;
+use crate::driven::ses::SESDrivenImpl;
 use crate::driven::stripe::StripeDrivenImpl;
 
 mod metadata;
@@ -53,6 +55,7 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         &config.stripe_url,
         &config.stripe_api_key,
     ));
+    let email = Arc::new(SESDrivenImpl::new());
 
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(dmtri::demeter::ops::v1alpha::FILE_DESCRIPTOR_SET)
@@ -67,7 +70,9 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         event_bridge.clone(),
         auth0.clone(),
         stripe.clone(),
+        email.clone(),
         config.secret.clone(),
+        config.invite_ttl,
     );
     let project_service =
         ProjectServiceServer::with_interceptor(project_inner, auth_interceptor.clone());
@@ -116,6 +121,7 @@ pub struct GrpcConfig {
     pub secret: String,
     pub topic: String,
     pub kafka: HashMap<String, String>,
+    pub invite_ttl: Duration,
 }
 
 impl From<Error> for Status {

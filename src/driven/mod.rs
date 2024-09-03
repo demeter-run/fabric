@@ -4,4 +4,5 @@ pub mod k8s;
 pub mod kafka;
 pub mod metadata;
 pub mod prometheus;
+pub mod ses;
 pub mod stripe;

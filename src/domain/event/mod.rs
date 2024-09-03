@@ -195,10 +195,12 @@ pub trait EventDrivenBridge: Send + Sync {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use uuid::Uuid;
 
     use crate::domain::{
-        project::ProjectStatus,
+        project::{ProjectStatus, ProjectUserRole},
         resource::ResourceStatus,
         tests::{PHC, SECRET},
     };
@@ -229,6 +231,30 @@ mod tests {
                 name: "Key 1".into(),
                 phc: PHC.into(),
                 secret: SECRET.as_bytes().to_vec(),
+                created_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ProjectUserInviteCreated {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                email: "p@txpipe.io".into(),
+                code: "123".into(),
+                role: ProjectUserRole::Owner.to_string(),
+                expire_in: Utc::now() + Duration::from_secs(15 * 60),
+                created_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ProjectUserInviteAccepted {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                user_id: "user id".into(),
+                role: ProjectUserRole::Owner.to_string(),
                 created_at: Utc::now(),
             }
         }

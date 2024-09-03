@@ -320,6 +320,8 @@ mod tests {
             async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
             async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
             async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
+            async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()>;
+            async fn create_user_acceptance(&self, invite_id: &str, user: &ProjectUser) -> Result<()>;
         }
     }
 
