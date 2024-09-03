@@ -6,7 +6,6 @@ use chrono::Utc;
 use rand::{
     distributions::{Alphanumeric, DistString},
     rngs::OsRng,
-    Rng,
 };
 use tracing::{error, info};
 use uuid::Uuid;
@@ -233,15 +232,13 @@ pub async fn create_user_invite(
         return Err(Error::CommandMalformed("invalid project id".into()));
     };
 
-    let code = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(32)
-        .map(char::from)
-        .collect::<String>();
+    let code = Uuid::new_v4().to_string();
 
     let expire_in = Utc::now() + cmd.ttl;
 
-    email.send_invite(&cmd.email, &code, &expire_in).await?;
+    email
+        .send_invite(&project.name, &cmd.email, &code, &expire_in)
+        .await?;
 
     let evt = ProjectUserInviteCreated {
         id: cmd.id,
@@ -269,6 +266,19 @@ pub async fn accept_user_invite(
 
     let Some(user_invite) = cache.find_user_invite_by_code(&cmd.code).await? else {
         return Err(Error::CommandMalformed("invalid invite code".into()));
+    };
+    if Utc::now() > user_invite.expire_in {
+        return Err(Error::CommandMalformed("invite code expired".into()));
+    }
+
+    if cache
+        .find_user_permission(&user_id, &user_invite.project_id)
+        .await?
+        .is_some()
+    {
+        return Err(Error::CommandMalformed(
+            "user already is in the project".into(),
+        ));
     };
 
     if user_invite.status != ProjectUserInviteStatus::Sent {
@@ -537,7 +547,7 @@ mod tests {
 
         #[async_trait::async_trait]
         impl ProjectEmailDriven for FakeProjectEmailDriven {
-            async fn send_invite(&self, email: &str, code: &str, expire_in: &DateTime<Utc>) -> Result<()>;
+            async fn send_invite(&self, project_name: &str, email: &str, code: &str, expire_in: &DateTime<Utc>) -> Result<()>;
         }
     }
 
@@ -884,7 +894,7 @@ mod tests {
             .return_once(|_| Ok(Some(Project::default())));
 
         let mut email = MockFakeProjectEmailDriven::new();
-        email.expect_send_invite().return_once(|_, _, _| Ok(()));
+        email.expect_send_invite().return_once(|_, _, _, _| Ok(()));
 
         let mut event = MockFakeEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
@@ -954,6 +964,9 @@ mod tests {
         cache
             .expect_find_user_invite_by_code()
             .return_once(|_| Ok(Some(invite)));
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(None));
 
         let mut auth0 = MockFakeAuth0Driven::new();
         auth0
@@ -1007,6 +1020,9 @@ mod tests {
         cache
             .expect_find_user_invite_by_code()
             .return_once(|_| Ok(Some(ProjectUserInvite::default())));
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(None));
 
         let mut auth0 = MockFakeAuth0Driven::new();
         auth0
@@ -1028,6 +1044,52 @@ mod tests {
         cache.expect_find_user_invite_by_code().return_once(|_| {
             Ok(Some(ProjectUserInvite {
                 status: ProjectUserInviteStatus::Accepted,
+                ..Default::default()
+            }))
+        });
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(None));
+
+        let auth0 = MockFakeAuth0Driven::new();
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = AcceptUserInviteCmd::default();
+
+        let result =
+            accept_user_invite(Arc::new(cache), Arc::new(auth0), Arc::new(event), cmd).await;
+
+        assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_accept_project_user_invite_when_user_already_is_in_the_project() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache.expect_find_user_invite_by_code().return_once(|_| {
+            Ok(Some(ProjectUserInvite {
+                status: ProjectUserInviteStatus::Accepted,
+                ..Default::default()
+            }))
+        });
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+
+        let auth0 = MockFakeAuth0Driven::new();
+        let event = MockFakeEventDrivenBridge::new();
+
+        let cmd = AcceptUserInviteCmd::default();
+
+        let result =
+            accept_user_invite(Arc::new(cache), Arc::new(auth0), Arc::new(event), cmd).await;
+
+        assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_accept_project_user_invite_when_invite_code_expired() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache.expect_find_user_invite_by_code().return_once(|_| {
+            Ok(Some(ProjectUserInvite {
+                expire_in: Utc::now() - Duration::from_secs(10),
                 ..Default::default()
             }))
         });

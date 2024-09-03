@@ -36,6 +36,8 @@ chrono = "0.4.38"
 thiserror = "1.0.63"
 base64 = "0.22.1"
 json-patch = "2.0.0"
+aws-config = { version = "1.5.5", features = ["behavior-version-latest"] }
+aws-sdk-sesv2 = { version = "1.43.0", features = ["behavior-version-latest"] }
 
 [dev-dependencies]
 mockall = "0.12.1"

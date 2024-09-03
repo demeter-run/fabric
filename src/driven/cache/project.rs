@@ -339,8 +339,9 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     pui.code,
                     pui.status,
                     pui.expire_in,
-                    pui.created_at
-                FROM project_user_invite pui;
+                    pui.created_at,
+                    pui.updated_at
+                FROM project_user_invite pui
                 WHERE pui.code = $1;
             "#,
         )
@@ -651,6 +652,42 @@ mod tests {
         let result = cache
             .find_user_permission(&project.owner, &project.id)
             .await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+    #[tokio::test]
+    async fn it_should_find_user_invite_by_code() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let invite = ProjectUserInvite {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_user_invite(&invite).await.unwrap();
+
+        let result = cache.find_user_invite_by_code(&invite.code).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_user_invite_by_code() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let invite = ProjectUserInvite {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_user_invite(&invite).await.unwrap();
+
+        let result = cache.find_user_invite_by_code("invalid").await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());

@@ -22,7 +22,13 @@ pub trait StripeDriven: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait ProjectEmailDriven: Send + Sync {
-    async fn send_invite(&self, email: &str, code: &str, expire_in: &DateTime<Utc>) -> Result<()>;
+    async fn send_invite(
+        &self,
+        project_name: &str,
+        email: &str,
+        code: &str,
+        expire_in: &DateTime<Utc>,
+    ) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]

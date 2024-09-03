@@ -33,31 +33,39 @@ async fn main() -> Result<()> {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct Auth {
+struct AuthConfig {
     url: String,
     client_id: String,
     client_secret: String,
     audience: String,
 }
 #[derive(Debug, Clone, Deserialize)]
-struct Stripe {
+struct StripeConfig {
     url: String,
     api_key: String,
+}
+#[derive(Debug, Clone, Deserialize)]
+struct EmailConfig {
+    #[serde(deserialize_with = "deserialize_duration")]
+    #[serde(rename(deserialize = "invite_ttl_min"))]
+    invite_ttl: Duration,
+    ses_access_key_id: String,
+    ses_secret_access_key: String,
+    ses_region: String,
+    ses_verified_email: String,
 }
 #[derive(Debug, Clone, Deserialize)]
 struct Config {
     addr: String,
     db_path: String,
     crds_path: PathBuf,
-    auth: Auth,
-    stripe: Stripe,
+    auth: AuthConfig,
+    email: EmailConfig,
+    stripe: StripeConfig,
     secret: String,
     topic: String,
     kafka_producer: HashMap<String, String>,
     kafka_consumer: HashMap<String, String>,
-    #[serde(deserialize_with = "deserialize_duration")]
-    #[serde(rename(deserialize = "invite_ttl_min"))]
-    invite_ttl: Duration,
 }
 impl Config {
     pub fn new() -> Result<Self> {
@@ -89,7 +97,11 @@ impl From<Config> for GrpcConfig {
             secret: value.secret,
             kafka: value.kafka_producer,
             topic: value.topic,
-            invite_ttl: value.invite_ttl,
+            invite_ttl: value.email.invite_ttl,
+            ses_access_key_id: value.email.ses_access_key_id,
+            ses_secret_access_key: value.email.ses_secret_access_key,
+            ses_region: value.email.ses_region,
+            ses_verified_email: value.email.ses_verified_email,
         }
     }
 }
@@ -123,6 +135,6 @@ impl<'de> Visitor<'de> for DurationVisitor {
     where
         E: serde::de::Error,
     {
-        Ok(Duration::from_secs(v as u64))
+        Ok(Duration::from_secs(60 * (v as u64)))
     }
 }

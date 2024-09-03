@@ -55,7 +55,12 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         &config.stripe_url,
         &config.stripe_api_key,
     ));
-    let email = Arc::new(SESDrivenImpl::new());
+    let email = Arc::new(SESDrivenImpl::new(
+        &config.ses_access_key_id,
+        &config.ses_secret_access_key,
+        &config.ses_region,
+        &config.ses_verified_email,
+    ));
 
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(dmtri::demeter::ops::v1alpha::FILE_DESCRIPTOR_SET)
@@ -122,6 +127,10 @@ pub struct GrpcConfig {
     pub topic: String,
     pub kafka: HashMap<String, String>,
     pub invite_ttl: Duration,
+    pub ses_access_key_id: String,
+    pub ses_secret_access_key: String,
+    pub ses_region: String,
+    pub ses_verified_email: String,
 }
 
 impl From<Error> for Status {
