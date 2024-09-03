@@ -21,3 +21,11 @@ audience=""
 [stripe]
 url = "https://api.stripe.com/v1"
 api_key = ""
+
+[email]
+invite_ttl_min = 15
+ses_access_key_id = "xxx"
+ses_secret_access_key = "xxx"
+ses_region = "us-west-2"
+ses_verified_email = "no-reply@demeter.run"
+
