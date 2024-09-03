@@ -101,6 +101,7 @@ data:
     crds_path="/fabric/crds"
     secret="fabric@txpipe"
     topic = "events"
+    invite_ttl_min = "15"
 
     [kafka_producer]
     "bootstrap.servers" = "redpanda.demeter-kafka.svc.cluster.local:19092"
