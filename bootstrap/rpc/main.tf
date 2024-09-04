@@ -29,6 +29,22 @@ variable "kafka_password" {
   type = string
 }
 
+variable "auth0_client_id" {
+  type = string
+}
+
+variable "auth0_client_secret" {
+  type = string
+}
+
+variable "auth0_audience" {
+  type = string
+}
+
+variable "stripe_api_key" {
+  type = string
+}
+
 variable "kafka_topic" {
   type    = string
   default = "events"
