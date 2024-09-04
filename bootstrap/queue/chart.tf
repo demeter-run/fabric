@@ -13,6 +13,7 @@ resource "helm_release" "redpanda" {
       rpc_username   = var.rpc_username
       rpc_password   = var.rpc_password
       daemon_users   = var.daemon_users
+      tolerations    = var.tolerations
     }
   )]
 
