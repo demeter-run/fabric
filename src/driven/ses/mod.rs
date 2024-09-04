@@ -50,12 +50,12 @@ impl ProjectEmailDriven for SESDrivenImpl {
         project_name: &str,
         email: &str,
         code: &str,
-        expire_in: &DateTime<Utc>,
+        expires_in: &DateTime<Utc>,
     ) -> Result<()> {
         let destination = Destination::builder().to_addresses(email).build();
         let template = Template::builder()
             .template_name("invite")
-            .template_data(json!({ "project_name": project_name, "code": code, "expire_in": expire_in.to_rfc2822() }).to_string())
+            .template_data(json!({ "project_name": project_name, "code": code, "expires_in": expires_in.to_rfc2822() }).to_string())
             .build();
         let email_content = EmailContent::builder().template(template).build();
 

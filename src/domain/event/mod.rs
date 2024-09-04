@@ -68,7 +68,7 @@ pub struct ProjectUserInviteCreated {
     pub email: String,
     pub role: String,
     pub code: String,
-    pub expire_in: DateTime<Utc>,
+    pub expires_in: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
 }
 into_event!(ProjectUserInviteCreated);
@@ -243,7 +243,7 @@ mod tests {
                 email: "p@txpipe.io".into(),
                 code: "123".into(),
                 role: ProjectUserRole::Owner.to_string(),
-                expire_in: Utc::now() + Duration::from_secs(15 * 60),
+                expires_in: Utc::now() + Duration::from_secs(15 * 60),
                 created_at: Utc::now(),
             }
         }

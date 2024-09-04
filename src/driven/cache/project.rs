@@ -338,7 +338,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     pui."role",
                     pui.code,
                     pui.status,
-                    pui.expire_in,
+                    pui.expires_in,
                     pui.created_at,
                     pui.updated_at
                 FROM project_user_invite pui
@@ -365,7 +365,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     "role",
                     code,
                     status,
-                    expire_in, 
+                    expires_in, 
                     created_at,
                     updated_at 
                 )
@@ -377,7 +377,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
             role,
             invite.code,
             status,
-            invite.expire_in,
+            invite.expires_in,
             invite.created_at,
             invite.updated_at
         )
@@ -494,7 +494,7 @@ impl FromRow<'_, SqliteRow> for ProjectUserInvite {
             status: status
                 .parse()
                 .map_err(|err: Error| sqlx::Error::Decode(err.into()))?,
-            expire_in: row.try_get("expire_in")?,
+            expires_in: row.try_get("expires_in")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         })

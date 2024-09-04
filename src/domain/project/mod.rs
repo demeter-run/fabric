@@ -27,7 +27,7 @@ pub trait ProjectEmailDriven: Send + Sync {
         project_name: &str,
         email: &str,
         code: &str,
-        expire_in: &DateTime<Utc>,
+        expires_in: &DateTime<Utc>,
     ) -> Result<()>;
 }
 
@@ -148,7 +148,7 @@ pub struct ProjectUserInvite {
     pub code: String,
     pub role: ProjectUserRole,
     pub status: ProjectUserInviteStatus,
-    pub expire_in: DateTime<Utc>,
+    pub expires_in: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -163,7 +163,7 @@ impl TryFrom<ProjectUserInviteCreated> for ProjectUserInvite {
             role: value.role.parse()?,
             code: value.code,
             status: ProjectUserInviteStatus::Sent,
-            expire_in: value.expire_in,
+            expires_in: value.expires_in,
             created_at: value.created_at,
             updated_at: value.created_at,
         })
@@ -302,7 +302,7 @@ mod tests {
                 role: ProjectUserRole::Owner,
                 code: "123".into(),
                 status: ProjectUserInviteStatus::Sent,
-                expire_in: Utc::now() + Duration::from_secs(15 * 60),
+                expires_in: Utc::now() + Duration::from_secs(15 * 60),
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             }

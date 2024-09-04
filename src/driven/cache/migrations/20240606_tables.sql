@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS project_user_invite (
   role TEXT NOT NULL,
   code TEXT NOT NULL,
   status TEXT NOT NULL,
-  expire_in DATETIME NOT NULL,
+  expires_in DATETIME NOT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
   FOREIGN KEY(project_id) REFERENCES project(id)

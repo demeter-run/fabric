@@ -234,10 +234,10 @@ pub async fn create_user_invite(
 
     let code = Uuid::new_v4().to_string();
 
-    let expire_in = Utc::now() + cmd.ttl;
+    let expires_in = Utc::now() + cmd.ttl;
 
     email
-        .send_invite(&project.name, &cmd.email, &code, &expire_in)
+        .send_invite(&project.name, &cmd.email, &code, &expires_in)
         .await?;
 
     let evt = ProjectUserInviteCreated {
@@ -246,12 +246,12 @@ pub async fn create_user_invite(
         email: cmd.email,
         role: cmd.role.to_string(),
         code,
-        expire_in,
+        expires_in,
         created_at: Utc::now(),
     };
 
     event.dispatch(evt.into()).await?;
-    info!(?expire_in, "new project invite created");
+    info!(?expires_in, "new project invite created");
 
     Ok(())
 }
@@ -267,7 +267,7 @@ pub async fn accept_user_invite(
     let Some(user_invite) = cache.find_user_invite_by_code(&cmd.code).await? else {
         return Err(Error::CommandMalformed("invalid invite code".into()));
     };
-    if Utc::now() > user_invite.expire_in {
+    if Utc::now() > user_invite.expires_in {
         return Err(Error::CommandMalformed("invite code expired".into()));
     }
 
@@ -547,7 +547,7 @@ mod tests {
 
         #[async_trait::async_trait]
         impl ProjectEmailDriven for FakeProjectEmailDriven {
-            async fn send_invite(&self, project_name: &str, email: &str, code: &str, expire_in: &DateTime<Utc>) -> Result<()>;
+            async fn send_invite(&self, project_name: &str, email: &str, code: &str, expires_in: &DateTime<Utc>) -> Result<()>;
         }
     }
 
@@ -1089,7 +1089,7 @@ mod tests {
         let mut cache = MockFakeProjectDrivenCache::new();
         cache.expect_find_user_invite_by_code().return_once(|_| {
             Ok(Some(ProjectUserInvite {
-                expire_in: Utc::now() - Duration::from_secs(10),
+                expires_in: Utc::now() - Duration::from_secs(10),
                 ..Default::default()
             }))
         });
