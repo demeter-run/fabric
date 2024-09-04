@@ -21,6 +21,8 @@ resource "kubernetes_config_map_v1" "fabric_rpc_config" {
         auth0_client_secret = var.auth0_client_secret
         auth0_audience      = var.auth0_audience
         stripe_api_key      = var.stripe_api_key
+        email_ses_access_key_id = var.email_ses_access_key_id
+        email_ses_secret_access_key = var.email_ses_secret_access_key
       }
     )}"
   }
