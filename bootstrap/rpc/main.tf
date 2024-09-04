@@ -55,7 +55,7 @@ variable "secret" {
 }
 
 variable "email_invite_ttl_min" {
-  type = number
+  type    = number
   default = 15
 }
 
@@ -68,12 +68,12 @@ variable "email_ses_secret_access_key" {
 }
 
 variable "email_ses_region" {
-  type = string
+  type    = string
   default = "us-west-2"
 }
 
 variable "email_ses_verified_email" {
-  type = string
+  type    = string
   default = "no-reply@demeter.run"
 }
 
