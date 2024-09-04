@@ -1,16 +1,12 @@
 tolerations:
-  - effect: "NoSchedule"
-    key: "demeter.run/compute-profile"
-    operator: "Equal"
-    value: "general-purpose"
-  - effect: "NoSchedule"
-    key: "demeter.run/compute-arch"
-    operator: "Equal"
-    value: "x86"
-  - effect: "NoSchedule"
-    key: "demeter.run/availability-sla"
-    operator: "Equal"
-    value: "consistent"
+%{ for toleration in tolerations }
+  - effect: "${toleration.effect}"
+    key: "${toleration.key}"
+    operator: "${toleration.operator}"
+    %{ if toleration.value != null }
+    value: "${toleration.value}"
+    %{ endif }
+%{ endfor }
 
 # -- Authentication settings.
 # https://docs.redpanda.com/docs/manage/kubernetes/security/sasl-kubernetes/
