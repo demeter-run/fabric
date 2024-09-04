@@ -62,6 +62,28 @@ pub struct ProjectSecretCreated {
 into_event!(ProjectSecretCreated);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectUserInviteCreated {
+    pub id: String,
+    pub project_id: String,
+    pub email: String,
+    pub role: String,
+    pub code: String,
+    pub expires_in: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+}
+into_event!(ProjectUserInviteCreated);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectUserInviteAccepted {
+    pub id: String,
+    pub project_id: String,
+    pub user_id: String,
+    pub role: String,
+    pub created_at: DateTime<Utc>,
+}
+into_event!(ProjectUserInviteAccepted);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceCreated {
     pub id: String,
     pub project_id: String,
@@ -113,12 +135,13 @@ into_event!(UsageCreated);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-#[allow(clippy::enum_variant_names)]
 pub enum Event {
     ProjectCreated(ProjectCreated),
     ProjectUpdated(ProjectUpdated),
     ProjectDeleted(ProjectDeleted),
     ProjectSecretCreated(ProjectSecretCreated),
+    ProjectUserInviteCreated(ProjectUserInviteCreated),
+    ProjectUserInviteAccepted(ProjectUserInviteAccepted),
     ResourceCreated(ResourceCreated),
     ResourceUpdated(ResourceUpdated),
     ResourceDeleted(ResourceDeleted),
@@ -131,6 +154,8 @@ impl Event {
             Event::ProjectUpdated(_) => "ProjectUpdated".into(),
             Event::ProjectDeleted(_) => "ProjectDeleted".into(),
             Event::ProjectSecretCreated(_) => "ProjectSecretCreated".into(),
+            Event::ProjectUserInviteCreated(_) => "ProjectUserInviteCreated".into(),
+            Event::ProjectUserInviteAccepted(_) => "ProjectUserInviteAccepted".into(),
             Event::ResourceCreated(_) => "ResourceCreated".into(),
             Event::ResourceUpdated(_) => "ResourceUpdated".into(),
             Event::ResourceDeleted(_) => "ResourceDeleted".into(),
@@ -145,6 +170,12 @@ impl Event {
             "ProjectSecretCreated" => {
                 Ok(Self::ProjectSecretCreated(serde_json::from_slice(payload)?))
             }
+            "ProjectUserInviteCreated" => Ok(Self::ProjectUserInviteCreated(
+                serde_json::from_slice(payload)?,
+            )),
+            "ProjectUserInviteAccepted" => Ok(Self::ProjectUserInviteAccepted(
+                serde_json::from_slice(payload)?,
+            )),
             "ResourceCreated" => Ok(Self::ResourceCreated(serde_json::from_slice(payload)?)),
             "ResourceUpdated" => Ok(Self::ResourceUpdated(serde_json::from_slice(payload)?)),
             "ResourceDeleted" => Ok(Self::ResourceDeleted(serde_json::from_slice(payload)?)),
@@ -164,10 +195,12 @@ pub trait EventDrivenBridge: Send + Sync {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use uuid::Uuid;
 
     use crate::domain::{
-        project::ProjectStatus,
+        project::{ProjectStatus, ProjectUserRole},
         resource::ResourceStatus,
         tests::{PHC, SECRET},
     };
@@ -198,6 +231,30 @@ mod tests {
                 name: "Key 1".into(),
                 phc: PHC.into(),
                 secret: SECRET.as_bytes().to_vec(),
+                created_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ProjectUserInviteCreated {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                email: "p@txpipe.io".into(),
+                code: "123".into(),
+                role: ProjectUserRole::Owner.to_string(),
+                expires_in: Utc::now() + Duration::from_secs(15 * 60),
+                created_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ProjectUserInviteAccepted {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                user_id: "user id".into(),
+                role: ProjectUserRole::Owner.to_string(),
                 created_at: Utc::now(),
             }
         }

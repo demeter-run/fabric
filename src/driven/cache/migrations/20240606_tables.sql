@@ -25,8 +25,22 @@ CREATE TABLE IF NOT EXISTS resource (
 CREATE TABLE IF NOT EXISTS project_user (
   user_id TEXT NOT NULL,
   project_id TEXT NOT NULL,
+  role TEXT NOT NULL,
   created_at DATETIME NOT NULL,
   PRIMARY KEY (user_id, project_id),
+  FOREIGN KEY(project_id) REFERENCES project(id)
+);
+
+CREATE TABLE IF NOT EXISTS project_user_invite (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  role TEXT NOT NULL,
+  code TEXT NOT NULL,
+  status TEXT NOT NULL,
+  expires_in DATETIME NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
   FOREIGN KEY(project_id) REFERENCES project(id)
 );
 
@@ -49,3 +63,4 @@ CREATE TABLE IF NOT EXISTS usage (
   created_at DATETIME NOT NULL,
   FOREIGN KEY(resource_id) REFERENCES resource(id)
 );
+

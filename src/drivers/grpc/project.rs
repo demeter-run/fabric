@@ -1,5 +1,5 @@
 use dmtri::demeter::ops::v1alpha as proto;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tonic::{async_trait, Status};
 use tracing::error;
 use uuid::Uuid;
@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::domain::{
     auth::{Auth0Driven, Credential},
     event::EventDrivenBridge,
-    project::{self, cache::ProjectDrivenCache, Project, StripeDriven},
+    project::{self, cache::ProjectDrivenCache, Project, ProjectEmailDriven, StripeDriven},
 };
 
 pub struct ProjectServiceImpl {
@@ -15,7 +15,9 @@ pub struct ProjectServiceImpl {
     pub event: Arc<dyn EventDrivenBridge>,
     pub auth0: Arc<dyn Auth0Driven>,
     pub stripe: Arc<dyn StripeDriven>,
+    pub email: Arc<dyn ProjectEmailDriven>,
     pub secret: String,
+    pub invite_ttl: Duration,
 }
 
 impl ProjectServiceImpl {
@@ -24,14 +26,18 @@ impl ProjectServiceImpl {
         event: Arc<dyn EventDrivenBridge>,
         auth0: Arc<dyn Auth0Driven>,
         stripe: Arc<dyn StripeDriven>,
+        email: Arc<dyn ProjectEmailDriven>,
         secret: String,
+        invite_ttl: Duration,
     ) -> Self {
         Self {
             cache,
             event,
             auth0,
             stripe,
+            email,
             secret,
+            invite_ttl,
         }
     }
 }
@@ -191,21 +197,64 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         Ok(tonic::Response::new(message))
     }
 
-    async fn create_project_invite(
+    async fn create_project_user_invite(
         &self,
-        request: tonic::Request<proto::CreateProjectInviteRequest>,
-    ) -> Result<tonic::Response<proto::CreateProjectInviteResponse>, tonic::Status> {
-        let _credential = match request.extensions().get::<Credential>() {
+        request: tonic::Request<proto::CreateProjectUserInviteRequest>,
+    ) -> Result<tonic::Response<proto::CreateProjectUserInviteResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
             Some(credential) => credential.clone(),
             None => return Err(Status::unauthenticated("invalid credential")),
         };
 
-        let _req = request.into_inner();
+        let req = request.into_inner();
 
-        let message = proto::CreateProjectInviteResponse {};
+        let cmd = project::command::CreateUserInviteCmd::try_new(
+            credential,
+            self.invite_ttl,
+            req.project_id,
+            req.email,
+            req.role.parse()?,
+        )?;
+
+        project::command::create_user_invite(
+            self.cache.clone(),
+            self.email.clone(),
+            self.event.clone(),
+            cmd.clone(),
+        )
+        .await?;
+
+        let message = proto::CreateProjectUserInviteResponse {};
 
         Ok(tonic::Response::new(message))
     }
+
+    async fn accept_project_user_invite(
+        &self,
+        request: tonic::Request<proto::AcceptProjectUserInviteRequest>,
+    ) -> Result<tonic::Response<proto::AcceptProjectUserInviteResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = project::command::AcceptUserInviteCmd::new(credential, req.code);
+
+        project::command::accept_user_invite(
+            self.cache.clone(),
+            self.auth0.clone(),
+            self.event.clone(),
+            cmd.clone(),
+        )
+        .await?;
+
+        let message = proto::AcceptProjectUserInviteResponse {};
+
+        Ok(tonic::Response::new(message))
+    }
+
     async fn fetch_project_users(
         &self,
         request: tonic::Request<proto::FetchProjectUsersRequest>,

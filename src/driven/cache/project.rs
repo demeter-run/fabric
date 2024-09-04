@@ -6,7 +6,7 @@ use crate::domain::{
     error::Error,
     project::{
         cache::ProjectDrivenCache, Project, ProjectSecret, ProjectStatus, ProjectUpdate,
-        ProjectUser,
+        ProjectUser, ProjectUserInvite, ProjectUserInviteStatus, ProjectUserRole,
     },
     resource::ResourceStatus,
     Result,
@@ -143,17 +143,20 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         .execute(&mut *tx)
         .await?;
 
+        let role = ProjectUserRole::Owner.to_string();
         sqlx::query!(
             r#"
                 INSERT INTO project_user (
                     project_id,
                     user_id,
+                    role,
                     created_at
                 )
-                VALUES ($1, $2, $3)
+                VALUES ($1, $2, $3, $4)
             "#,
             project.id,
             project.owner,
+            role,
             project.created_at
         )
         .execute(&mut *tx)
@@ -311,6 +314,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                 SELECT 
                     pu.user_id, 
                     pu.project_id, 
+                    pu.role, 
                     pu.created_at
                 FROM project_user pu 
                 WHERE pu.user_id = $1 and pu.project_id = $2;
@@ -322,6 +326,106 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         .await?;
 
         Ok(project_user)
+    }
+
+    async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>> {
+        let invite = sqlx::query_as::<_, ProjectUserInvite>(
+            r#"
+                SELECT 
+                    pui.id,
+                    pui.project_id,
+                    pui.email,
+                    pui."role",
+                    pui.code,
+                    pui.status,
+                    pui.expires_in,
+                    pui.created_at,
+                    pui.updated_at
+                FROM project_user_invite pui
+                WHERE pui.code = $1;
+            "#,
+        )
+        .bind(code)
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        Ok(invite)
+    }
+
+    async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()> {
+        let role = invite.role.to_string();
+        let status = invite.status.to_string();
+
+        sqlx::query!(
+            r#"
+                INSERT INTO project_user_invite(
+                    id, 
+                    project_id,
+                    email,
+                    "role",
+                    code,
+                    status,
+                    expires_in, 
+                    created_at,
+                    updated_at 
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+            "#,
+            invite.id,
+            invite.project_id,
+            invite.email,
+            role,
+            invite.code,
+            status,
+            invite.expires_in,
+            invite.created_at,
+            invite.updated_at
+        )
+        .execute(&self.sqlite.db)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn create_user_acceptance(&self, invite_id: &str, user: &ProjectUser) -> Result<()> {
+        let mut tx = self.sqlite.db.begin().await?;
+
+        let role = user.role.to_string();
+        sqlx::query!(
+            r#"
+                INSERT INTO project_user (
+                    project_id,
+                    user_id,
+                    role,
+                    created_at
+                )
+                VALUES ($1, $2, $3, $4)
+            "#,
+            user.project_id,
+            user.user_id,
+            role,
+            user.created_at
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let status = ProjectUserInviteStatus::Accepted.to_string();
+        sqlx::query!(
+            r#"
+                UPDATE project_user_invite 
+                SET status = $1, updated_at = $2
+                WHERE id = $3
+            "#,
+            status,
+            user.created_at,
+            invite_id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(())
     }
 }
 
@@ -361,10 +465,38 @@ impl FromRow<'_, SqliteRow> for ProjectSecret {
 
 impl FromRow<'_, SqliteRow> for ProjectUser {
     fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        let role: &str = row.try_get("role")?;
+
         Ok(Self {
             user_id: row.try_get("user_id")?,
             project_id: row.try_get("project_id")?,
+            role: role
+                .parse()
+                .map_err(|err: Error| sqlx::Error::Decode(err.into()))?,
             created_at: row.try_get("created_at")?,
+        })
+    }
+}
+
+impl FromRow<'_, SqliteRow> for ProjectUserInvite {
+    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        let role: &str = row.try_get("role")?;
+        let status: &str = row.try_get("status")?;
+
+        Ok(Self {
+            id: row.try_get("id")?,
+            project_id: row.try_get("project_id")?,
+            email: row.try_get("email")?,
+            code: row.try_get("code")?,
+            role: role
+                .parse()
+                .map_err(|err: Error| sqlx::Error::Decode(err.into()))?,
+            status: status
+                .parse()
+                .map_err(|err: Error| sqlx::Error::Decode(err.into()))?,
+            expires_in: row.try_get("expires_in")?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
         })
     }
 }
@@ -523,5 +655,79 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
+    }
+    #[tokio::test]
+    async fn it_should_find_user_invite_by_code() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let invite = ProjectUserInvite {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_user_invite(&invite).await.unwrap();
+
+        let result = cache.find_user_invite_by_code(&invite.code).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_user_invite_by_code() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let invite = ProjectUserInvite {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_user_invite(&invite).await.unwrap();
+
+        let result = cache.find_user_invite_by_code("invalid").await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+    #[tokio::test]
+    async fn it_should_create_user_invite() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let invite = ProjectUserInvite {
+            project_id: project.id,
+            ..Default::default()
+        };
+        let result = cache.create_user_invite(&invite).await;
+
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_create_user_acceptance() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let invite = ProjectUserInvite {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_user_invite(&invite).await.unwrap();
+
+        let project_user = ProjectUser {
+            project_id: project.id,
+            ..Default::default()
+        };
+        let result = cache
+            .create_user_acceptance(&invite.id, &project_user)
+            .await;
+
+        assert!(result.is_ok());
     }
 }

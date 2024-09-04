@@ -1,10 +1,13 @@
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
-use crate::domain::event::{ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated};
+use crate::domain::event::{
+    ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated,
+    ProjectUserInviteAccepted, ProjectUserInviteCreated,
+};
 use crate::domain::Result;
 
-use super::{Project, ProjectSecret, ProjectUpdate, ProjectUser};
+use super::{Project, ProjectSecret, ProjectUpdate, ProjectUser, ProjectUserInvite};
 
 #[async_trait::async_trait]
 pub trait ProjectDrivenCache: Send + Sync {
@@ -21,10 +24,21 @@ pub trait ProjectDrivenCache: Send + Sync {
         user_id: &str,
         project_id: &str,
     ) -> Result<Option<ProjectUser>>;
+    async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
+    async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()>;
+    async fn create_user_acceptance(&self, invite_id: &str, user: &ProjectUser) -> Result<()>;
 }
 
 pub async fn create(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectCreated) -> Result<()> {
     cache.create(&evt.try_into()?).await
+}
+
+pub async fn update(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectUpdated) -> Result<()> {
+    cache.update(&evt.try_into()?).await
+}
+
+pub async fn delete(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectDeleted) -> Result<()> {
+    cache.delete(&evt.id, &evt.deleted_at).await
 }
 
 pub async fn create_secret(
@@ -34,12 +48,20 @@ pub async fn create_secret(
     cache.create_secret(&evt.into()).await
 }
 
-pub async fn update(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectUpdated) -> Result<()> {
-    cache.update(&evt.try_into()?).await
+pub async fn create_user_invite(
+    cache: Arc<dyn ProjectDrivenCache>,
+    evt: ProjectUserInviteCreated,
+) -> Result<()> {
+    cache.create_user_invite(&evt.try_into()?).await
 }
 
-pub async fn delete(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectDeleted) -> Result<()> {
-    cache.delete(&evt.id, &evt.deleted_at).await
+pub async fn create_user_invite_acceptance(
+    cache: Arc<dyn ProjectDrivenCache>,
+    evt: ProjectUserInviteAccepted,
+) -> Result<()> {
+    cache
+        .create_user_acceptance(&evt.id.clone(), &evt.try_into()?)
+        .await
 }
 
 #[cfg(test)]
@@ -62,6 +84,9 @@ mod tests {
             async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
             async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
             async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
+            async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
+            async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()>;
+            async fn create_user_acceptance(&self, invite_id: &str, user: &ProjectUser) -> Result<()>;
         }
     }
 
@@ -84,6 +109,30 @@ mod tests {
         let evt = ProjectSecretCreated::default();
 
         let result = create_secret(Arc::new(cache), evt).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_create_user_invite_cache() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache.expect_create_user_invite().return_once(|_| Ok(()));
+
+        let evt = ProjectUserInviteCreated::default();
+
+        let result = create_user_invite(Arc::new(cache), evt).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_create_user_invite_acceptance_cache() {
+        let mut cache = MockFakeProjectDrivenCache::new();
+        cache
+            .expect_create_user_acceptance()
+            .return_once(|_, _| Ok(()));
+
+        let evt = ProjectUserInviteAccepted::default();
+
+        let result = create_user_invite_acceptance(Arc::new(cache), evt).await;
         assert!(result.is_ok());
     }
 }

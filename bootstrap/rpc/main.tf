@@ -54,6 +54,29 @@ variable "secret" {
   type = string
 }
 
+variable "email_invite_ttl_min" {
+  type    = number
+  default = 15
+}
+
+variable "email_ses_access_key_id" {
+  type = string
+}
+
+variable "email_ses_secret_access_key" {
+  type = string
+}
+
+variable "email_ses_region" {
+  type    = string
+  default = "us-west-2"
+}
+
+variable "email_ses_verified_email" {
+  type    = string
+  default = "no-reply@demeter.run"
+}
+
 variable "replicas" {
   type    = number
   default = 1
