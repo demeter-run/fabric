@@ -3,7 +3,6 @@ db_path="dev.db"
 crds_path="examples/crds"
 secret="fabric@txpipe"
 topic="events"
-invite_ttl_min="15"
 
 [kafka_producer]
 "bootstrap.servers" = "localhost:19092"
