@@ -1,0 +1,41 @@
+name: Deploy
+
+on:
+  check_run:
+    workflows: ["Build"]
+    types: [completed]
+
+jobs:
+  rpc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ClusterAdminRole
+          role-session-name: Github-Actions-Demeter
+          role-duration-seconds: 1200
+
+      - name: setup kubeconfig
+        run: aws eks update-kubeconfig --name ${{ secrets.AWS_CLUSTER_NAME }}
+
+      - name: setup terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: init terraform
+        working-directory: .github/iac
+        run: terraform init -reconfigure
+
+      - name: validate terraform
+        working-directory: .github/iac
+        run: terraform validate
+
+      - name: apply terraform
+        working-directory: .github/iac
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: terraform apply -auto-approve -input=false -var="rpc_image=ghcr.io/demeter-run/fabric-rpc:${{ github.sha }}"
