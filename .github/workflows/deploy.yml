@@ -1,9 +1,10 @@
 name: Deploy
 
 on:
-  check_run:
+  workflow_run:
     workflows: ["Build"]
-    types: [completed]
+    types:
+      - completed
 
 jobs:
   rpc:
