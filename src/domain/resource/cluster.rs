@@ -11,6 +11,7 @@ use crate::domain::{
     Result,
 };
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait ResourceDrivenCluster: Send + Sync {
     async fn create(&self, obj: &DynamicObject) -> Result<()>;
@@ -96,24 +97,11 @@ fn build_api_resource(kind: &str) -> ApiResource {
 
 #[cfg(test)]
 mod tests {
-    use mockall::mock;
-
     use super::*;
-
-    mock! {
-        pub FakeResourceDrivenCluster { }
-
-        #[async_trait::async_trait]
-        impl ResourceDrivenCluster for FakeResourceDrivenCluster {
-            async fn create(&self, obj: &DynamicObject) -> Result<()>;
-            async fn update(&self, obj: &DynamicObject) -> Result<()>;
-            async fn delete(&self, obj: &DynamicObject) -> Result<()>;
-        }
-    }
 
     #[tokio::test]
     async fn it_should_apply_manifest() {
-        let mut cluster = MockFakeResourceDrivenCluster::new();
+        let mut cluster = MockResourceDrivenCluster::new();
         cluster.expect_create().return_once(|_| Ok(()));
 
         let evt = ResourceCreated::default();

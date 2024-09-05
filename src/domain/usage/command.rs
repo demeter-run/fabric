@@ -55,45 +55,13 @@ impl FetchCmd {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{DateTime, Utc};
-    use mockall::mock;
     use uuid::Uuid;
 
     use super::*;
     use crate::domain::{
-        project::{Project, ProjectSecret, ProjectUpdate, ProjectUser, ProjectUserInvite},
-        usage::Usage,
+        project::{cache::MockProjectDrivenCache, ProjectUser},
+        usage::cache::MockUsageDrivenCache,
     };
-
-    mock! {
-        pub FakeProjectDrivenCache { }
-
-        #[async_trait::async_trait]
-        impl ProjectDrivenCache for FakeProjectDrivenCache {
-            async fn find(&self, user_id: &str, page: &u32, page_size: &u32) -> Result<Vec<Project>>;
-            async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>>;
-            async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
-            async fn create(&self, project: &Project) -> Result<()>;
-            async fn update(&self, project: &ProjectUpdate) -> Result<()>;
-            async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
-            async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
-            async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
-            async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
-            async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
-            async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()>;
-            async fn create_user_acceptance(&self, invite_id: &str, user: &ProjectUser) -> Result<()>;
-        }
-    }
-
-    mock! {
-        pub FakeUsageDrivenCache { }
-
-        #[async_trait::async_trait]
-        impl UsageDrivenCache for FakeUsageDrivenCache {
-            async fn find_report(&self, project_id: &str, page: &u32, page_size: &u32,) -> Result<Vec<UsageReport>>;
-            async fn create(&self, usage: Vec<Usage>) -> Result<()>;
-        }
-    }
 
     impl Default for FetchCmd {
         fn default() -> Self {
@@ -108,12 +76,12 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_fetch_project_usage_report() {
-        let mut project_cache = MockFakeProjectDrivenCache::new();
+        let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
 
-        let mut usage_cache = MockFakeUsageDrivenCache::new();
+        let mut usage_cache = MockUsageDrivenCache::new();
         usage_cache
             .expect_find_report()
             .return_once(|_, _, _| Ok(vec![UsageReport::default()]));
@@ -125,12 +93,12 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_fetch_project_usage_report_when_user_doesnt_have_permission() {
-        let mut project_cache = MockFakeProjectDrivenCache::new();
+        let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
 
-        let usage_cache = MockFakeUsageDrivenCache::new();
+        let usage_cache = MockUsageDrivenCache::new();
 
         let cmd = FetchCmd::default();
 
@@ -139,8 +107,8 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_fetch_project_usage_report_when_secret_doesnt_have_permission() {
-        let project_cache = MockFakeProjectDrivenCache::new();
-        let usage_cache = MockFakeUsageDrivenCache::new();
+        let project_cache = MockProjectDrivenCache::new();
+        let usage_cache = MockUsageDrivenCache::new();
 
         let cmd = FetchCmd {
             credential: Credential::ApiKey(Uuid::new_v4().to_string()),

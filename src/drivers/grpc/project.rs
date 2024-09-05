@@ -7,7 +7,10 @@ use uuid::Uuid;
 use crate::domain::{
     auth::{Auth0Driven, Credential},
     event::EventDrivenBridge,
-    project::{self, cache::ProjectDrivenCache, Project, ProjectEmailDriven, StripeDriven},
+    project::{
+        self, cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectUserInvite,
+        StripeDriven,
+    },
 };
 
 pub struct ProjectServiceImpl {
@@ -197,6 +200,32 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         Ok(tonic::Response::new(message))
     }
 
+    async fn fetch_project_user_invites(
+        &self,
+        request: tonic::Request<proto::FetchProjectUserInvitesRequest>,
+    ) -> Result<tonic::Response<proto::FetchProjectUserInvitesResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = project::command::FetchUserInviteCmd::new(
+            credential,
+            req.page,
+            req.page_size,
+            req.project_id,
+        )?;
+
+        let invites = project::command::fetch_user_invite(self.cache.clone(), cmd.clone()).await?;
+
+        let records = invites.into_iter().map(|v| v.into()).collect();
+        let message = proto::FetchProjectUserInvitesResponse { records };
+
+        Ok(tonic::Response::new(message))
+    }
+
     async fn create_project_user_invite(
         &self,
         request: tonic::Request<proto::CreateProjectUserInviteRequest>,
@@ -290,6 +319,21 @@ impl From<Project> for proto::Project {
             billing_provider: value.billing_provider,
             billing_provider_id: value.billing_provider_id,
             billing_subscription_id: value.billing_subscription_id,
+            created_at: value.created_at.to_rfc3339(),
+            updated_at: value.updated_at.to_rfc3339(),
+        }
+    }
+}
+
+impl From<ProjectUserInvite> for proto::ProjectUserInvite {
+    fn from(value: ProjectUserInvite) -> Self {
+        Self {
+            id: value.id,
+            project_id: value.project_id,
+            email: value.email,
+            role: value.role.to_string(),
+            status: value.status.to_string(),
+            expires_in: value.expires_in.to_rfc3339(),
             created_at: value.created_at.to_rfc3339(),
             updated_at: value.updated_at.to_rfc3339(),
         }

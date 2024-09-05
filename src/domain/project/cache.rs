@@ -9,6 +9,7 @@ use crate::domain::Result;
 
 use super::{Project, ProjectSecret, ProjectUpdate, ProjectUser, ProjectUserInvite};
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait ProjectDrivenCache: Send + Sync {
     async fn find(&self, user_id: &str, page: &u32, page_size: &u32) -> Result<Vec<Project>>;
@@ -24,6 +25,12 @@ pub trait ProjectDrivenCache: Send + Sync {
         user_id: &str,
         project_id: &str,
     ) -> Result<Option<ProjectUser>>;
+    async fn find_user_invite(
+        &self,
+        project_id: &str,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<Vec<ProjectUserInvite>>;
     async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
     async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()>;
     async fn create_user_acceptance(&self, invite_id: &str, user: &ProjectUser) -> Result<()>;
@@ -66,33 +73,11 @@ pub async fn create_user_invite_acceptance(
 
 #[cfg(test)]
 mod tests {
-    use mockall::mock;
-
     use super::*;
-
-    mock! {
-        pub FakeProjectDrivenCache { }
-
-        #[async_trait::async_trait]
-        impl ProjectDrivenCache for FakeProjectDrivenCache {
-            async fn find(&self, user_id: &str, page: &u32, page_size: &u32) -> Result<Vec<Project>>;
-            async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>>;
-            async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
-            async fn create(&self, project: &Project) -> Result<()>;
-            async fn update(&self, project: &ProjectUpdate) -> Result<()>;
-            async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
-            async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
-            async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
-            async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
-            async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
-            async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()>;
-            async fn create_user_acceptance(&self, invite_id: &str, user: &ProjectUser) -> Result<()>;
-        }
-    }
 
     #[tokio::test]
     async fn it_should_create_project_cache() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache.expect_create().return_once(|_| Ok(()));
 
         let evt = ProjectCreated::default();
@@ -103,7 +88,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_create_project_secret_cache() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache.expect_create_secret().return_once(|_| Ok(()));
 
         let evt = ProjectSecretCreated::default();
@@ -114,7 +99,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_create_user_invite_cache() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache.expect_create_user_invite().return_once(|_| Ok(()));
 
         let evt = ProjectUserInviteCreated::default();
@@ -125,7 +110,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_create_user_invite_acceptance_cache() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_create_user_acceptance()
             .return_once(|_, _| Ok(()));
