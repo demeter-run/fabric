@@ -4,6 +4,7 @@ use super::{error::Error, project::cache::ProjectDrivenCache};
 
 use crate::domain::Result;
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait Auth0Driven: Send + Sync {
     fn verify(&self, token: &str) -> Result<String>;

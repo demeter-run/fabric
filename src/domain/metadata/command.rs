@@ -11,23 +11,13 @@ pub async fn fetch(metadata: Arc<dyn MetadataDriven>) -> Result<Vec<CustomResour
 
 #[cfg(test)]
 mod tests {
-    use mockall::mock;
+    use crate::domain::metadata::MockMetadataDriven;
 
     use super::*;
 
-    mock! {
-        pub FakeMetadataDrivenCrds { }
-
-        #[async_trait::async_trait]
-        impl MetadataDriven for FakeMetadataDrivenCrds {
-            async fn find(&self) -> Result<Vec<CustomResourceDefinition>>;
-            async fn find_by_kind(&self, kind: &str) -> Result<Option<CustomResourceDefinition>>;
-        }
-    }
-
     #[tokio::test]
     async fn it_should_fetch_metadata() {
-        let mut metadata = MockFakeMetadataDrivenCrds::new();
+        let mut metadata = MockMetadataDriven::new();
         metadata
             .expect_find()
             .return_once(|| Ok(vec![CustomResourceDefinition::default()]));

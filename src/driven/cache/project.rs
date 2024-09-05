@@ -352,6 +352,42 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         Ok(invite)
     }
 
+    async fn find_user_invite(
+        &self,
+        project_id: &str,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<Vec<ProjectUserInvite>> {
+        let offset = page_size * (page - 1);
+
+        let invites = sqlx::query_as::<_, ProjectUserInvite>(
+            r#"
+                SELECT 
+                    pui.id,
+                    pui.project_id,
+                    pui.email,
+                    pui."role",
+                    pui.code,
+                    pui.status,
+                    pui.expires_in,
+                    pui.created_at,
+                    pui.updated_at
+                FROM project_user_invite pui
+                WHERE pui.project_id = $1
+                ORDER BY pui.created_at DESC
+                LIMIT $2
+                OFFSET $3;
+            "#,
+        )
+        .bind(project_id)
+        .bind(page_size)
+        .bind(offset)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(invites)
+    }
+
     async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()> {
         let role = invite.role.to_string();
         let status = invite.status.to_string();
@@ -692,6 +728,34 @@ mod tests {
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
     }
+
+    #[tokio::test]
+    async fn it_should_find_user_invites() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let invite = ProjectUserInvite {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_user_invite(&invite).await.unwrap();
+
+        let result = cache.find_user_invite(&project.id, &1, &12).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().len() == 1);
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_user_invites() {
+        let cache = get_cache().await;
+        let result = cache.find_user_invite(Default::default(), &1, &12).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
     #[tokio::test]
     async fn it_should_create_user_invite() {
         let cache = get_cache().await;

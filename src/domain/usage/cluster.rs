@@ -11,6 +11,7 @@ use crate::domain::{
 
 use super::UsageUnit;
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait UsageDrivenCluster: Send + Sync {
     async fn find_metrics(
@@ -59,36 +60,18 @@ pub async fn sync_usage(
 
 #[cfg(test)]
 mod tests {
-    use mockall::mock;
+    use crate::domain::event::MockEventDrivenBridge;
 
     use super::*;
-    use crate::domain::event::Event;
-
-    mock! {
-        pub FakeUsageDriven { }
-
-        #[async_trait::async_trait]
-        impl UsageDrivenCluster for FakeUsageDriven {
-            async fn find_metrics(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> Result<Vec<UsageUnit>>;
-        }
-    }
-    mock! {
-        pub FakeEventDrivenBridge { }
-
-        #[async_trait::async_trait]
-        impl EventDrivenBridge for FakeEventDrivenBridge {
-            async fn dispatch(&self, event: Event) -> Result<()>;
-        }
-    }
 
     #[tokio::test]
     async fn it_should_sync_usage() {
-        let mut usage = MockFakeUsageDriven::new();
+        let mut usage = MockUsageDrivenCluster::new();
         usage
             .expect_find_metrics()
             .return_once(|_, _| Ok(Default::default()));
 
-        let mut event = MockFakeEventDrivenBridge::new();
+        let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
 
         let result = sync_usage(
