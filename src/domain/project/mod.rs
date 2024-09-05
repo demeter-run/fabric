@@ -15,11 +15,13 @@ pub mod cache;
 pub mod cluster;
 pub mod command;
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait StripeDriven: Send + Sync {
     async fn create_customer(&self, name: &str, email: &str) -> Result<String>;
 }
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait ProjectEmailDriven: Send + Sync {
     async fn send_invite(

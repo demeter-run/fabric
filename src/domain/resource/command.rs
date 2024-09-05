@@ -291,71 +291,16 @@ pub struct DeleteCmd {
 
 #[cfg(test)]
 mod tests {
-    use chrono::DateTime;
-    use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
-    use mockall::mock;
     use uuid::Uuid;
 
-    use crate::domain::event::Event;
+    use crate::domain::event::MockEventDrivenBridge;
     use crate::domain::metadata::tests::mock_crd;
-    use crate::domain::project::{
-        Project, ProjectSecret, ProjectUpdate, ProjectUser, ProjectUserInvite,
-    };
-    use crate::domain::resource::ResourceUpdate;
+    use crate::domain::metadata::MockMetadataDriven;
+    use crate::domain::project::cache::MockProjectDrivenCache;
+    use crate::domain::project::{Project, ProjectUser};
+    use crate::domain::resource::cache::MockResourceDrivenCache;
 
     use super::*;
-
-    mock! {
-        pub FakeProjectDrivenCache { }
-
-        #[async_trait::async_trait]
-        impl ProjectDrivenCache for FakeProjectDrivenCache {
-            async fn find(&self, user_id: &str, page: &u32, page_size: &u32) -> Result<Vec<Project>>;
-            async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>>;
-            async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
-            async fn create(&self, project: &Project) -> Result<()>;
-            async fn update(&self, project: &ProjectUpdate) -> Result<()>;
-            async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
-            async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
-            async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
-            async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
-            async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
-            async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()>;
-            async fn create_user_acceptance(&self, invite_id: &str, user: &ProjectUser) -> Result<()>;
-        }
-    }
-
-    mock! {
-        pub FakeResourceDrivenCache { }
-
-        #[async_trait::async_trait]
-        impl ResourceDrivenCache for FakeResourceDrivenCache {
-            async fn find(&self,project_id: &str,page: &u32,page_size: &u32) -> Result<Vec<Resource>>;
-            async fn find_by_id(&self, id: &str) -> Result<Option<Resource>>;
-            async fn create(&self, resource: &Resource) -> Result<()>;
-            async fn update(&self, resource: &ResourceUpdate) -> Result<()>;
-            async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
-        }
-    }
-
-    mock! {
-        pub FakeEventDrivenBridge { }
-
-        #[async_trait::async_trait]
-        impl EventDrivenBridge for FakeEventDrivenBridge {
-            async fn dispatch(&self, event: Event) -> Result<()>;
-        }
-    }
-
-    mock! {
-        pub FakeMetadataDrivenCrds { }
-
-        #[async_trait::async_trait]
-        impl MetadataDriven for FakeMetadataDrivenCrds {
-            async fn find(&self) -> Result<Vec<CustomResourceDefinition>>;
-            async fn find_by_kind(&self, kind: &str) -> Result<Option<CustomResourceDefinition>>;
-        }
-    }
 
     impl Default for FetchCmd {
         fn default() -> Self {
@@ -399,12 +344,12 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_fetch_project_resources() {
-        let mut project_cache = MockFakeProjectDrivenCache::new();
+        let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
 
-        let mut resource_cache = MockFakeResourceDrivenCache::new();
+        let mut resource_cache = MockResourceDrivenCache::new();
         resource_cache
             .expect_find()
             .return_once(|_, _, _| Ok(vec![Resource::default()]));
@@ -416,12 +361,12 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_fetch_project_resources_when_user_doesnt_have_permission() {
-        let mut project_cache = MockFakeProjectDrivenCache::new();
+        let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
 
-        let resource_cache = MockFakeResourceDrivenCache::new();
+        let resource_cache = MockResourceDrivenCache::new();
 
         let cmd = FetchCmd::default();
 
@@ -430,8 +375,8 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_fetch_project_resources_when_secret_doesnt_have_permission() {
-        let project_cache = MockFakeProjectDrivenCache::new();
-        let resource_cache = MockFakeResourceDrivenCache::new();
+        let project_cache = MockProjectDrivenCache::new();
+        let resource_cache = MockResourceDrivenCache::new();
 
         let cmd = FetchCmd {
             credential: Credential::ApiKey(Uuid::new_v4().to_string()),
@@ -444,7 +389,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_fetch_project_resources_by_id() {
-        let mut project_cache = MockFakeProjectDrivenCache::new();
+        let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
@@ -456,7 +401,7 @@ mod tests {
             .expect_find_by_id()
             .return_once(|_| Ok(Some(project_cloned)));
 
-        let mut resource_cache = MockFakeResourceDrivenCache::new();
+        let mut resource_cache = MockResourceDrivenCache::new();
         resource_cache.expect_find_by_id().return_once(|_| {
             Ok(Some(Resource {
                 project_id: project.id,
@@ -472,7 +417,7 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_fetch_project_resources_by_id_when_resource_is_from_other_project() {
-        let mut project_cache = MockFakeProjectDrivenCache::new();
+        let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
@@ -480,7 +425,7 @@ mod tests {
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
 
-        let mut resource_cache = MockFakeResourceDrivenCache::new();
+        let mut resource_cache = MockResourceDrivenCache::new();
         resource_cache
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Resource::default())));
@@ -494,7 +439,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_create_resource() {
-        let mut project_cache = MockFakeProjectDrivenCache::new();
+        let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
@@ -502,12 +447,12 @@ mod tests {
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
 
-        let mut metadata = MockFakeMetadataDrivenCrds::new();
+        let mut metadata = MockMetadataDriven::new();
         metadata
             .expect_find_by_kind()
             .return_once(|_| Ok(Some(mock_crd())));
 
-        let mut event = MockFakeEventDrivenBridge::new();
+        let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
 
         let cmd = CreateCmd::default();
@@ -524,15 +469,15 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_resource_when_crd_doesnt_exist() {
-        let mut project_cache = MockFakeProjectDrivenCache::new();
+        let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
 
-        let mut metadata = MockFakeMetadataDrivenCrds::new();
+        let mut metadata = MockMetadataDriven::new();
         metadata.expect_find_by_kind().return_once(|_| Ok(None));
 
-        let event = MockFakeEventDrivenBridge::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = CreateCmd::default();
 
@@ -548,18 +493,18 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_resource_when_project_doesnt_exist() {
-        let mut project_cache = MockFakeProjectDrivenCache::new();
+        let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
         project_cache.expect_find_by_id().return_once(|_| Ok(None));
 
-        let mut metadata = MockFakeMetadataDrivenCrds::new();
+        let mut metadata = MockMetadataDriven::new();
         metadata
             .expect_find_by_kind()
             .return_once(|_| Ok(Some(mock_crd())));
 
-        let event = MockFakeEventDrivenBridge::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = CreateCmd::default();
 
@@ -575,13 +520,13 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_resource_when_user_doesnt_have_permission() {
-        let mut project_cache = MockFakeProjectDrivenCache::new();
+        let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
 
-        let metadata = MockFakeMetadataDrivenCrds::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let metadata = MockMetadataDriven::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = CreateCmd::default();
 
@@ -596,9 +541,9 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_resource_when_secret_doesnt_have_permission() {
-        let project_cache = MockFakeProjectDrivenCache::new();
-        let metadata = MockFakeMetadataDrivenCrds::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let project_cache = MockProjectDrivenCache::new();
+        let metadata = MockMetadataDriven::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = CreateCmd {
             credential: Credential::ApiKey(Uuid::new_v4().to_string()),
@@ -618,7 +563,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_delete_resource() {
-        let mut project_cache = MockFakeProjectDrivenCache::new();
+        let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
@@ -630,7 +575,7 @@ mod tests {
             .expect_find_by_id()
             .return_once(|_| Ok(Some(project_cloned)));
 
-        let mut resource_cache = MockFakeResourceDrivenCache::new();
+        let mut resource_cache = MockResourceDrivenCache::new();
         resource_cache.expect_find_by_id().return_once(|_| {
             Ok(Some(Resource {
                 project_id: project.id,
@@ -638,7 +583,7 @@ mod tests {
             }))
         });
 
-        let mut event = MockFakeEventDrivenBridge::new();
+        let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
 
         let cmd = DeleteCmd::default();
@@ -655,13 +600,13 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_delete_resource_when_user_doesnt_have_permission() {
-        let mut project_cache = MockFakeProjectDrivenCache::new();
+        let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
 
-        let resource_cache = MockFakeResourceDrivenCache::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let resource_cache = MockResourceDrivenCache::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = DeleteCmd::default();
 
@@ -677,9 +622,9 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_delete_resource_when_secret_doesnt_have_permission() {
-        let project_cache = MockFakeProjectDrivenCache::new();
-        let resource_cache = MockFakeResourceDrivenCache::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let project_cache = MockProjectDrivenCache::new();
+        let resource_cache = MockResourceDrivenCache::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = DeleteCmd {
             credential: Credential::ApiKey(Uuid::new_v4().to_string()),
@@ -698,7 +643,7 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_delete_resource_when_resource_is_from_other_project() {
-        let mut project_cache = MockFakeProjectDrivenCache::new();
+        let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
@@ -706,12 +651,12 @@ mod tests {
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
 
-        let mut resource_cache = MockFakeResourceDrivenCache::new();
+        let mut resource_cache = MockResourceDrivenCache::new();
         resource_cache
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Resource::default())));
 
-        let event = MockFakeEventDrivenBridge::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = DeleteCmd::default();
 
