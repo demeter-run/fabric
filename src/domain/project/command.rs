@@ -22,8 +22,8 @@ use crate::domain::{
 };
 
 use super::{
-    cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret, ProjectUserRole,
-    StripeDriven,
+    cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret, ProjectUserInvite,
+    ProjectUserRole, StripeDriven,
 };
 
 pub async fn fetch(cache: Arc<dyn ProjectDrivenCache>, cmd: FetchCmd) -> Result<Vec<Project>> {
@@ -217,6 +217,18 @@ pub async fn verify_secret(
     };
 
     Ok(secret)
+}
+
+pub async fn fetch_user_invite(
+    cache: Arc<dyn ProjectDrivenCache>,
+    cmd: FetchUserInviteCmd,
+) -> Result<Vec<ProjectUserInvite>> {
+    assert_credential(&cmd.credential)?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
+
+    cache
+        .find_user_invite(&cmd.project_id, &cmd.page, &cmd.page_size)
+        .await
 }
 
 pub async fn create_user_invite(
@@ -434,6 +446,38 @@ pub struct VerifySecretCmd {
 }
 
 #[derive(Debug, Clone)]
+pub struct FetchUserInviteCmd {
+    pub credential: Credential,
+    pub page: u32,
+    pub page_size: u32,
+    pub project_id: String,
+}
+impl FetchUserInviteCmd {
+    pub fn new(
+        credential: Credential,
+        page: Option<u32>,
+        page_size: Option<u32>,
+        project_id: String,
+    ) -> Result<Self> {
+        let page = page.unwrap_or(1);
+        let page_size = page_size.unwrap_or(PAGE_SIZE_DEFAULT);
+
+        if page_size >= PAGE_SIZE_MAX {
+            return Err(Error::CommandMalformed(format!(
+                "page_size exceeded the limit of {PAGE_SIZE_MAX}"
+            )));
+        }
+
+        Ok(Self {
+            credential,
+            page,
+            page_size,
+            project_id,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct CreateUserInviteCmd {
     pub credential: Credential,
     pub ttl: Duration,
@@ -483,73 +527,18 @@ impl AcceptUserInviteCmd {
 
 #[cfg(test)]
 mod tests {
-    use chrono::DateTime;
-    use mockall::mock;
     use uuid::Uuid;
 
     use super::*;
     use crate::domain::{
-        event::Event,
-        project::{ProjectUpdate, ProjectUser, ProjectUserInvite},
+        auth::MockAuth0Driven,
+        event::MockEventDrivenBridge,
+        project::{
+            cache::MockProjectDrivenCache, MockProjectEmailDriven, MockStripeDriven, ProjectUser,
+            ProjectUserInvite,
+        },
         tests::{INVALID_HRP_KEY, INVALID_KEY, KEY, SECRET},
     };
-
-    mock! {
-        pub FakeProjectDrivenCache { }
-
-        #[async_trait::async_trait]
-        impl ProjectDrivenCache for FakeProjectDrivenCache {
-            async fn find(&self, user_id: &str, page: &u32, page_size: &u32) -> Result<Vec<Project>>;
-            async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>>;
-            async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
-            async fn create(&self, project: &Project) -> Result<()>;
-            async fn update(&self, project: &ProjectUpdate) -> Result<()>;
-            async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
-            async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
-            async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
-            async fn find_user_permission(&self,user_id: &str, project_id: &str) -> Result<Option<ProjectUser>>;
-            async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
-            async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()>;
-            async fn create_user_acceptance(&self, invite_id: &str, user: &ProjectUser) -> Result<()>;
-        }
-    }
-
-    mock! {
-        pub FakeEventDrivenBridge { }
-
-        #[async_trait::async_trait]
-        impl EventDrivenBridge for FakeEventDrivenBridge {
-            async fn dispatch(&self, event: Event) -> Result<()>;
-        }
-    }
-
-    mock! {
-        pub FakeAuth0Driven { }
-
-        #[async_trait::async_trait]
-        impl Auth0Driven for FakeAuth0Driven {
-            fn verify(&self, token: &str) -> Result<String>;
-            async fn find_info(&self, token: &str) -> Result<(String, String)>;
-        }
-    }
-
-    mock! {
-        pub FakeStripeDriven { }
-
-        #[async_trait::async_trait]
-        impl StripeDriven for FakeStripeDriven {
-            async fn create_customer(&self, name: &str, email: &str) -> Result<String>;
-        }
-    }
-
-    mock! {
-        pub FakeProjectEmailDriven { }
-
-        #[async_trait::async_trait]
-        impl ProjectEmailDriven for FakeProjectEmailDriven {
-            async fn send_invite(&self, project_name: &str, email: &str, code: &str, expires_in: &DateTime<Utc>) -> Result<()>;
-        }
-    }
 
     impl Default for FetchCmd {
         fn default() -> Self {
@@ -598,6 +587,16 @@ mod tests {
             }
         }
     }
+    impl Default for FetchUserInviteCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                page: 1,
+                page_size: 12,
+                project_id: Uuid::new_v4().to_string(),
+            }
+        }
+    }
     impl Default for CreateUserInviteCmd {
         fn default() -> Self {
             Self {
@@ -622,7 +621,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_fetch_user_projects() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find()
             .return_once(|_, _, _| Ok(vec![Project::default()]));
@@ -635,20 +634,20 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_create_project() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache.expect_find_by_namespace().return_once(|_| Ok(None));
 
-        let mut auth0 = MockFakeAuth0Driven::new();
+        let mut auth0 = MockAuth0Driven::new();
         auth0
             .expect_find_info()
             .return_once(|_| Ok(("user name".into(), "user email".into())));
 
-        let mut stripe = MockFakeStripeDriven::new();
+        let mut stripe = MockStripeDriven::new();
         stripe
             .expect_create_customer()
             .return_once(|_, _| Ok("stripe id".into()));
 
-        let mut event = MockFakeEventDrivenBridge::new();
+        let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
 
         let cmd = CreateCmd::default();
@@ -667,14 +666,14 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_fail_create_project_when_namespace_exists() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_by_namespace()
             .return_once(|_| Ok(Some(Project::default())));
 
-        let auth0 = MockFakeAuth0Driven::new();
-        let stripe = MockFakeStripeDriven::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let auth0 = MockAuth0Driven::new();
+        let stripe = MockStripeDriven::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = CreateCmd::default();
 
@@ -691,10 +690,10 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_project_when_invalid_permission() {
-        let cache = MockFakeProjectDrivenCache::new();
-        let auth0 = MockFakeAuth0Driven::new();
-        let stripe = MockFakeStripeDriven::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let cache = MockProjectDrivenCache::new();
+        let auth0 = MockAuth0Driven::new();
+        let stripe = MockStripeDriven::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = CreateCmd {
             credential: Credential::ApiKey("xxxx".into()),
@@ -715,7 +714,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_update_project() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
@@ -726,7 +725,7 @@ mod tests {
             .expect_find_secret_by_project_id()
             .return_once(|_| Ok(Vec::new()));
 
-        let mut event = MockFakeEventDrivenBridge::new();
+        let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
 
         let cmd = UpdateCmd::default();
@@ -737,7 +736,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_create_project_secret() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
@@ -748,7 +747,7 @@ mod tests {
             .expect_find_secret_by_project_id()
             .return_once(|_| Ok(Vec::new()));
 
-        let mut event = MockFakeEventDrivenBridge::new();
+        let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
 
         let cmd = CreateSecretCmd::default();
@@ -758,13 +757,13 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_project_secret_when_project_doesnt_exists() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
         cache.expect_find_by_id().return_once(|_| Ok(None));
 
-        let event = MockFakeEventDrivenBridge::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = CreateSecretCmd::default();
 
@@ -773,8 +772,8 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_project_secret_when_invalid_credential() {
-        let cache = MockFakeProjectDrivenCache::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let cache = MockProjectDrivenCache::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = CreateSecretCmd {
             credential: Credential::ApiKey("xxxx".into()),
@@ -786,12 +785,12 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_project_secret_when_invalid_permission() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
 
-        let event = MockFakeEventDrivenBridge::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = CreateSecretCmd::default();
 
@@ -800,7 +799,7 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_project_secret_when_max_secret_exceeded() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
@@ -811,7 +810,7 @@ mod tests {
             .expect_find_secret_by_project_id()
             .return_once(|_| Ok(vec![ProjectSecret::default(); 3]));
 
-        let event = MockFakeEventDrivenBridge::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = CreateSecretCmd::default();
 
@@ -821,7 +820,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_verify_secret() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_secret_by_project_id()
             .return_once(|_| Ok(vec![ProjectSecret::default()]));
@@ -833,7 +832,7 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_verify_secret_when_invalid_key() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_secret_by_project_id()
             .return_once(|_| Ok(vec![ProjectSecret::default()]));
@@ -848,7 +847,7 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_verify_secret_when_invalid_bech32() {
-        let cache = MockFakeProjectDrivenCache::new();
+        let cache = MockProjectDrivenCache::new();
 
         let cmd = VerifySecretCmd {
             key: "invalid bech32".into(),
@@ -860,7 +859,7 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_verify_secret_when_invalid_bech32_hrp() {
-        let cache = MockFakeProjectDrivenCache::new();
+        let cache = MockProjectDrivenCache::new();
 
         let cmd = VerifySecretCmd {
             key: INVALID_HRP_KEY.into(),
@@ -872,7 +871,7 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_verify_secret_when_there_arent_secrets_storaged() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_secret_by_project_id()
             .return_once(|_| Ok(vec![]));
@@ -884,8 +883,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn it_should_fetch_project_user_invites() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_user_invite()
+            .return_once(|_, _, _| Ok(vec![ProjectUserInvite::default()]));
+
+        let cmd = FetchUserInviteCmd::default();
+
+        let result = fetch_user_invite(Arc::new(cache), cmd).await;
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
     async fn it_should_create_project_user_invite() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
@@ -893,10 +907,10 @@ mod tests {
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
 
-        let mut email = MockFakeProjectEmailDriven::new();
+        let mut email = MockProjectEmailDriven::new();
         email.expect_send_invite().return_once(|_, _, _, _| Ok(()));
 
-        let mut event = MockFakeEventDrivenBridge::new();
+        let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
 
         let cmd = CreateUserInviteCmd::default();
@@ -908,14 +922,14 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_project_user_invite_when_project_doesnt_exists() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
         cache.expect_find_by_id().return_once(|_| Ok(None));
 
-        let email = MockFakeProjectEmailDriven::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let email = MockProjectEmailDriven::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = CreateUserInviteCmd::default();
 
@@ -925,9 +939,9 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_project_user_invite_when_invalid_credential() {
-        let cache = MockFakeProjectDrivenCache::new();
-        let email = MockFakeProjectEmailDriven::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let cache = MockProjectDrivenCache::new();
+        let email = MockProjectEmailDriven::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = CreateUserInviteCmd {
             credential: Credential::ApiKey("xxxx".into()),
@@ -940,13 +954,13 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_project_user_invite_when_invalid_permission() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
 
-        let email = MockFakeProjectEmailDriven::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let email = MockProjectEmailDriven::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = CreateUserInviteCmd::default();
 
@@ -960,7 +974,7 @@ mod tests {
         let invite = ProjectUserInvite::default();
         let invite_email = invite.email.clone();
 
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_user_invite_by_code()
             .return_once(|_| Ok(Some(invite)));
@@ -968,12 +982,12 @@ mod tests {
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
 
-        let mut auth0 = MockFakeAuth0Driven::new();
+        let mut auth0 = MockAuth0Driven::new();
         auth0
             .expect_find_info()
             .return_once(|_| Ok(("user name".into(), invite_email)));
 
-        let mut event = MockFakeEventDrivenBridge::new();
+        let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
 
         let cmd = AcceptUserInviteCmd::default();
@@ -985,13 +999,13 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_accept_project_user_invite_when_invalid_code() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_user_invite_by_code()
             .return_once(|_| Ok(None));
 
-        let auth0 = MockFakeAuth0Driven::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let auth0 = MockAuth0Driven::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = AcceptUserInviteCmd::default();
 
@@ -1001,9 +1015,9 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_accept_project_user_invite_when_invalid_credential() {
-        let cache = MockFakeProjectDrivenCache::new();
-        let auth0 = MockFakeAuth0Driven::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let cache = MockProjectDrivenCache::new();
+        let auth0 = MockAuth0Driven::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = AcceptUserInviteCmd {
             credential: Credential::ApiKey("xxxx".into()),
@@ -1016,7 +1030,7 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_accept_project_user_invite_when_email_doesnt_match() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_user_invite_by_code()
             .return_once(|_| Ok(Some(ProjectUserInvite::default())));
@@ -1024,12 +1038,12 @@ mod tests {
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
 
-        let mut auth0 = MockFakeAuth0Driven::new();
+        let mut auth0 = MockAuth0Driven::new();
         auth0
             .expect_find_info()
             .return_once(|_| Ok(("user name".into(), "user email".into())));
 
-        let event = MockFakeEventDrivenBridge::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = AcceptUserInviteCmd::default();
 
@@ -1040,7 +1054,7 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_accept_project_user_invite_when_invite_has_already_been_accepted() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache.expect_find_user_invite_by_code().return_once(|_| {
             Ok(Some(ProjectUserInvite {
                 status: ProjectUserInviteStatus::Accepted,
@@ -1051,8 +1065,8 @@ mod tests {
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
 
-        let auth0 = MockFakeAuth0Driven::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let auth0 = MockAuth0Driven::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = AcceptUserInviteCmd::default();
 
@@ -1063,7 +1077,7 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_accept_project_user_invite_when_user_already_is_in_the_project() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache.expect_find_user_invite_by_code().return_once(|_| {
             Ok(Some(ProjectUserInvite {
                 status: ProjectUserInviteStatus::Accepted,
@@ -1074,8 +1088,8 @@ mod tests {
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
 
-        let auth0 = MockFakeAuth0Driven::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let auth0 = MockAuth0Driven::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = AcceptUserInviteCmd::default();
 
@@ -1086,7 +1100,7 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_accept_project_user_invite_when_invite_code_expired() {
-        let mut cache = MockFakeProjectDrivenCache::new();
+        let mut cache = MockProjectDrivenCache::new();
         cache.expect_find_user_invite_by_code().return_once(|_| {
             Ok(Some(ProjectUserInvite {
                 expires_in: Utc::now() - Duration::from_secs(10),
@@ -1094,8 +1108,8 @@ mod tests {
             }))
         });
 
-        let auth0 = MockFakeAuth0Driven::new();
-        let event = MockFakeEventDrivenBridge::new();
+        let auth0 = MockAuth0Driven::new();
+        let event = MockEventDrivenBridge::new();
 
         let cmd = AcceptUserInviteCmd::default();
 

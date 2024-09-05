@@ -188,6 +188,7 @@ impl Event {
     }
 }
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait EventDrivenBridge: Send + Sync {
     async fn dispatch(&self, event: Event) -> Result<()>;

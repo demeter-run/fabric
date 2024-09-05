@@ -9,6 +9,7 @@ use crate::domain::{
     Result,
 };
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait ProjectDrivenCluster: Send + Sync {
     async fn create(&self, namespace: &Namespace) -> Result<()>;
@@ -55,24 +56,11 @@ pub async fn delete_manifest(
 
 #[cfg(test)]
 mod tests {
-    use k8s_openapi::api::core::v1::Namespace;
-    use mockall::mock;
-
     use super::*;
-
-    mock! {
-        pub FakeProjectDrivenCluster { }
-
-        #[async_trait::async_trait]
-        impl ProjectDrivenCluster for FakeProjectDrivenCluster {
-            async fn create(&self, namespace: &Namespace) -> Result<()>;
-            async fn delete(&self, namespace: &Namespace) -> Result<()>;
-        }
-    }
 
     #[tokio::test]
     async fn it_should_apply_manifest() {
-        let mut cluster = MockFakeProjectDrivenCluster::new();
+        let mut cluster = MockProjectDrivenCluster::new();
         cluster.expect_create().return_once(|_| Ok(()));
 
         let project = ProjectCreated::default();

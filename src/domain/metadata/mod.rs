@@ -6,6 +6,7 @@ use super::{error::Error, Result};
 
 pub mod command;
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait MetadataDriven: Send + Sync {
     async fn find(&self) -> Result<Vec<CustomResourceDefinition>>;
