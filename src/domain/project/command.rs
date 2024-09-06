@@ -41,7 +41,8 @@ pub async fn create(
     let user_id = assert_credential(&cmd.credential)?;
 
     if cache.find_by_namespace(&cmd.namespace).await?.is_some() {
-        return Err(Error::CommandMalformed("invalid project namespace".into())); }
+        return Err(Error::CommandMalformed("invalid project namespace".into()));
+    }
 
     let (name, email) = auth0.find_info(&user_id).await?;
     let billing_provider_id = stripe.create_customer(&name, &email).await?;
@@ -115,6 +116,16 @@ pub async fn delete(
     Ok(())
 }
 
+pub async fn fetch_secret(
+    cache: Arc<dyn ProjectDrivenCache>,
+    cmd: FetchSecretCmd,
+) -> Result<Vec<ProjectSecret>> {
+    assert_credential(&cmd.credential)?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
+
+    cache.find_secrets(&cmd.project_id).await
+}
+
 pub async fn create_secret(
     cache: Arc<dyn ProjectDrivenCache>,
     event: Arc<dyn EventDrivenBridge>,
@@ -127,7 +138,7 @@ pub async fn create_secret(
         return Err(Error::CommandMalformed("invalid project id".into()));
     };
 
-    let secrets = cache.find_secret_by_project_id(&cmd.project_id).await?;
+    let secrets = cache.find_secrets(&cmd.project_id).await?;
     if secrets.len() >= MAX_SECRET {
         return Err(Error::SecretExceeded(format!(
             "secrets exceeded the limit of {MAX_SECRET}"
@@ -187,7 +198,7 @@ pub async fn verify_secret(
         return Err(Error::Unauthorized("invalid project secret".into()));
     }
 
-    let secrets = cache.find_secret_by_project_id(&cmd.project_id).await?;
+    let secrets = cache.find_secrets(&cmd.project_id).await?;
 
     let secret = secrets.into_iter().find(|project_secret| {
         let argon2 = Argon2::new_with_secret(
@@ -429,6 +440,20 @@ impl DeleteCmd {
 }
 
 #[derive(Debug, Clone)]
+pub struct FetchSecretCmd {
+    pub credential: Credential,
+    pub project_id: String,
+}
+impl FetchSecretCmd {
+    pub fn new(credential: Credential, project_id: String) -> Self {
+        Self {
+            credential,
+            project_id,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct CreateSecretCmd {
     pub credential: Credential,
     pub secret: String,
@@ -610,6 +635,14 @@ mod tests {
             }
         }
     }
+    impl Default for FetchSecretCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                project_id: Uuid::new_v4().to_string(),
+            }
+        }
+    }
     impl Default for CreateSecretCmd {
         fn default() -> Self {
             Self {
@@ -773,9 +806,7 @@ mod tests {
         cache
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
-        cache
-            .expect_find_secret_by_project_id()
-            .return_once(|_| Ok(Vec::new()));
+        cache.expect_find_secrets().return_once(|_| Ok(Vec::new()));
 
         let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
@@ -787,6 +818,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn it_should_fetch_project_secrets() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_secrets()
+            .return_once(|_| Ok(vec![ProjectSecret::default()]));
+
+        let cmd = FetchSecretCmd::default();
+
+        let result = fetch_secret(Arc::new(cache), cmd).await;
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
     async fn it_should_create_project_secret() {
         let mut cache = MockProjectDrivenCache::new();
         cache
@@ -795,9 +841,7 @@ mod tests {
         cache
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
-        cache
-            .expect_find_secret_by_project_id()
-            .return_once(|_| Ok(Vec::new()));
+        cache.expect_find_secrets().return_once(|_| Ok(Vec::new()));
 
         let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
@@ -859,7 +903,7 @@ mod tests {
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
         cache
-            .expect_find_secret_by_project_id()
+            .expect_find_secrets()
             .return_once(|_| Ok(vec![ProjectSecret::default(); 3]));
 
         let event = MockEventDrivenBridge::new();
@@ -874,7 +918,7 @@ mod tests {
     async fn it_should_verify_secret() {
         let mut cache = MockProjectDrivenCache::new();
         cache
-            .expect_find_secret_by_project_id()
+            .expect_find_secrets()
             .return_once(|_| Ok(vec![ProjectSecret::default()]));
 
         let cmd = VerifySecretCmd::default();
@@ -886,7 +930,7 @@ mod tests {
     async fn it_should_fail_verify_secret_when_invalid_key() {
         let mut cache = MockProjectDrivenCache::new();
         cache
-            .expect_find_secret_by_project_id()
+            .expect_find_secrets()
             .return_once(|_| Ok(vec![ProjectSecret::default()]));
 
         let cmd = VerifySecretCmd {
@@ -924,9 +968,7 @@ mod tests {
     #[tokio::test]
     async fn it_should_fail_verify_secret_when_there_arent_secrets_storaged() {
         let mut cache = MockProjectDrivenCache::new();
-        cache
-            .expect_find_secret_by_project_id()
-            .return_once(|_| Ok(vec![]));
+        cache.expect_find_secrets().return_once(|_| Ok(vec![]));
 
         let cmd = VerifySecretCmd::default();
 

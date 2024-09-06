@@ -284,7 +284,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         Ok(())
     }
-    async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>> {
+    async fn find_secrets(&self, project_id: &str) -> Result<Vec<ProjectSecret>> {
         let secrets = sqlx::query_as::<_, ProjectSecret>(
             r#"
                 SELECT 
@@ -295,7 +295,8 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     ps.secret, 
                     ps.created_at
                 FROM project_secret ps 
-                WHERE ps.project_id = $1;
+                WHERE ps.project_id = $1
+                ORDER BY ps.created_at DESC;
             "#,
         )
         .bind(project_id)
@@ -691,7 +692,7 @@ mod tests {
         };
         cache.create_secret(&secret).await.unwrap();
 
-        let result = cache.find_secret_by_project_id(&project.id).await;
+        let result = cache.find_secrets(&project.id).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 1);
