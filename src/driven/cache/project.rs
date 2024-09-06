@@ -352,7 +352,39 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         Ok(invite)
     }
 
-    async fn find_user_invite(
+    async fn find_users(
+        &self,
+        project_id: &str,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<Vec<ProjectUser>> {
+        let offset = page_size * (page - 1);
+
+        let users = sqlx::query_as::<_, ProjectUser>(
+            r#"
+
+                SELECT 
+                    pu.user_id, 
+                    pu.project_id, 
+                    pu.role, 
+                    pu.created_at
+                FROM project_user pu 
+                WHERE pu.project_id = $1
+                ORDER BY pu.created_at DESC
+                LIMIT $2
+                OFFSET $3;
+            "#,
+        )
+        .bind(project_id)
+        .bind(page_size)
+        .bind(offset)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(users)
+    }
+
+    async fn find_user_invites(
         &self,
         project_id: &str,
         page: &u32,
@@ -742,7 +774,7 @@ mod tests {
         };
         cache.create_user_invite(&invite).await.unwrap();
 
-        let result = cache.find_user_invite(&project.id, &1, &12).await;
+        let result = cache.find_user_invites(&project.id, &1, &12).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 1);
@@ -750,7 +782,7 @@ mod tests {
     #[tokio::test]
     async fn it_should_return_none_find_user_invites() {
         let cache = get_cache().await;
-        let result = cache.find_user_invite(Default::default(), &1, &12).await;
+        let result = cache.find_user_invites(Default::default(), &1, &12).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -793,5 +825,26 @@ mod tests {
             .await;
 
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_find_users() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let result = cache.find_users(&project.id, &1, &12).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().len() == 1);
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_users() {
+        let cache = get_cache().await;
+        let result = cache.find_users(Default::default(), &1, &12).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
     }
 }

@@ -1,5 +1,3 @@
-use std::{sync::Arc, time::Duration};
-
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use bech32::{Bech32m, Hrp};
 use chrono::Utc;
@@ -7,6 +5,7 @@ use rand::{
     distributions::{Alphanumeric, DistString},
     rngs::OsRng,
 };
+use std::{sync::Arc, time::Duration};
 use tracing::{error, info};
 use uuid::Uuid;
 
@@ -22,8 +21,8 @@ use crate::domain::{
 };
 
 use super::{
-    cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret, ProjectUserInvite,
-    ProjectUserRole, StripeDriven,
+    cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret, ProjectUser,
+    ProjectUserInvite, ProjectUserRole, StripeDriven,
 };
 
 pub async fn fetch(cache: Arc<dyn ProjectDrivenCache>, cmd: FetchCmd) -> Result<Vec<Project>> {
@@ -42,8 +41,7 @@ pub async fn create(
     let user_id = assert_credential(&cmd.credential)?;
 
     if cache.find_by_namespace(&cmd.namespace).await?.is_some() {
-        return Err(Error::CommandMalformed("invalid project namespace".into()));
-    }
+        return Err(Error::CommandMalformed("invalid project namespace".into())); }
 
     let (name, email) = auth0.find_info(&user_id).await?;
     let billing_provider_id = stripe.create_customer(&name, &email).await?;
@@ -219,6 +217,18 @@ pub async fn verify_secret(
     Ok(secret)
 }
 
+pub async fn fetch_user(
+    cache: Arc<dyn ProjectDrivenCache>,
+    cmd: FetchUserCmd,
+) -> Result<Vec<ProjectUser>> {
+    assert_credential(&cmd.credential)?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
+
+    cache
+        .find_users(&cmd.project_id, &cmd.page, &cmd.page_size)
+        .await
+}
+
 pub async fn fetch_user_invite(
     cache: Arc<dyn ProjectDrivenCache>,
     cmd: FetchUserInviteCmd,
@@ -227,7 +237,7 @@ pub async fn fetch_user_invite(
     assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
 
     cache
-        .find_user_invite(&cmd.project_id, &cmd.page, &cmd.page_size)
+        .find_user_invites(&cmd.project_id, &cmd.page, &cmd.page_size)
         .await
 }
 
@@ -446,6 +456,38 @@ pub struct VerifySecretCmd {
 }
 
 #[derive(Debug, Clone)]
+pub struct FetchUserCmd {
+    pub credential: Credential,
+    pub page: u32,
+    pub page_size: u32,
+    pub project_id: String,
+}
+impl FetchUserCmd {
+    pub fn new(
+        credential: Credential,
+        page: Option<u32>,
+        page_size: Option<u32>,
+        project_id: String,
+    ) -> Result<Self> {
+        let page = page.unwrap_or(1);
+        let page_size = page_size.unwrap_or(PAGE_SIZE_DEFAULT);
+
+        if page_size >= PAGE_SIZE_MAX {
+            return Err(Error::CommandMalformed(format!(
+                "page_size exceeded the limit of {PAGE_SIZE_MAX}"
+            )));
+        }
+
+        Ok(Self {
+            credential,
+            page,
+            page_size,
+            project_id,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct FetchUserInviteCmd {
     pub credential: Credential,
     pub page: u32,
@@ -615,6 +657,16 @@ mod tests {
                 credential: Credential::Auth0("user id".into()),
                 id: Uuid::new_v4().to_string(),
                 code: "123".into(),
+            }
+        }
+    }
+    impl Default for FetchUserCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                page: 1,
+                page_size: 12,
+                project_id: Uuid::new_v4().to_string(),
             }
         }
     }
@@ -889,7 +941,7 @@ mod tests {
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
         cache
-            .expect_find_user_invite()
+            .expect_find_user_invites()
             .return_once(|_, _, _| Ok(vec![ProjectUserInvite::default()]));
 
         let cmd = FetchUserInviteCmd::default();
@@ -1117,5 +1169,21 @@ mod tests {
             accept_user_invite(Arc::new(cache), Arc::new(auth0), Arc::new(event), cmd).await;
 
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn it_should_fetch_project_users() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_users()
+            .return_once(|_, _, _| Ok(vec![ProjectUser::default()]));
+
+        let cmd = FetchUserCmd::default();
+
+        let result = fetch_user(Arc::new(cache), cmd).await;
+        assert!(result.is_ok());
     }
 }

@@ -20,12 +20,18 @@ pub trait ProjectDrivenCache: Send + Sync {
     async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
     async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
     async fn find_secret_by_project_id(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
+    async fn find_users(
+        &self,
+        project_id: &str,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<Vec<ProjectUser>>;
     async fn find_user_permission(
         &self,
         user_id: &str,
         project_id: &str,
     ) -> Result<Option<ProjectUser>>;
-    async fn find_user_invite(
+    async fn find_user_invites(
         &self,
         project_id: &str,
         page: &u32,
