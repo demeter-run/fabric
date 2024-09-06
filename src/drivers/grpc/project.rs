@@ -8,8 +8,8 @@ use crate::domain::{
     auth::{Auth0Driven, Credential},
     event::EventDrivenBridge,
     project::{
-        self, cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectUserInvite,
-        StripeDriven,
+        self, cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectUser,
+        ProjectUserInvite, StripeDriven,
     },
 };
 
@@ -199,7 +199,31 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
+    async fn fetch_project_users(
+        &self,
+        request: tonic::Request<proto::FetchProjectUsersRequest>,
+    ) -> Result<tonic::Response<proto::FetchProjectUsersResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
 
+        let req = request.into_inner();
+
+        let cmd = project::command::FetchUserCmd::new(
+            credential,
+            req.page,
+            req.page_size,
+            req.project_id,
+        )?;
+
+        let users = project::command::fetch_user(self.cache.clone(), cmd.clone()).await?;
+
+        let records = users.into_iter().map(|v| v.into()).collect();
+        let message = proto::FetchProjectUsersResponse { records };
+
+        Ok(tonic::Response::new(message))
+    }
     async fn fetch_project_user_invites(
         &self,
         request: tonic::Request<proto::FetchProjectUserInvitesRequest>,
@@ -283,30 +307,6 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
-
-    async fn fetch_project_users(
-        &self,
-        request: tonic::Request<proto::FetchProjectUsersRequest>,
-    ) -> Result<tonic::Response<proto::FetchProjectUsersResponse>, tonic::Status> {
-        let _credential = match request.extensions().get::<Credential>() {
-            Some(credential) => credential.clone(),
-            None => return Err(Status::unauthenticated("invalid credential")),
-        };
-
-        let req = request.into_inner();
-
-        let message = proto::FetchProjectUsersResponse {
-            records: vec![proto::ProjectUser {
-                id: Uuid::new_v4().to_string(),
-                project_id: req.project_id,
-                user_id: "auth0 id".into(),
-                role: "owner".into(),
-                ..Default::default()
-            }],
-        };
-
-        Ok(tonic::Response::new(message))
-    }
 }
 
 impl From<Project> for proto::Project {
@@ -336,6 +336,17 @@ impl From<ProjectUserInvite> for proto::ProjectUserInvite {
             expires_in: value.expires_in.to_rfc3339(),
             created_at: value.created_at.to_rfc3339(),
             updated_at: value.updated_at.to_rfc3339(),
+        }
+    }
+}
+
+impl From<ProjectUser> for proto::ProjectUser {
+    fn from(value: ProjectUser) -> Self {
+        Self {
+            user_id: value.user_id,
+            project_id: value.project_id,
+            role: value.role.to_string(),
+            created_at: value.created_at.to_rfc3339(),
         }
     }
 }
