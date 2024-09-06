@@ -7,3 +7,4 @@ rpc.toml
 test/.terraform*
 test/local.tfstate*
 crds-path/
+.github/iac/.terraform*
