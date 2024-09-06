@@ -24,9 +24,7 @@ provider "helm" {
 }
 
 variable "rpc_image" {}
-variable "kafka_admin_password" {}
 variable "kafka_rpc_password" {}
-variable "kafka_daemon_password" {}
 variable "secret" {}
 variable "auth0_client_id" {}
 variable "auth0_client_secret" {}
@@ -37,18 +35,11 @@ variable "email_ses_secret_access_key" {}
 
 locals {
   namespace                   = "fabric-stg"
-  queue_instance_name         = "fabric-queue"
   replicas                    = 1
-  external_domain             = "stg-fabric-queue.demeter.run"
-  broker_urls                 = "redpanda.${local.external_domain}:31092"
+  broker_urls                 = "redpanda.stg-fabric-queue.demeter.run:31092"
   secret                      = var.secret
-  kafka_admin_username        = "admin"
-  kafka_admin_password        = var.kafka_admin_password
   kafka_rpc_username          = "rpc"
   kafka_rpc_password          = var.kafka_rpc_password
-  kafka_daemon_username       = "daemon"
-  kafka_daemon_password       = var.kafka_daemon_password
-  kafka_daemon_consumer       = "daemon"
   kafka_topic                 = "stg"
   auth0_client_id             = var.auth0_client_id
   auth0_client_secret         = var.auth0_client_secret
@@ -67,28 +58,6 @@ resource "kubernetes_namespace_v1" "fabric_namespace" {
   }
 }
 
-module "fabric_queue" {
-  source     = "../../../fabric/bootstrap/queue/"
-  depends_on = [kubernetes_namespace_v1.fabric_namespace]
-
-  namespace       = local.namespace
-  instance_name   = local.queue_instance_name
-  replicas        = local.replicas
-  external_domain = local.external_domain
-  admin_username  = local.kafka_admin_username
-  admin_password  = local.kafka_admin_password
-  rpc_username    = local.kafka_rpc_username
-  rpc_password    = local.kafka_rpc_password
-
-  daemon_users = [
-    {
-      name          = local.kafka_daemon_username
-      password      = local.kafka_daemon_password
-      consumer_name = local.kafka_daemon_consumer
-    },
-  ]
-}
-
 module "fabric_rpc" {
   source = "../../../fabric/bootstrap/rpc"
 
@@ -96,8 +65,8 @@ module "fabric_rpc" {
   image                       = var.rpc_image
   broker_urls                 = local.broker_urls
   consumer_name               = "rpc"
-  kafka_username              = local.kafka_admin_username
-  kafka_password              = local.kafka_admin_password
+  kafka_username              = local.kafka_rpc_username
+  kafka_password              = local.kafka_rpc_password
   kafka_topic                 = local.kafka_topic
   secret                      = local.secret
   auth0_client_id             = local.auth0_client_id
@@ -111,11 +80,3 @@ module "fabric_rpc" {
   email_ses_verified_email    = local.email_ses_verified_email
 }
 
-module "fabric_services" {
-  source     = "../../../fabric/bootstrap/services/"
-  depends_on = [module.fabric_queue, module.fabric_rpc]
-
-  namespace          = local.namespace
-  ingress_class_name = "nginx"
-  dns_zone           = "demeter.run"
-}
