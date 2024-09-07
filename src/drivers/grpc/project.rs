@@ -2,13 +2,12 @@ use dmtri::demeter::ops::v1alpha as proto;
 use std::{sync::Arc, time::Duration};
 use tonic::{async_trait, Status};
 use tracing::error;
-use uuid::Uuid;
 
 use crate::domain::{
     auth::{Auth0Driven, Credential},
     event::EventDrivenBridge,
     project::{
-        self, cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectUser,
+        self, cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret, ProjectUser,
         ProjectUserInvite, StripeDriven,
     },
 };
@@ -146,7 +145,26 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
+    async fn fetch_project_secrets(
+        &self,
+        request: tonic::Request<proto::FetchProjectSecretsRequest>,
+    ) -> Result<tonic::Response<proto::FetchProjectSecretsResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
 
+        let req = request.into_inner();
+
+        let cmd = project::command::FetchSecretCmd::new(credential, req.project_id);
+
+        let secrets = project::command::fetch_secret(self.cache.clone(), cmd.clone()).await?;
+
+        let records = secrets.into_iter().map(|v| v.into()).collect();
+        let message = proto::FetchProjectSecretsResponse { records };
+
+        Ok(tonic::Response::new(message))
+    }
     async fn create_project_secret(
         &self,
         request: tonic::Request<proto::CreateProjectSecretRequest>,
@@ -173,28 +191,6 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             id: cmd.id,
             name: cmd.name,
             key,
-        };
-
-        Ok(tonic::Response::new(message))
-    }
-    async fn fetch_project_secrets(
-        &self,
-        request: tonic::Request<proto::FetchProjectSecretsRequest>,
-    ) -> Result<tonic::Response<proto::FetchProjectSecretsResponse>, tonic::Status> {
-        let _credential = match request.extensions().get::<Credential>() {
-            Some(credential) => credential.clone(),
-            None => return Err(Status::unauthenticated("invalid credential")),
-        };
-
-        let req = request.into_inner();
-
-        let message = proto::FetchProjectSecretsResponse {
-            records: vec![proto::ProjectSecret {
-                id: Uuid::new_v4().to_string(),
-                name: "Secret Name".into(),
-                project_id: req.project_id,
-                ..Default::default()
-            }],
         };
 
         Ok(tonic::Response::new(message))
@@ -346,6 +342,17 @@ impl From<ProjectUser> for proto::ProjectUser {
             user_id: value.user_id,
             project_id: value.project_id,
             role: value.role.to_string(),
+            created_at: value.created_at.to_rfc3339(),
+        }
+    }
+}
+
+impl From<ProjectSecret> for proto::ProjectSecret {
+    fn from(value: ProjectSecret) -> Self {
+        Self {
+            id: value.id,
+            project_id: value.project_id,
+            name: value.name,
             created_at: value.created_at.to_rfc3339(),
         }
     }
