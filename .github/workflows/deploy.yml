@@ -47,6 +47,4 @@ jobs:
 
       - name: apply terraform
         working-directory: .github/iac
-        env:
-          IMAGE_TAG: ${{ github.sha }}
         run: terraform apply -auto-approve -input=false
