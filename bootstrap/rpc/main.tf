@@ -77,6 +77,16 @@ variable "email_ses_verified_email" {
   default = "no-reply@demeter.run"
 }
 
+variable "url_prefix" {
+  type    = string
+  default = "rpc"
+}
+
+variable "dns_zone" {
+  type    = string
+  default = "demeter.run"
+}
+
 variable "replicas" {
   type    = number
   default = 1

@@ -2,7 +2,10 @@ use std::{collections::HashMap, env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use dotenv::dotenv;
-use fabric::drivers::{cache::CacheConfig, grpc::GrpcConfig};
+use fabric::drivers::{
+    cache::CacheConfig,
+    grpc::{GrpcConfig, GrpcTlsConfig},
+};
 use serde::{de::Visitor, Deserialize, Deserializer};
 use tokio::try_join;
 use tracing::Level;
@@ -55,6 +58,11 @@ struct EmailConfig {
     ses_verified_email: String,
 }
 #[derive(Debug, Clone, Deserialize)]
+struct TlsConfig {
+    ssl_crt_path: PathBuf,
+    ssl_key_path: PathBuf,
+}
+#[derive(Debug, Clone, Deserialize)]
 struct Config {
     addr: String,
     db_path: String,
@@ -64,6 +72,7 @@ struct Config {
     stripe: StripeConfig,
     secret: String,
     topic: String,
+    tls: Option<TlsConfig>,
     kafka_producer: HashMap<String, String>,
     kafka_consumer: HashMap<String, String>,
 }
@@ -102,6 +111,10 @@ impl From<Config> for GrpcConfig {
             ses_secret_access_key: value.email.ses_secret_access_key,
             ses_region: value.email.ses_region,
             ses_verified_email: value.email.ses_verified_email,
+            tls_config: value.tls.map(|value| GrpcTlsConfig {
+                ssl_key_path: value.ssl_key_path,
+                ssl_crt_path: value.ssl_crt_path,
+            }),
         }
     }
 }

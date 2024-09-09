@@ -9,8 +9,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
-use tonic::transport::Server;
-use tonic::Status;
+use tonic::{
+    transport::{Identity, Server, ServerTlsConfig},
+    Status,
+};
 use tracing::{error, info};
 
 use dmtri::demeter::ops::v1alpha::project_service_server::ProjectServiceServer;
@@ -99,9 +101,18 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
 
     let address = SocketAddr::from_str(&config.addr)?;
 
-    info!(address = config.addr, "Server running");
+    let mut server = if let Some(tls) = config.tls_config {
+        let cert = std::fs::read_to_string(tls.ssl_crt_path)?;
+        let key = std::fs::read_to_string(tls.ssl_key_path)?;
+        let identity = Identity::from_pem(cert, key);
 
-    Server::builder()
+        Server::builder().tls_config(ServerTlsConfig::new().identity(identity))?
+    } else {
+        Server::builder()
+    };
+
+    info!(address = config.addr, "Server running");
+    server
         .add_service(reflection)
         .add_service(project_service)
         .add_service(resource_service)
@@ -111,6 +122,11 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         .await?;
 
     Ok(())
+}
+
+pub struct GrpcTlsConfig {
+    pub ssl_crt_path: PathBuf,
+    pub ssl_key_path: PathBuf,
 }
 
 pub struct GrpcConfig {
@@ -131,6 +147,7 @@ pub struct GrpcConfig {
     pub ses_secret_access_key: String,
     pub ses_region: String,
     pub ses_verified_email: String,
+    pub tls_config: Option<GrpcTlsConfig>,
 }
 
 impl From<Error> for Status {
