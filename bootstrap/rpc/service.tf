@@ -1,21 +1,27 @@
-resource "kubernetes_service_v1" "fabric_rpc_service" {
+resource "kubernetes_service_v1" "service" {
   metadata {
+    name      = "rpc"
     namespace = var.namespace
-    name      = "fabric-rpc"
+    annotations = {
+      "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type" : "instance"
+      "service.beta.kubernetes.io/aws-load-balancer-scheme" : "internet-facing"
+      "service.beta.kubernetes.io/aws-load-balancer-type" : "external"
+    }
   }
 
   spec {
-    type = "ClusterIP"
-
-    port {
-      name        = "grpc"
-      port        = local.port
-      protocol    = "TCP"
-      target_port = local.port
-    }
-
+    load_balancer_class = "service.k8s.aws/nlb"
     selector = {
       role = local.role
     }
+
+    port {
+      name        = "api"
+      port        = 443
+      target_port = local.port
+      protocol    = "TCP"
+    }
+
+    type = "LoadBalancer"
   }
 }

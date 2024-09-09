@@ -78,5 +78,6 @@ module "fabric_rpc" {
   email_ses_access_key_id     = local.email_ses_access_key_id
   email_ses_secret_access_key = local.email_ses_secret_access_key
   email_ses_verified_email    = local.email_ses_verified_email
+  url_prefix                  = "rpc-stg"
 }
 

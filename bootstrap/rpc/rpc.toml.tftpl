@@ -10,6 +10,10 @@ client_id="${auth0_client_id}"
 client_secret="${auth0_client_secret}"
 audience="${auth0_audience}"
 
+[tls]
+ssl_crt_path = "/certs/tls.crt"
+ssl_key_path = "/certs/tls.key"
+
 [stripe]
 url = "https://api.stripe.com/v1"
 api_key = "${stripe_api_key}"

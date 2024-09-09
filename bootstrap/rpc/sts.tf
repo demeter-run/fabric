@@ -56,6 +56,7 @@ resource "kubernetes_stateful_set_v1" "rpc" {
           }
 
           port {
+            name           = "api"
             container_port = local.port
           }
 
@@ -72,6 +73,11 @@ resource "kubernetes_stateful_set_v1" "rpc" {
           volume_mount {
             name       = "crds"
             mount_path = "/fabric/crds"
+          }
+
+          volume_mount {
+            mount_path = "/certs"
+            name       = "certs"
           }
 
           resources {
@@ -97,6 +103,13 @@ resource "kubernetes_stateful_set_v1" "rpc" {
           name = "crds"
           config_map {
             name = local.crds_configmap_name
+          }
+        }
+
+        volume {
+          name = "certs"
+          secret {
+            secret_name = local.cert_secret_name
           }
         }
 
