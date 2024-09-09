@@ -36,7 +36,7 @@ variable "email_ses_secret_access_key" {}
 locals {
   namespace                   = "fabric-stg"
   replicas                    = 1
-  broker_urls                 = "redpanda.stg-fabric-queue.demeter.run:31092"
+  broker_urls                 = "redpanda-0.stg-fabric-queue.demeter.run:31092"
   secret                      = var.secret
   kafka_rpc_username          = "rpc"
   kafka_rpc_password          = var.kafka_rpc_password
