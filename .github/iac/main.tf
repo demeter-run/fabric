@@ -38,7 +38,7 @@ locals {
   replicas                    = 1
   broker_urls                 = "redpanda-0.fabric-queue.demeter.run:31092,redpanda-1.fabric-queue.demeter.run:31092,redpanda-2.fabric-queue.demeter.run:31092"
   secret                      = var.secret
-  kafka_rpc_username          = "rpc"
+  kafka_rpc_username          = "rpc-stg"
   kafka_rpc_password          = var.kafka_rpc_password
   kafka_topic                 = "events-stg"
   auth0_client_id             = var.auth0_client_id
