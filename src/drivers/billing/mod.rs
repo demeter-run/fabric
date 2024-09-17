@@ -1,25 +1,55 @@
 use anyhow::Result;
+use comfy_table::Table;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::Arc,
 };
 use tracing::info;
 
-use crate::driven::cache::{
-    project::SqliteProjectDrivenCache, resource::SqliteResourceDrivenCache,
-    usage::SqliteUsageDrivenCache, SqliteCache,
+use crate::{
+    domain,
+    driven::cache::{usage::SqliteUsageDrivenCache, SqliteCache},
 };
 
-pub async fn run(config: BillingConfig) -> Result<()> {
+pub async fn run(config: BillingConfig, period: &str) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     sqlite_cache.migrate().await?;
 
-    let _project_cache = Arc::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
-    let _resource_cache = Arc::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
-    let _usage_cache = Arc::new(SqliteUsageDrivenCache::new(sqlite_cache.clone()));
+    let usage_cache = Arc::new(SqliteUsageDrivenCache::new(sqlite_cache.clone()));
 
-    info!("Aggregating data");
+    info!("Collecting data");
+    let report = domain::usage::cache::find_report_aggregated(usage_cache.clone(), period).await?;
+    let projects = report
+        .iter()
+        .map(|r| r.project_id.clone())
+        .collect::<HashSet<_>>();
+
+    let mut table = Table::new();
+    table.set_header(vec!["project", "stripe_id", "port", "tier", "units"]);
+    for id in projects {
+        let resources: Vec<_> = report.iter().filter(|r| r.project_id == id).collect();
+        let total_units: i64 = resources.iter().map(|r| r.units).sum();
+
+        table.add_row(vec![
+            &resources.first().unwrap().project_namespace,
+            &resources.first().unwrap().project_billing_provider_id,
+            "",
+            "",
+            &total_units.to_string(),
+        ]);
+        for r in resources {
+            table.add_row(vec![
+                "",
+                "",
+                &r.resource_kind,
+                &r.tier,
+                &r.units.to_string(),
+            ]);
+        }
+    }
+
+    println!("{table}");
 
     Ok(())
 }

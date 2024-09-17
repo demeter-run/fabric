@@ -2,7 +2,7 @@ use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
 use crate::domain::{
-    usage::{cache::UsageDrivenCache, Usage, UsageReport},
+    usage::{cache::UsageDrivenCache, Usage, UsageReport, UsageReportAggregated},
     Result,
 };
 
@@ -51,6 +51,34 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
         .await?;
 
         Ok(report)
+    }
+
+    async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReportAggregated>> {
+        let report_aggregated = sqlx::query_as::<_, UsageReportAggregated>(
+            r#"
+                SELECT
+                	  p.id as project_id,
+                	  p.namespace as project_namespace,
+                	  p.billing_provider as project_billing_provider,
+                	  p.billing_provider_id as project_billing_provider_id,
+                	  r.id as resource_id,
+                	  r.kind as resource_kind,
+                	  u.tier as tier, 
+                	  SUM(u.units) as units, 
+                	  STRFTIME('%m-%Y', 'now') as period 
+                FROM "usage" u 
+                INNER JOIN resource r ON r.id == u.resource_id
+                INNER JOIN project p ON p.id == r.project_id 
+                WHERE STRFTIME('%m-%Y', u.created_at) = $1
+                GROUP BY resource_id, tier 
+                ORDER BY project_namespace, resource_id ASC;
+            "#,
+        )
+        .bind(period)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(report_aggregated)
     }
 
     async fn create(&self, usages: Vec<Usage>) -> Result<()> {
@@ -112,8 +140,26 @@ impl FromRow<'_, SqliteRow> for UsageReport {
     }
 }
 
+impl FromRow<'_, SqliteRow> for UsageReportAggregated {
+    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        Ok(Self {
+            project_id: row.try_get("project_id")?,
+            project_namespace: row.try_get("project_namespace")?,
+            project_billing_provider: row.try_get("project_billing_provider")?,
+            project_billing_provider_id: row.try_get("project_billing_provider_id")?,
+            resource_id: row.try_get("resource_id")?,
+            resource_kind: row.try_get("resource_kind")?,
+            tier: row.try_get("tier")?,
+            units: row.try_get("units")?,
+            period: row.try_get("period")?,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use chrono::Utc;
+
     use crate::driven::cache::tests::{mock_project, mock_resource};
 
     use super::*;
@@ -190,5 +236,34 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 2);
+    }
+
+    #[tokio::test]
+    async fn it_should_find_usage_report_aggregated() {
+        let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
+        let cache = SqliteUsageDrivenCache::new(sqlite_cache.clone());
+
+        let project = mock_project(sqlite_cache.clone()).await;
+        let resource = mock_resource(sqlite_cache.clone(), &project.id).await;
+
+        let usages = vec![
+            Usage {
+                resource_id: resource.id.clone(),
+                ..Default::default()
+            },
+            Usage {
+                resource_id: resource.id.clone(),
+                ..Default::default()
+            },
+        ];
+
+        cache.create(usages).await.unwrap();
+
+        let result = cache
+            .find_report_aggregated(&Utc::now().format("%m-%Y").to_string())
+            .await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().len() == 1);
     }
 }

@@ -31,16 +31,31 @@ impl From<UsageCreated> for Vec<Usage> {
     }
 }
 
+#[derive(Debug)]
 pub struct UsageUnit {
     pub resource_id: String,
     pub units: i64,
     pub tier: String,
 }
 
+#[derive(Debug)]
 pub struct UsageReport {
     pub resource_id: String,
     pub resource_kind: String,
     pub resource_spec: String,
+    pub tier: String,
+    pub units: i64,
+    pub period: String,
+}
+
+#[derive(Debug)]
+pub struct UsageReportAggregated {
+    pub project_id: String,
+    pub project_namespace: String,
+    pub project_billing_provider: String,
+    pub project_billing_provider_id: String,
+    pub resource_id: String,
+    pub resource_kind: String,
     pub tier: String,
     pub units: i64,
     pub period: String,

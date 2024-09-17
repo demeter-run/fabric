@@ -77,6 +77,7 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
     }
 }
 
+#[derive(Debug)]
 pub struct MonitorConfig {
     pub topic: String,
     pub kafka: HashMap<String, String>,

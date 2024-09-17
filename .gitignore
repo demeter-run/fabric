@@ -5,6 +5,7 @@ dev.billing.db*
 grpcurl*
 config.toml
 config.billing.toml
+config.daemon.toml
 rpc.toml
 test/.terraform*
 test/local.tfstate*

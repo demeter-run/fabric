@@ -19,10 +19,15 @@ struct Cli {
     command: Commands,
 }
 
+#[derive(Parser, Clone)]
+pub struct BillingArgs {
+    /// period to collect the data (month-year) e.g 09-2024
+    pub period: String,
+}
 #[derive(Subcommand)]
 enum Commands {
     /// Send the billing invoices
-    Billing,
+    Billing(BillingArgs),
 }
 
 #[tokio::main]
@@ -43,10 +48,10 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
     match cli.command {
-        Commands::Billing => {
+        Commands::Billing(args) => {
             info!("sincronizing cache");
             fabric::drivers::cache::subscribe(config.clone().into()).await?;
-            fabric::drivers::billing::run(config.clone().into()).await?;
+            fabric::drivers::billing::run(config.clone().into(), &args.period).await?;
         }
     }
 
