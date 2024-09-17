@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -15,6 +15,9 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Env
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
 struct Cli {
+    #[arg(short, long, help = "Cli config path file", env = "CLI_CONFIG")]
+    config: String,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -44,9 +47,9 @@ async fn main() -> Result<()> {
         .with(env_filter)
         .init();
 
-    let config = Config::new()?;
-
     let cli = Cli::parse();
+    let config = Config::new(&cli.config)?;
+
     match cli.command {
         Commands::Billing(args) => {
             info!("sincronizing cache");
@@ -71,13 +74,9 @@ struct Config {
     kafka_consumer: HashMap<String, String>,
 }
 impl Config {
-    pub fn new() -> Result<Self> {
+    pub fn new(path: &str) -> Result<Self> {
         let config = config::Config::builder()
-            .add_source(
-                config::File::with_name(&env::var("CLI_CONFIG").unwrap_or("cli.toml".into()))
-                    .required(false),
-            )
-            .add_source(config::Environment::with_prefix("cli").separator("_"))
+            .add_source(config::File::with_name(path).required(true))
             .build()?
             .try_deserialize()?;
 
