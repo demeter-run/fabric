@@ -59,11 +59,6 @@ async fn main() -> Result<()> {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct StripeConfig {
-    url: String,
-    api_key: String,
-}
-#[derive(Debug, Clone, Deserialize)]
 struct TlsConfig {
     ssl_crt_path: PathBuf,
     ssl_key_path: PathBuf,
@@ -71,7 +66,6 @@ struct TlsConfig {
 #[derive(Debug, Clone, Deserialize)]
 struct Config {
     db_path: String,
-    stripe: StripeConfig,
     topic: String,
     tls: Option<TlsConfig>,
     kafka_consumer: HashMap<String, String>,
@@ -95,8 +89,6 @@ impl From<Config> for BillingConfig {
     fn from(value: Config) -> Self {
         Self {
             db_path: value.db_path,
-            stripe_url: value.stripe.url,
-            stripe_api_key: value.stripe.api_key,
             kafka: value.kafka_consumer,
             topic: value.topic,
             tls_config: value.tls.map(|value| BillingTlsConfig {

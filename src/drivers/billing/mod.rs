@@ -65,7 +65,5 @@ pub struct BillingConfig {
     pub db_path: String,
     pub topic: String,
     pub kafka: HashMap<String, String>,
-    pub stripe_url: String,
-    pub stripe_api_key: String,
     pub tls_config: Option<BillingTlsConfig>,
 }
