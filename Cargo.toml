@@ -38,6 +38,7 @@ base64 = "0.22.1"
 json-patch = "2.0.0"
 aws-config = { version = "1.5.5", features = ["behavior-version-latest"] }
 aws-sdk-sesv2 = { version = "1.43.0", features = ["behavior-version-latest"] }
+clap = { version = "4.5.17", features = ["derive", "env"] }
 
 [dev-dependencies]
 mockall = "0.12.1"
@@ -49,6 +50,10 @@ path = "src/bin/daemon.rs"
 [[bin]]
 name = "rpc"
 path = "src/bin/rpc.rs"
+
+[[bin]]
+name = "cli"
+path = "src/bin/cli.rs"
 
 [lib]
 path = "src/lib.rs"
