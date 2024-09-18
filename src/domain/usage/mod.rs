@@ -55,6 +55,7 @@ pub struct UsageReport {
 pub struct UsageReportAggregated {
     pub project_id: String,
     pub project_namespace: String,
+    #[allow(dead_code)]
     pub project_billing_provider: String,
     pub project_billing_provider_id: String,
     pub resource_id: String,
