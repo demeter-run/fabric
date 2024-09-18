@@ -33,6 +33,7 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                 	  r.kind as resource_kind,
                 	  r.spec as resource_spec,
                 	  u.tier, 
+                    SUM(u.interval) as interval,
                 	  SUM(u.units) as units, 
                 	  STRFTIME('%m-%Y', 'now') as period 
                 FROM "usage" u 
@@ -64,6 +65,7 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                 	  r.id as resource_id,
                 	  r.kind as resource_kind,
                 	  u.tier as tier, 
+                	  SUM(u.interval) as interval, 
                 	  SUM(u.units) as units, 
                 	  STRFTIME('%m-%Y', 'now') as period 
                 FROM "usage" u 
@@ -85,6 +87,7 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
         let mut tx = self.sqlite.db.begin().await?;
 
         for usage in usages {
+            let interval = usage.interval as i64;
             sqlx::query!(
                 r#"
                 INSERT INTO usage (
@@ -93,15 +96,17 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                     event_id,
                     units,
                     tier,
+                    interval,
                     created_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
                 usage.id,
                 usage.resource_id,
                 usage.event_id,
                 usage.units,
                 usage.tier,
+                interval,
                 usage.created_at,
             )
             .execute(&mut *tx)
@@ -116,12 +121,14 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
 
 impl FromRow<'_, SqliteRow> for Usage {
     fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        let interval: i64 = row.try_get("interval")?;
         Ok(Self {
             id: row.try_get("id")?,
             event_id: row.try_get("event_id")?,
             resource_id: row.try_get("resource_id")?,
             units: row.try_get("units")?,
             tier: row.try_get("tier")?,
+            interval: interval as u64,
             created_at: row.try_get("created_at")?,
         })
     }
@@ -142,6 +149,7 @@ impl FromRow<'_, SqliteRow> for UsageReport {
 
 impl FromRow<'_, SqliteRow> for UsageReportAggregated {
     fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        let interval: i64 = row.try_get("interval")?;
         Ok(Self {
             project_id: row.try_get("project_id")?,
             project_namespace: row.try_get("project_namespace")?,
@@ -150,6 +158,7 @@ impl FromRow<'_, SqliteRow> for UsageReportAggregated {
             resource_id: row.try_get("resource_id")?,
             resource_kind: row.try_get("resource_kind")?,
             tier: row.try_get("tier")?,
+            interval: interval as u64,
             units: row.try_get("units")?,
             period: row.try_get("period")?,
         })

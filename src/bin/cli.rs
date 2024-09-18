@@ -1,10 +1,10 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 use dotenv::dotenv;
 use fabric::drivers::{
-    billing::{BillingConfig, BillingTlsConfig},
+    billing::{BillingConfig, BillingTlsConfig, OutputFormat},
     cache::CacheConfig,
 };
 use serde::Deserialize;
@@ -26,6 +26,9 @@ struct Cli {
 pub struct BillingArgs {
     /// period to collect the data (month-year) e.g 09-2024
     pub period: String,
+
+    /// format that will be returned table(log in terminal), json(log in terminal), csv(save a file e.g 09-2024.csv)
+    pub output: String,
 }
 #[derive(Subcommand)]
 enum Commands {
@@ -53,8 +56,16 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Billing(args) => {
             info!("sincronizing cache");
+
+            let output = match args.output.as_str() {
+                "table" => OutputFormat::Table,
+                "json" => OutputFormat::Json,
+                "csv" => OutputFormat::Csv,
+                _ => bail!("invalid output format"),
+            };
+
             fabric::drivers::cache::subscribe(config.clone().into()).await?;
-            fabric::drivers::billing::run(config.clone().into(), &args.period).await?;
+            fabric::drivers::billing::run(config.clone().into(), &args.period, output).await?;
         }
     }
 

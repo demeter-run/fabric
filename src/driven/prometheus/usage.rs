@@ -20,16 +20,17 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<UsageUnit>> {
-        let since = (end - start).num_seconds();
-
-        let query = format!(
-            "round(sum by (resource_name, tier) (increase(usage{{tier!~\"0\"}}[{since}s] @ {})) > 0)",
-            end.timestamp_millis() / 1000
-        );
-
         let response = self
             .client
-            .get(format!("{}/query?query={query}", &self.url))
+            .get(format!(
+                "{}/query_range?query=sum by (resource_name, tier) (usage)",
+                &self.url
+            ))
+            .query(&[
+                ("start", start.timestamp().to_string()),
+                ("end", end.timestamp().to_string()),
+                ("step", "10m".into()),
+            ])
             .send()
             .await?;
 
@@ -37,8 +38,8 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
         if status.is_client_error() || status.is_server_error() {
             error!(status = status.to_string(), "request status code fail");
             return Err(Error::Unexpected(format!(
-                "Prometheus request error. Status: {} Query: {}",
-                status, query
+                "Prometheus request error. Status: {}",
+                status
             )));
         }
 
@@ -48,10 +49,37 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
             .data
             .result
             .iter()
-            .map(|r| UsageUnit {
-                resource_id: r.metric.resource_name.clone(),
-                units: r.value,
-                tier: r.metric.tier.clone(),
+            .map(|r| {
+                let min = r.values.iter().min_by_key(|v| v.timestamp);
+                let max = r.values.iter().max_by_key(|v| v.timestamp);
+
+                let first_timestamp = match min {
+                    Some(v) => v.timestamp,
+                    None => 0,
+                };
+                let last_timestamp = match max {
+                    Some(v) => v.timestamp,
+                    None => 0,
+                };
+
+                let first_value = match min {
+                    Some(v) => v.value,
+                    None => 0,
+                };
+                let last_value = match max {
+                    Some(v) => v.value,
+                    None => 0,
+                };
+
+                let interval = last_timestamp - first_timestamp;
+                let units = last_value - first_value;
+
+                UsageUnit {
+                    resource_id: r.metric.resource_name.clone(),
+                    units,
+                    interval,
+                    tier: r.metric.tier.clone(),
+                }
             })
             .collect();
 
@@ -71,6 +99,14 @@ struct PrometheusData {
 #[derive(Debug, Deserialize)]
 struct PrometheusUsageResult {
     metric: PrometheusUsageMetric,
+    values: Vec<PrometheusValue>,
+}
+#[derive(Debug, Deserialize)]
+struct PrometheusValue {
+    #[serde(rename = "0")]
+    timestamp: u64,
+
+    #[serde(rename = "1")]
     #[serde(deserialize_with = "deserialize_value")]
     value: i64,
 }
