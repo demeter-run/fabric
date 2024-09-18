@@ -63,6 +63,7 @@ pub struct UsageReportAggregated {
     pub tier: String,
     pub interval: u64,
     pub units: i64,
+    #[allow(dead_code)]
     pub period: String,
 }
 
