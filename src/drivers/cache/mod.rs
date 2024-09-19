@@ -63,6 +63,9 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                         )
                         .await
                     }
+                    Event::ProjectUserDeleted(evt) => {
+                        todo!()
+                    }
                     Event::ResourceCreated(evt) => {
                         resource::cache::create(resource_cache.clone(), evt.clone()).await
                     }
