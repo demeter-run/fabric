@@ -496,6 +496,23 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         Ok(())
     }
+
+    async fn delete_user(&self, project_id: &str, id: &str) -> Result<()> {
+        sqlx::query!(
+            r#"
+                DELETE FROM
+                    project_user
+                WHERE 
+                    project_id=$1 AND user_id=$2;
+            "#,
+            project_id,
+            id,
+        )
+        .execute(&self.sqlite.db)
+        .await?;
+
+        Ok(())
+    }
 }
 
 impl FromRow<'_, SqliteRow> for Project {
@@ -847,5 +864,32 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn it_should_delete_user() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let invite = ProjectUserInvite {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_user_invite(&invite).await.unwrap();
+
+        let project_user = ProjectUser {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache
+            .create_user_acceptance(&invite.id, &project_user)
+            .await
+            .unwrap();
+
+        let result = cache.delete_user(&project.id, &project_user.user_id).await;
+
+        assert!(result.is_ok());
     }
 }

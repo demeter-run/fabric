@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
 use crate::domain::event::{
-    ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated,
+    ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated, ProjectUserDeleted,
     ProjectUserInviteAccepted, ProjectUserInviteCreated,
 };
 use crate::domain::Result;
@@ -40,6 +40,7 @@ pub trait ProjectDrivenCache: Send + Sync {
     async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
     async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()>;
     async fn create_user_acceptance(&self, invite_id: &str, user: &ProjectUser) -> Result<()>;
+    async fn delete_user(&self, project_id: &str, id: &str) -> Result<()>;
 }
 
 pub async fn create(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectCreated) -> Result<()> {
@@ -75,6 +76,13 @@ pub async fn create_user_invite_acceptance(
     cache
         .create_user_acceptance(&evt.id.clone(), &evt.try_into()?)
         .await
+}
+
+pub async fn delete_user(
+    cache: Arc<dyn ProjectDrivenCache>,
+    evt: ProjectUserDeleted,
+) -> Result<()> {
+    cache.delete_user(&evt.project_id, &evt.user_id).await
 }
 
 #[cfg(test)]

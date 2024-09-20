@@ -14,7 +14,7 @@ use crate::domain::{
     error::Error,
     event::{
         EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated,
-        ProjectUserInviteAccepted, ProjectUserInviteCreated,
+        ProjectUserDeleted, ProjectUserInviteAccepted, ProjectUserInviteCreated,
     },
     project::{ProjectStatus, ProjectUserInviteStatus},
     utils, Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
@@ -72,7 +72,7 @@ pub async fn update(
     cmd: UpdateCmd,
 ) -> Result<Project> {
     assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.id).await?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.id, None).await?;
 
     let evt = ProjectUpdated {
         id: cmd.id.clone(),
@@ -97,7 +97,7 @@ pub async fn delete(
     cmd: DeleteCmd,
 ) -> Result<()> {
     assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.id).await?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.id, None).await?;
 
     let project = match cache.find_by_id(&cmd.id).await? {
         Some(project) => project,
@@ -121,7 +121,7 @@ pub async fn fetch_secret(
     cmd: FetchSecretCmd,
 ) -> Result<Vec<ProjectSecret>> {
     assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id, None).await?;
 
     cache.find_secrets(&cmd.project_id).await
 }
@@ -132,7 +132,7 @@ pub async fn create_secret(
     cmd: CreateSecretCmd,
 ) -> Result<String> {
     assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id, None).await?;
 
     let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
         return Err(Error::CommandMalformed("invalid project id".into()));
@@ -233,11 +233,51 @@ pub async fn fetch_user(
     cmd: FetchUserCmd,
 ) -> Result<Vec<ProjectUser>> {
     assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id, None).await?;
 
     cache
         .find_users(&cmd.project_id, &cmd.page, &cmd.page_size)
         .await
+}
+pub async fn delete_user(
+    cache: Arc<dyn ProjectDrivenCache>,
+    event: Arc<dyn EventDrivenBridge>,
+    cmd: DeleteUserCmd,
+) -> Result<()> {
+    let user_id = assert_credential(&cmd.credential)?;
+    assert_permission(
+        cache.clone(),
+        &cmd.credential,
+        &cmd.project_id,
+        Some(ProjectUserRole::Owner),
+    )
+    .await?;
+
+    let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
+        return Err(Error::CommandMalformed("invalid project id".into()));
+    };
+
+    if project.owner == cmd.id {
+        return Err(Error::CommandMalformed("owner can not be deleted".into()));
+    }
+
+    let Some(user_permission) = cache.find_user_permission(&cmd.id, &cmd.project_id).await? else {
+        return Err(Error::CommandMalformed("invalid user id".into()));
+    };
+
+    let evt = ProjectUserDeleted {
+        id: Uuid::new_v4().to_string(),
+        project_id: project.id,
+        user_id: user_permission.user_id,
+        role: user_permission.role.to_string(),
+        deleted_by: user_id,
+        deleted_at: Utc::now(),
+    };
+
+    event.dispatch(evt.into()).await?;
+    info!(user = &cmd.id, "project user deleted");
+
+    Ok(())
 }
 
 pub async fn fetch_user_invite(
@@ -245,7 +285,7 @@ pub async fn fetch_user_invite(
     cmd: FetchUserInviteCmd,
 ) -> Result<Vec<ProjectUserInvite>> {
     assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id, None).await?;
 
     cache
         .find_user_invites(&cmd.project_id, &cmd.page, &cmd.page_size)
@@ -259,7 +299,7 @@ pub async fn create_user_invite(
     cmd: CreateUserInviteCmd,
 ) -> Result<()> {
     assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id).await?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id, None).await?;
 
     let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
         return Err(Error::CommandMalformed("invalid project id".into()));
@@ -353,6 +393,7 @@ async fn assert_permission(
     cache: Arc<dyn ProjectDrivenCache>,
     credential: &Credential,
     project_id: &str,
+    role: Option<ProjectUserRole>,
 ) -> Result<()> {
     match credential {
         Credential::Auth0(user_id) => {
@@ -361,7 +402,16 @@ async fn assert_permission(
                 return Err(Error::Unauthorized("user doesnt have permission".into()));
             }
 
-            Ok(())
+            match role {
+                Some(role) => {
+                    let permission = result.unwrap();
+                    if role != permission.role {
+                        return Err(Error::Unauthorized("user doesnt have permission".into()));
+                    }
+                    Ok(())
+                }
+                None => Ok(()),
+            }
         }
         Credential::ApiKey(_) => Err(Error::Unauthorized("rpc doesnt support api-key".into())),
     }
@@ -509,6 +559,22 @@ impl FetchUserCmd {
             page_size,
             project_id,
         })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DeleteUserCmd {
+    pub credential: Credential,
+    pub project_id: String,
+    pub id: String,
+}
+impl DeleteUserCmd {
+    pub fn new(credential: Credential, project_id: String, id: String) -> Self {
+        Self {
+            credential,
+            project_id,
+            id,
+        }
     }
 }
 
@@ -699,6 +765,15 @@ mod tests {
                 credential: Credential::Auth0("user id".into()),
                 page: 1,
                 page_size: 12,
+                project_id: Uuid::new_v4().to_string(),
+            }
+        }
+    }
+    impl Default for DeleteUserCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                id: "member user id".into(),
                 project_id: Uuid::new_v4().to_string(),
             }
         }
@@ -1227,5 +1302,47 @@ mod tests {
 
         let result = fetch_user(Arc::new(cache), cmd).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_delete_project_user() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .times(2)
+            .returning(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let mut event = MockEventDrivenBridge::new();
+        event.expect_dispatch().return_once(|_| Ok(()));
+
+        let cmd = DeleteUserCmd::default();
+
+        let result = delete_user(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_fail_delete_project_user_when_the_project_owner_is_the_user() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let mut event = MockEventDrivenBridge::new();
+        event.expect_dispatch().return_once(|_| Ok(()));
+
+        let cmd = DeleteUserCmd {
+            id: "user id".into(),
+            ..Default::default()
+        };
+
+        let result = delete_user(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_err());
     }
 }

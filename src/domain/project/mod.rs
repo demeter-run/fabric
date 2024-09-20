@@ -219,7 +219,7 @@ impl TryFrom<ProjectUserInviteAccepted> for ProjectUser {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectUserRole {
     Owner,
     Member,
