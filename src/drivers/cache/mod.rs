@@ -1,6 +1,7 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use rdkafka::{
     consumer::{CommitMode, Consumer, StreamConsumer},
+    error::KafkaError,
     ClientConfig, Message,
 };
 use std::{borrow::Borrow, collections::HashMap, path::Path, sync::Arc};
@@ -26,16 +27,21 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
     for (k, v) in config.kafka.iter() {
         client_config.set(k, v);
     }
+
     let consumer: StreamConsumer = client_config.create()?;
     consumer.subscribe(&[&config.topic])?;
 
     info!("Subscriber running");
     loop {
-        // If we fail to consume from Kafka, we need a restart.
-        let message = consumer
-            .recv()
-            .await
-            .expect("Failed to consume from Kafka, restarting");
+        let result = consumer.recv().await;
+        if let Err(error) = result {
+            return match error {
+                KafkaError::PartitionEOF(_) => Ok(()),
+                _ => bail!(error),
+            };
+        }
+
+        let message = result.unwrap();
 
         info!("Consuming from kafka, current offset: {}", message.offset());
         match message.borrow().try_into() {

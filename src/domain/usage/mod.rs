@@ -13,6 +13,7 @@ pub struct Usage {
     pub resource_id: String,
     pub units: i64,
     pub tier: String,
+    pub interval: u64,
     pub created_at: DateTime<Utc>,
 }
 impl From<UsageCreated> for Vec<Usage> {
@@ -25,24 +26,44 @@ impl From<UsageCreated> for Vec<Usage> {
                 resource_id: usage.resource_id.clone(),
                 units: usage.units,
                 tier: usage.tier.clone(),
+                interval: usage.interval,
                 created_at: evt.created_at,
             })
             .collect()
     }
 }
 
+#[derive(Debug)]
 pub struct UsageUnit {
     pub resource_id: String,
     pub units: i64,
     pub tier: String,
+    pub interval: u64,
 }
 
+#[derive(Debug)]
 pub struct UsageReport {
     pub resource_id: String,
     pub resource_kind: String,
     pub resource_spec: String,
     pub tier: String,
     pub units: i64,
+    pub period: String,
+}
+
+#[derive(Debug)]
+pub struct UsageReportAggregated {
+    pub project_id: String,
+    pub project_namespace: String,
+    #[allow(dead_code)]
+    pub project_billing_provider: String,
+    pub project_billing_provider_id: String,
+    pub resource_id: String,
+    pub resource_kind: String,
+    pub tier: String,
+    pub interval: u64,
+    pub units: i64,
+    #[allow(dead_code)]
     pub period: String,
 }
 
@@ -60,6 +81,7 @@ mod tests {
                 resource_id: Uuid::new_v4().to_string(),
                 units: 120,
                 tier: "0".into(),
+                interval: 10,
                 created_at: Utc::now(),
             }
         }

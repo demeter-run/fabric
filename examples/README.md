@@ -13,3 +13,7 @@ Use the [rpc config](config/rpc.toml)
 It's possible to create a toml file as config and set the file path in the env `DAEMON_CONFIG`, but it's possible to set the config using the prefix `DAEMON_`
 
 Use the [daemon config](config/daemon.toml)
+
+## cli 
+
+Use the [cli config](config/cli.toml)

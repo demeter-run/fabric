@@ -22,10 +22,6 @@ fn deserialize_value<'de, D>(deserializer: D) -> Result<i64, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let value: Vec<serde_json::Value> = Deserialize::deserialize(deserializer)?;
-    Ok(value.into_iter().as_slice()[1]
-        .as_str()
-        .unwrap()
-        .parse::<i64>()
-        .unwrap())
+    let value = String::deserialize(deserializer)?;
+    Ok(value.parse().unwrap())
 }

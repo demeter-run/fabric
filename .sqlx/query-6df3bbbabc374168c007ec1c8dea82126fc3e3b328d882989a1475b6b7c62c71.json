@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                INSERT INTO usage (\n                    id,\n                    resource_id,\n                    event_id,\n                    units,\n                    tier,\n                    interval,\n                    created_at\n                )\n                VALUES ($1, $2, $3, $4, $5, $6, $7)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "6df3bbbabc374168c007ec1c8dea82126fc3e3b328d882989a1475b6b7c62c71"
+}

@@ -43,6 +43,7 @@ pub async fn sync_usage(
                 resource_id: u.resource_id,
                 units: u.units,
                 tier: u.tier,
+                interval: u.interval,
             })
             .collect(),
         created_at: Utc::now(),

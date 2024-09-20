@@ -1,0 +1,8 @@
+db_path="dev.billing.db"
+topic="events"
+
+[kafka_consumer]
+"bootstrap.servers" = "localhost:19092"
+"group.id"= "billing-stg-local-1"
+"auto.offset.reset" = "earliest"
+"enable.partition.eof" = true

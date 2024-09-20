@@ -123,6 +123,7 @@ pub struct UsageUnitCreated {
     pub resource_id: String,
     pub tier: String,
     pub units: i64,
+    pub interval: u64,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsageCreated {
@@ -296,6 +297,7 @@ mod tests {
                     resource_id: Uuid::new_v4().to_string(),
                     units: 120,
                     tier: "0".into(),
+                    interval: 10,
                 }],
                 created_at: Utc::now(),
             }
