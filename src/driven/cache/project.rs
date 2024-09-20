@@ -329,30 +329,6 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         Ok(project_user)
     }
 
-    async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>> {
-        let invite = sqlx::query_as::<_, ProjectUserInvite>(
-            r#"
-                SELECT 
-                    pui.id,
-                    pui.project_id,
-                    pui.email,
-                    pui."role",
-                    pui.code,
-                    pui.status,
-                    pui.expires_in,
-                    pui.created_at,
-                    pui.updated_at
-                FROM project_user_invite pui
-                WHERE pui.code = $1;
-            "#,
-        )
-        .bind(code)
-        .fetch_optional(&self.sqlite.db)
-        .await?;
-
-        Ok(invite)
-    }
-
     async fn find_users(
         &self,
         project_id: &str,
@@ -419,6 +395,52 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         .await?;
 
         Ok(invites)
+    }
+    async fn find_user_invite_by_id(&self, id: &str) -> Result<Option<ProjectUserInvite>> {
+        let invite = sqlx::query_as::<_, ProjectUserInvite>(
+            r#"
+                SELECT 
+                    pui.id,
+                    pui.project_id,
+                    pui.email,
+                    pui."role",
+                    pui.code,
+                    pui.status,
+                    pui.expires_in,
+                    pui.created_at,
+                    pui.updated_at
+                FROM project_user_invite pui
+                WHERE pui.id = $1;
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        Ok(invite)
+    }
+    async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>> {
+        let invite = sqlx::query_as::<_, ProjectUserInvite>(
+            r#"
+                SELECT 
+                    pui.id,
+                    pui.project_id,
+                    pui.email,
+                    pui."role",
+                    pui.code,
+                    pui.status,
+                    pui.expires_in,
+                    pui.created_at,
+                    pui.updated_at
+                FROM project_user_invite pui
+                WHERE pui.code = $1;
+            "#,
+        )
+        .bind(code)
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        Ok(invite)
     }
 
     async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()> {
@@ -774,6 +796,42 @@ mod tests {
         cache.create_user_invite(&invite).await.unwrap();
 
         let result = cache.find_user_invite_by_code("invalid").await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+    #[tokio::test]
+    async fn it_should_find_user_invite_by_id() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let invite = ProjectUserInvite {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_user_invite(&invite).await.unwrap();
+
+        let result = cache.find_user_invite_by_id(&invite.id).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+    }
+    #[tokio::test]
+    async fn it_should_return_none_find_user_invite_by_id() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let invite = ProjectUserInvite {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_user_invite(&invite).await.unwrap();
+
+        let result = cache.find_user_invite_by_id("invalid").await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());

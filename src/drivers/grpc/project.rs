@@ -303,6 +303,26 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
+    async fn resend_project_user_invite(
+        &self,
+        request: tonic::Request<proto::ResendProjectUserInviteRequest>,
+    ) -> Result<tonic::Response<proto::ResendProjectUserInviteResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = project::command::ResendUserInviteCmd::new(credential, req.id);
+
+        project::command::resend_user_invite(self.cache.clone(), self.email.clone(), cmd.clone())
+            .await?;
+
+        let message = proto::ResendProjectUserInviteResponse {};
+
+        Ok(tonic::Response::new(message))
+    }
 
     async fn delete_project_user(
         &self,

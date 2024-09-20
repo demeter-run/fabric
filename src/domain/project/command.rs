@@ -381,6 +381,47 @@ pub async fn accept_user_invite(
     Ok(())
 }
 
+pub async fn resend_user_invite(
+    cache: Arc<dyn ProjectDrivenCache>,
+    email: Arc<dyn ProjectEmailDriven>,
+    cmd: ResendUserInviteCmd,
+) -> Result<()> {
+    assert_credential(&cmd.credential)?;
+
+    let Some(user_invite) = cache.find_user_invite_by_id(&cmd.id).await? else {
+        return Err(Error::CommandMalformed("invalid invite id".into()));
+    };
+
+    assert_permission(
+        cache.clone(),
+        &cmd.credential,
+        &user_invite.project_id,
+        None,
+    )
+    .await?;
+
+    if Utc::now() > user_invite.expires_in {
+        return Err(Error::CommandMalformed("invite code expired".into()));
+    }
+
+    let Some(project) = cache.find_by_id(&user_invite.project_id).await? else {
+        return Err(Error::CommandMalformed("invalid project id".into()));
+    };
+
+    email
+        .send_invite(
+            &project.name,
+            &user_invite.email,
+            &user_invite.code,
+            &user_invite.expires_in,
+        )
+        .await?;
+
+    info!("project invite resent");
+
+    Ok(())
+}
+
 fn assert_credential(credential: &Credential) -> Result<UserId> {
     match credential {
         Credential::Auth0(user_id) => Ok(user_id.into()),
@@ -658,6 +699,17 @@ impl AcceptUserInviteCmd {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ResendUserInviteCmd {
+    pub credential: Credential,
+    pub id: String,
+}
+impl ResendUserInviteCmd {
+    pub fn new(credential: Credential, id: String) -> Self {
+        Self { credential, id }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use uuid::Uuid;
@@ -756,6 +808,14 @@ mod tests {
                 credential: Credential::Auth0("user id".into()),
                 id: Uuid::new_v4().to_string(),
                 code: "123".into(),
+            }
+        }
+    }
+    impl Default for ResendUserInviteCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                id: Uuid::new_v4().to_string(),
             }
         }
     }
@@ -1284,6 +1344,68 @@ mod tests {
 
         let result =
             accept_user_invite(Arc::new(cache), Arc::new(auth0), Arc::new(event), cmd).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn it_should_resend_project_user_invite() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_user_invite_by_id()
+            .return_once(|_| Ok(Some(ProjectUserInvite::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let mut email = MockProjectEmailDriven::new();
+        email.expect_send_invite().return_once(|_, _, _, _| Ok(()));
+
+        let cmd = ResendUserInviteCmd::default();
+
+        let result = resend_user_invite(Arc::new(cache), Arc::new(email), cmd).await;
+
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_fail_resend_project_user_invite_when_invite_doesnt_exist() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_user_invite_by_id()
+            .return_once(|_| Ok(None));
+
+        let email = MockProjectEmailDriven::new();
+
+        let cmd = ResendUserInviteCmd::default();
+
+        let result = resend_user_invite(Arc::new(cache), Arc::new(email), cmd).await;
+
+        assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_resend_project_user_invite_when_invite_code_expired() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache.expect_find_user_invite_by_id().return_once(|_| {
+            Ok(Some(ProjectUserInvite {
+                expires_in: Utc::now() - Duration::from_secs(10),
+                ..Default::default()
+            }))
+        });
+
+        let email = MockProjectEmailDriven::new();
+
+        let cmd = ResendUserInviteCmd::default();
+
+        let result = resend_user_invite(Arc::new(cache), Arc::new(email), cmd).await;
 
         assert!(result.is_err());
     }
