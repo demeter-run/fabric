@@ -37,6 +37,7 @@ pub trait ProjectDrivenCache: Send + Sync {
         page: &u32,
         page_size: &u32,
     ) -> Result<Vec<ProjectUserInvite>>;
+    async fn find_user_invite_by_id(&self, id: &str) -> Result<Option<ProjectUserInvite>>;
     async fn find_user_invite_by_code(&self, code: &str) -> Result<Option<ProjectUserInvite>>;
     async fn create_user_invite(&self, invite: &ProjectUserInvite) -> Result<()>;
     async fn create_user_acceptance(&self, invite_id: &str, user: &ProjectUser) -> Result<()>;
