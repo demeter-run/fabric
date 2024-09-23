@@ -96,13 +96,19 @@ pub async fn delete(
     event: Arc<dyn EventDrivenBridge>,
     cmd: DeleteCmd,
 ) -> Result<()> {
-    assert_credential(&cmd.credential)?;
+    let user_id = assert_credential(&cmd.credential)?;
     assert_permission(cache.clone(), &cmd.credential, &cmd.id, None).await?;
 
     let project = match cache.find_by_id(&cmd.id).await? {
         Some(project) => project,
         None => return Err(Error::Unexpected("Failed to locate project.".into())),
     };
+
+    if user_id != project.owner {
+        return Err(Error::CommandMalformed(
+            "Just the creator can delete the project".into(),
+        ));
+    }
 
     let evt = ProjectDeleted {
         id: cmd.id.clone(),
@@ -111,7 +117,7 @@ pub async fn delete(
     };
 
     event.dispatch(evt.into()).await?;
-    info!(project = &cmd.id, "project updated");
+    info!(project = &cmd.id, "project deleted");
 
     Ok(())
 }
@@ -838,6 +844,14 @@ mod tests {
             }
         }
     }
+    impl Default for DeleteCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                id: Uuid::new_v4().to_string(),
+            }
+        }
+    }
 
     #[tokio::test]
     async fn it_should_fetch_user_projects() {
@@ -1465,6 +1479,57 @@ mod tests {
         };
 
         let result = delete_user(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn it_should_delete_project() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+
+        cache.expect_find_by_id().return_once(|_| {
+            Ok(Some(Project {
+                owner: "user id".into(),
+                ..Default::default()
+            }))
+        });
+
+        let mut event = MockEventDrivenBridge::new();
+        event.expect_dispatch().return_once(|_| Ok(()));
+
+        let cmd = DeleteCmd {
+            credential: Credential::Auth0("user id".into()),
+            ..Default::default()
+        };
+
+        let result = delete(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_fail_delete_project_when_user_is_not_creator() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+
+        cache.expect_find_by_id().return_once(|_| {
+            Ok(Some(Project {
+                owner: "user id".into(),
+                ..Default::default()
+            }))
+        });
+
+        let event = MockEventDrivenBridge::new();
+
+        let cmd = DeleteCmd {
+            credential: Credential::Auth0("user id member".into()),
+            ..Default::default()
+        };
+
+        let result = delete(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_err());
     }
 }
