@@ -24,7 +24,7 @@ use crate::driven::cache::resource::SqliteResourceDrivenCache;
 use crate::driven::cache::usage::SqliteUsageDrivenCache;
 use crate::driven::cache::SqliteCache;
 use crate::driven::kafka::KafkaProducer;
-use crate::driven::metadata::MetadataCrd;
+use crate::driven::metadata::Metadata;
 use crate::driven::ses::SESDrivenImpl;
 use crate::driven::stripe::StripeDrivenImpl;
 
@@ -42,7 +42,7 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
 
     let event_bridge = Arc::new(KafkaProducer::new(&config.topic, &config.kafka)?);
 
-    let metadata = Arc::new(MetadataCrd::new(&config.crds_path)?);
+    let metadata = Arc::new(Metadata::new(&config.crds_path)?);
 
     let auth0 = Arc::new(
         Auth0DrivenImpl::try_new(

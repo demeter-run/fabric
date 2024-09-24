@@ -24,13 +24,16 @@ use super::{cache::ResourceDrivenCache, Resource};
 pub async fn fetch(
     project_cache: Arc<dyn ProjectDrivenCache>,
     resource_cache: Arc<dyn ResourceDrivenCache>,
+    metadata: Arc<dyn MetadataDriven>,
     cmd: FetchCmd,
 ) -> Result<Vec<Resource>> {
     assert_project_permission(project_cache.clone(), &cmd.credential, &cmd.project_id).await?;
 
-    resource_cache
+    let resources = resource_cache
         .find(&cmd.project_id, &cmd.page, &cmd.page_size)
-        .await
+        .await?;
+
+    Ok(resources)
 }
 
 pub async fn fetch_by_id(

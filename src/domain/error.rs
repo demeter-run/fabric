@@ -52,3 +52,8 @@ impl From<reqwest::Error> for Error {
         Self::Unexpected(value.to_string())
     }
 }
+impl From<handlebars::RenderError> for Error {
+    fn from(value: handlebars::RenderError) -> Self {
+        Self::Unexpected(value.to_string())
+    }
+}
