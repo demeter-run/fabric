@@ -16,7 +16,7 @@ pub struct Resource {
     pub project_id: String,
     pub kind: String,
     pub spec: String,
-    pub annotations: Option<Vec<serde_json::Value>>,
+    pub annotations: Option<String>,
     pub status: ResourceStatus,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use anyhow::{Error, Result as AnyhowResult};
+use anyhow::Result as AnyhowResult;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 
 use crate::domain::{metadata::MetadataDriven, Result};
@@ -10,7 +10,7 @@ pub struct Metadata<'a> {
     hbs: handlebars::Handlebars<'a>,
 }
 
-impl Metadata<'_> {
+impl<'a> Metadata<'a> {
     pub fn new(path: &Path) -> AnyhowResult<Self> {
         let dir = fs::read_dir(path)?;
 
@@ -28,7 +28,13 @@ impl Metadata<'_> {
                         crds.push(crd);
                     }
                     Some("hbs") => {
-                        let name = entry.file_name().to_str().unwrap().to_string();
+                        let name = entry
+                            .path()
+                            .file_stem()
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string();
                         let template = String::from_utf8(file.clone())?;
 
                         hbs.register_template_string(&name, template)?;
@@ -43,7 +49,7 @@ impl Metadata<'_> {
 }
 
 #[async_trait::async_trait]
-impl MetadataDriven for Metadata<'_> {
+impl<'a> MetadataDriven for Metadata<'a> {
     async fn find(&self) -> Result<Vec<CustomResourceDefinition>> {
         Ok(self.crds.clone())
     }
@@ -55,10 +61,11 @@ impl MetadataDriven for Metadata<'_> {
             .find(|crd| crd.spec.names.kind == kind))
     }
 
-    async fn render_hbs(&self, name: &str, spec: &str) -> Result<String> {
+    fn render_hbs(&self, name: &str, spec: &str) -> Result<String> {
         let data: serde_json::Value = serde_json::from_str(spec)?;
+        let rendered = self.hbs.render(name, &data)?;
+        let value: serde_json::Value = serde_json::from_str(&rendered.replace('\n', ""))?;
 
-        let x = self.hbs.render(name, &data)?.clone();
-        Ok(x)
+        Ok(value.to_string())
     }
 }

@@ -47,8 +47,13 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)?;
 
-        let resources =
-            command::fetch(self.project_cache.clone(), self.resource_cache.clone(), cmd).await?;
+        let resources = command::fetch(
+            self.project_cache.clone(),
+            self.resource_cache.clone(),
+            self.metadata.clone(),
+            cmd,
+        )
+        .await?;
 
         let records = resources.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchResourcesResponse { records };
@@ -68,13 +73,16 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         let cmd = command::FetchByIdCmd {
             credential,
-            project_id: req.project_id,
-            resource_id: req.resource_id,
+            id: req.id,
         };
 
-        let resource =
-            command::fetch_by_id(self.project_cache.clone(), self.resource_cache.clone(), cmd)
-                .await?;
+        let resource = command::fetch_by_id(
+            self.project_cache.clone(),
+            self.resource_cache.clone(),
+            self.metadata.clone(),
+            cmd,
+        )
+        .await?;
 
         let records = vec![resource.into()];
         let message = proto::FetchResourcesByIdResponse { records };
@@ -166,8 +174,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         let cmd = command::DeleteCmd {
             credential,
-            project_id: req.project_id,
-            resource_id: req.resource_id,
+            id: req.id,
         };
 
         command::delete(
@@ -188,6 +195,7 @@ impl From<Resource> for proto::Resource {
             id: value.id,
             kind: value.kind,
             spec: value.spec,
+            annotations: value.annotations,
             status: value.status.to_string(),
             created_at: value.created_at.to_rfc3339(),
             updated_at: value.updated_at.to_rfc3339(),
