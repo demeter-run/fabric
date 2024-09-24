@@ -34,13 +34,13 @@ variable "email_ses_access_key_id" {}
 variable "email_ses_secret_access_key" {}
 
 locals {
-  namespace                   = "fabric-stg"
+  namespace                   = "demeter-global"
   replicas                    = 1
   broker_urls                 = "redpanda-0.fabric-queue.demeter.run:31092,redpanda-1.fabric-queue.demeter.run:31092,redpanda-2.fabric-queue.demeter.run:31092"
   secret                      = var.secret
-  kafka_rpc_username          = "rpc-stg"
+  kafka_rpc_username          = "rpc"
   kafka_rpc_password          = var.kafka_rpc_password
-  kafka_topic                 = "events-stg"
+  kafka_topic                 = "events"
   auth0_client_id             = var.auth0_client_id
   auth0_client_secret         = var.auth0_client_secret
   auth0_audience              = var.auth0_audience
@@ -52,19 +52,13 @@ locals {
   email_ses_verified_email    = "no-reply@demeter.run"
 }
 
-resource "kubernetes_namespace_v1" "fabric_namespace" {
-  metadata {
-    name = local.namespace
-  }
-}
-
 module "fabric_rpc" {
   source = "../../../fabric/bootstrap/rpc"
 
   namespace                   = local.namespace
   image                       = var.rpc_image
   broker_urls                 = local.broker_urls
-  consumer_name               = "rpc-stg-ahid01"
+  consumer_name               = "rpc-stg-ahid02"
   kafka_username              = local.kafka_rpc_username
   kafka_password              = local.kafka_rpc_password
   kafka_topic                 = local.kafka_topic
@@ -78,6 +72,6 @@ module "fabric_rpc" {
   email_ses_access_key_id     = local.email_ses_access_key_id
   email_ses_secret_access_key = local.email_ses_secret_access_key
   email_ses_verified_email    = local.email_ses_verified_email
-  url_prefix                  = "rpc-stg"
+  url_prefix                  = "rpc"
 }
 
