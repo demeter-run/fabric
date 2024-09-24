@@ -96,6 +96,6 @@ import {
 }
 
 import {
-  id = "apiVersion=cert-manager.io/v1,kind=Certificate,[namespace=demeter-global,]name=rpc-tls"
+  id = "apiVersion=cert-manager.io/v1,kind=Certificate,namespace=demeter-global,name=rpc-tls"
   to = module.fabric_rpc.kubernetes_manifest.certificate_cluster_wildcard_tls
 }
