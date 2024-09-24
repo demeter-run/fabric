@@ -28,6 +28,7 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
                 SELECT 
                     r.id, 
                 	  r.project_id, 
+                	  r.name, 
                 	  r.kind, 
                 	  r.spec, 
                     r.status,
@@ -55,6 +56,7 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
                 SELECT 
                     r.id, 
                 	  r.project_id, 
+                	  r.name, 
                 	  r.kind, 
                 	  r.spec, 
                     r.status,
@@ -79,16 +81,18 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
                 INSERT INTO resource (
                     id,
                     project_id,
+                    name,
                     kind,
                     spec,
                     status,
                     created_at,
                     updated_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
             resource.id,
             resource.project_id,
+            resource.name,
             resource.kind,
             resource.spec,
             status,
@@ -173,6 +177,7 @@ impl FromRow<'_, SqliteRow> for Resource {
         Ok(Self {
             id: row.try_get("id")?,
             project_id: row.try_get("project_id")?,
+            name: row.try_get("name")?,
             kind: row.try_get("kind")?,
             spec: row.try_get("spec")?,
             status: status

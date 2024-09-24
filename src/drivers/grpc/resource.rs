@@ -112,6 +112,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         let message = proto::CreateResourceResponse {
             id: cmd.id,
+            name: cmd.name,
             kind: cmd.kind,
         };
 
@@ -186,6 +187,7 @@ impl From<Resource> for proto::Resource {
     fn from(value: Resource) -> Self {
         Self {
             id: value.id,
+            name: value.name,
             kind: value.kind,
             spec: value.spec,
             status: value.status.to_string(),

@@ -15,7 +15,7 @@ use crate::domain::{
     metadata::{KnownField, MetadataDriven},
     project::{cache::ProjectDrivenCache, Project},
     resource::{ResourceStatus, ResourceUpdated},
-    utils::get_schema_from_crd,
+    utils::{self, get_schema_from_crd},
     Result, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
@@ -97,6 +97,7 @@ pub async fn create(
         id: cmd.id,
         project_id: project.id,
         project_namespace: project.namespace,
+        name: cmd.name.clone(),
         kind: cmd.kind.clone(),
         spec: serde_json::to_string(&spec)?,
         status: ResourceStatus::Active.to_string(),
@@ -248,6 +249,7 @@ pub type Spec = serde_json::value::Map<String, serde_json::Value>;
 pub struct CreateCmd {
     pub credential: Credential,
     pub id: String,
+    pub name: String,
     pub project_id: String,
     pub kind: String,
     pub spec: Spec,
@@ -255,10 +257,16 @@ pub struct CreateCmd {
 impl CreateCmd {
     pub fn new(credential: Credential, project_id: String, kind: String, spec: Spec) -> Self {
         let id = Uuid::new_v4().to_string();
+        let name = format!(
+            "{}-{}",
+            kind.to_lowercase().replace("port", ""),
+            utils::get_random_salt()
+        );
 
         Self {
             credential,
             id,
+            name,
             project_id,
             kind,
             spec,
@@ -326,6 +334,7 @@ mod tests {
             Self {
                 credential: Credential::Auth0("user id".into()),
                 id: Uuid::new_v4().to_string(),
+                name: format!("cardanonode-{}", utils::get_random_salt()),
                 project_id: Uuid::new_v4().to_string(),
                 kind: "CardanoNodePort".into(),
                 spec: serde_json::Map::default(),

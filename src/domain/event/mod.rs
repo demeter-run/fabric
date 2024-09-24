@@ -99,6 +99,7 @@ pub struct ResourceCreated {
     pub id: String,
     pub project_id: String,
     pub project_namespace: String,
+    pub name: String,
     pub kind: String,
     pub spec: String,
     pub status: String,
@@ -219,6 +220,7 @@ mod tests {
         project::{ProjectStatus, ProjectUserRole},
         resource::ResourceStatus,
         tests::{PHC, SECRET},
+        utils::get_random_salt,
     };
 
     use super::*;
@@ -281,6 +283,7 @@ mod tests {
                 id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
                 project_namespace: "prj-test".into(),
+                name: format!("cardanonode-{}", get_random_salt()),
                 kind: "CardanoNodePort".into(),
                 spec: "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
                     .into(),
