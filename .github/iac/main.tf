@@ -74,28 +74,3 @@ module "fabric_rpc" {
   email_ses_verified_email    = local.email_ses_verified_email
   url_prefix                  = "rpc"
 }
-
-import {
-  id = "demeter-global/fabric-rpc"
-  to = module.fabric_rpc.kubernetes_stateful_set_v1.rpc
-}
-
-import {
-  id = "demeter-global/rpc"
-  to = module.fabric_rpc.kubernetes_service_v1.service
-}
-
-import {
-  id = "demeter-global/fabric-rpc-crds"
-  to = module.fabric_rpc.kubernetes_config_map_v1.fabric_rpc_crds
-}
-
-import {
-  id = "demeter-global/fabric-rpc-config"
-  to = module.fabric_rpc.kubernetes_config_map_v1.fabric_rpc_config
-}
-
-import {
-  id = "apiVersion=cert-manager.io/v1,kind=Certificate,namespace=demeter-global,name=rpc-tls"
-  to = module.fabric_rpc.kubernetes_manifest.certificate_cluster_wildcard_tls
-}
