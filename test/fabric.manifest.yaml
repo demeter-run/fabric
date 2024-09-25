@@ -50,7 +50,7 @@ data:
 
     [prometheus]
     url = "http://prometheus:9090/api/v1"
-    step = "1m"
+    query_step = "1m"
 kind: ConfigMap
 metadata:
   name: daemon-config
