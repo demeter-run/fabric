@@ -98,7 +98,7 @@ NAMESPACE=$(echo $OUTPUT | jq -r '.namespace')
 # Check if namespace is created
 echo "Checking if namespace $NAMESPACE exists"
 for attempt in $(seq 1 120); do
-    if kubectl get namespace "$NAMESPACE" &> /dev/null; then
+    if kubectl get namespace "prj-$NAMESPACE" &> /dev/null; then
         echo "Namespace $NAMESPACE exists."
         break
     else
@@ -107,7 +107,7 @@ for attempt in $(seq 1 120); do
     fi
 done
 
-if ! kubectl get namespace "$NAMESPACE" &> /dev/null; then
+if ! kubectl get namespace "prj-$NAMESPACE" &> /dev/null; then
     echo "Error: Namespace $NAMESPACE not found after 120 attempts."
     exit 1
 fi
