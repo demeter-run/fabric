@@ -28,6 +28,7 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
                 SELECT 
                     r.id, 
                 	  r.project_id, 
+                	  r.name, 
                 	  r.kind, 
                 	  r.spec, 
                     r.status,
@@ -55,6 +56,7 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
                 SELECT 
                     r.id, 
                 	  r.project_id, 
+                	  r.name, 
                 	  r.kind, 
                 	  r.spec, 
                     r.status,
@@ -71,6 +73,64 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
 
         Ok(resource)
     }
+    async fn find_by_name(&self, project_id: &str, name: &str) -> Result<Option<Resource>> {
+        let resource = sqlx::query_as::<_, Resource>(
+            r#"
+                SELECT 
+                    r.id, 
+                	  r.project_id, 
+                	  r.name, 
+                	  r.kind, 
+                	  r.spec, 
+                    r.status,
+                	  r.created_at, 
+                	  r.updated_at
+                FROM resource r 
+                WHERE r.project_id = $1 AND r.name = $2 AND r.status != $3;
+            "#,
+        )
+        .bind(project_id)
+        .bind(name)
+        .bind(ResourceStatus::Deleted.to_string())
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        Ok(resource)
+    }
+    async fn find_by_name_for_usage(
+        &self,
+        namespace: &str,
+        name: &str,
+    ) -> Result<Option<Resource>> {
+        let resource = sqlx::query_as::<_, Resource>(
+            r#"
+                SELECT
+                	  r.id,
+                	  r.project_id,
+                	  r.name,
+                	  r.kind,
+                	  r.spec,
+                	  r.status,
+                	  r.created_at,
+                	  r.updated_at
+                FROM
+                	  resource r
+                INNER JOIN project p ON
+                	  p.id == r.project_id
+                WHERE
+                	  p.namespace = $1
+                	  AND
+                	  r.name = $2;
+            "#,
+        )
+        .bind(namespace)
+        .bind(name)
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        Ok(resource)
+    }
+
     async fn create(&self, resource: &Resource) -> Result<()> {
         let status = resource.status.to_string();
 
@@ -79,16 +139,18 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
                 INSERT INTO resource (
                     id,
                     project_id,
+                    name,
                     kind,
                     spec,
                     status,
                     created_at,
                     updated_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
             resource.id,
             resource.project_id,
+            resource.name,
             resource.kind,
             resource.spec,
             status,
@@ -173,6 +235,7 @@ impl FromRow<'_, SqliteRow> for Resource {
         Ok(Self {
             id: row.try_get("id")?,
             project_id: row.try_get("project_id")?,
+            name: row.try_get("name")?,
             kind: row.try_get("kind")?,
             spec: row.try_get("spec")?,
             annotations: None,

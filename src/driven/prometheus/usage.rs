@@ -17,19 +17,20 @@ use super::PrometheusUsageDriven;
 impl UsageDrivenCluster for PrometheusUsageDriven {
     async fn find_metrics(
         &self,
+        step: &str,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<UsageUnit>> {
         let response = self
             .client
             .get(format!(
-                "{}/query_range?query=sum by (resource_name, tier) (usage)",
+                "{}/query_range?query=sum by (project, resource_name, tier) (usage)",
                 &self.url
             ))
             .query(&[
                 ("start", start.timestamp().to_string()),
                 ("end", end.timestamp().to_string()),
-                ("step", "10m".into()),
+                ("step", step.into()),
             ])
             .send()
             .await?;
@@ -75,7 +76,8 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
                 let units = last_value - first_value;
 
                 UsageUnit {
-                    resource_id: r.metric.resource_name.clone(),
+                    project_namespace: r.metric.project.clone(),
+                    resource_name: r.metric.resource_name.clone(),
                     units,
                     interval,
                     tier: r.metric.tier.clone(),
@@ -112,6 +114,7 @@ struct PrometheusValue {
 }
 #[derive(Debug, Deserialize)]
 pub struct PrometheusUsageMetric {
+    project: String,
     resource_name: String,
     tier: String,
 }

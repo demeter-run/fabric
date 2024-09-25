@@ -42,12 +42,15 @@ data:
   daemon.toml: |
     topic = "events"
     cluster_id = "625e6681-8a74-4454-b5ad-861b45c6a42e"
-    prometheus_url = "http://prometheus:9090/api/v1"
     delay_sec = 60
 
     [kafka]
     "bootstrap.servers" = "redpanda.demeter-kafka.svc.cluster.local:19092"
-    "group.id"= "demeter-daemon"
+    "group.id" = "demeter-daemon"
+
+    [prometheus]
+    url = "http://prometheus:9090/api/v1"
+    query_step = "1m"
 kind: ConfigMap
 metadata:
   name: daemon-config

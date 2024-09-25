@@ -79,7 +79,12 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                         resource::cache::delete(resource_cache.clone(), evt.clone()).await
                     }
                     Event::UsageCreated(evt) => {
-                        usage::cache::create(usage_cache.clone(), evt.clone()).await
+                        usage::cache::create(
+                            usage_cache.clone(),
+                            resource_cache.clone(),
+                            evt.clone(),
+                        )
+                        .await
                     }
                     Event::ResourceUpdated(evt) => {
                         resource::cache::update(resource_cache.clone(), evt.clone()).await

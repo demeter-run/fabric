@@ -6,6 +6,7 @@ use tracing::info;
 
 use crate::domain::{
     event::{ProjectCreated, ProjectDeleted},
+    utils::cluster_namespace,
     Result,
 };
 
@@ -22,7 +23,7 @@ pub async fn apply_manifest(
 ) -> Result<()> {
     let namespace = Namespace {
         metadata: ObjectMeta {
-            name: Some(evt.namespace),
+            name: Some(cluster_namespace(&evt.namespace)),
             ..Default::default()
         },
         ..Default::default()
@@ -41,7 +42,7 @@ pub async fn delete_manifest(
 ) -> Result<()> {
     let namespace = Namespace {
         metadata: ObjectMeta {
-            name: Some(evt.namespace),
+            name: Some(cluster_namespace(&evt.namespace)),
             ..Default::default()
         },
         ..Default::default()

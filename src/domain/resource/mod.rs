@@ -14,6 +14,7 @@ pub mod command;
 pub struct Resource {
     pub id: String,
     pub project_id: String,
+    pub name: String,
     pub kind: String,
     pub spec: String,
     pub annotations: Option<String>,
@@ -28,6 +29,7 @@ impl TryFrom<ResourceCreated> for Resource {
         Ok(Self {
             id: value.id,
             project_id: value.project_id,
+            name: value.name,
             kind: value.kind,
             spec: value.spec,
             annotations: None,
@@ -84,6 +86,8 @@ impl Display for ResourceStatus {
 mod tests {
     use uuid::Uuid;
 
+    use crate::domain::utils;
+
     use super::*;
 
     impl Default for Resource {
@@ -91,6 +95,7 @@ mod tests {
             Self {
                 id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
+                name: format!("cardanonode-{}", utils::get_random_salt()),
                 kind: "CardanoNodePort".into(),
                 spec: "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
                     .into(),

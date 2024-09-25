@@ -16,17 +16,20 @@ fn get_random_word(list: Vec<&str>) -> String {
 }
 
 pub fn get_random_name() -> String {
-    let salt: String = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        .take(6)
-        .map(char::from)
-        .collect();
-
+    let salt = get_random_salt();
     let adjective = get_random_word(ADJECTIVES.lines().collect());
     let noun = get_random_word(NOUNS.lines().collect());
 
     format!("{adjective}-{noun}-{salt}")
+}
+
+pub fn get_random_salt() -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        .take(6)
+        .map(char::from)
+        .collect()
 }
 
 pub fn get_schema_from_crd(
@@ -36,4 +39,8 @@ pub fn get_schema_from_crd(
     let version = crd.spec.versions.last()?;
     let schema = version.schema.clone()?.open_api_v3_schema?.properties?;
     schema.get(field)?.properties.clone()
+}
+
+pub fn cluster_namespace(namespace: &str) -> String {
+    format!("prj-{}", namespace)
 }

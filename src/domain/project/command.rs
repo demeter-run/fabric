@@ -498,7 +498,7 @@ pub struct CreateCmd {
 impl CreateCmd {
     pub fn new(credential: Credential, name: String) -> Self {
         let id = Uuid::new_v4().to_string();
-        let namespace = format!("prj-{}", utils::get_random_name());
+        let namespace = utils::get_random_name();
 
         Self {
             credential,

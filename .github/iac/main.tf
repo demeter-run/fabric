@@ -58,7 +58,7 @@ module "fabric_rpc" {
   namespace                   = local.namespace
   image                       = var.rpc_image
   broker_urls                 = local.broker_urls
-  consumer_name               = "rpc-ahid02"
+  consumer_name               = "rpc-ahid03"
   kafka_username              = local.kafka_rpc_username
   kafka_password              = local.kafka_rpc_password
   kafka_topic                 = local.kafka_topic

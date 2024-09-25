@@ -54,6 +54,12 @@ variable "prometheus_delay_sec" {
   default     = 60
 }
 
+variable "prometheus_query_step" {
+  type        = string
+  description = "Usage Query Step"
+  default     = "10m"
+}
+
 variable "tolerations" {
   type = list(object({
     effect   = string

@@ -99,6 +99,7 @@ pub struct ResourceCreated {
     pub id: String,
     pub project_id: String,
     pub project_namespace: String,
+    pub name: String,
     pub kind: String,
     pub spec: String,
     pub status: String,
@@ -112,6 +113,7 @@ pub struct ResourceUpdated {
     pub id: String,
     pub project_id: String,
     pub project_namespace: String,
+    pub name: String,
     pub kind: String,
     pub spec_patch: String,
     pub updated_at: DateTime<Utc>,
@@ -121,17 +123,19 @@ into_event!(ResourceUpdated);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceDeleted {
     pub id: String,
-    pub kind: String,
-    pub status: String,
     pub project_id: String,
     pub project_namespace: String,
+    pub name: String,
+    pub kind: String,
+    pub status: String,
     pub deleted_at: DateTime<Utc>,
 }
 into_event!(ResourceDeleted);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsageUnitCreated {
-    pub resource_id: String,
+    pub project_namespace: String,
+    pub resource_name: String,
     pub tier: String,
     pub units: i64,
     pub interval: u64,
@@ -219,6 +223,7 @@ mod tests {
         project::{ProjectStatus, ProjectUserRole},
         resource::ResourceStatus,
         tests::{PHC, SECRET},
+        utils::get_random_salt,
     };
 
     use super::*;
@@ -280,7 +285,8 @@ mod tests {
             Self {
                 id: Uuid::new_v4().to_string(),
                 project_id: Uuid::new_v4().to_string(),
-                project_namespace: "prj-test".into(),
+                project_namespace: "test".into(),
+                name: format!("cardanonode-{}", get_random_salt()),
                 kind: "CardanoNodePort".into(),
                 spec: "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
                     .into(),
@@ -294,10 +300,11 @@ mod tests {
         fn default() -> Self {
             Self {
                 id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                project_namespace: "test".into(),
+                name: format!("cardanonode-{}", get_random_salt()),
                 kind: "CardanoNodePort".into(),
                 status: ResourceStatus::Deleted.to_string(),
-                project_id: Uuid::new_v4().to_string(),
-                project_namespace: "prj-test".into(),
                 deleted_at: Utc::now(),
             }
         }
@@ -308,7 +315,8 @@ mod tests {
                 id: Uuid::new_v4().to_string(),
                 cluster_id: Uuid::new_v4().to_string(),
                 usages: vec![UsageUnitCreated {
-                    resource_id: Uuid::new_v4().to_string(),
+                    project_namespace: "test".into(),
+                    resource_name: format!("cardanonode-{}", get_random_salt()),
                     units: 120,
                     tier: "0".into(),
                     interval: 10,

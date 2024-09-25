@@ -8,6 +8,7 @@ use tracing::info;
 
 use crate::domain::{
     event::{ResourceCreated, ResourceDeleted, ResourceUpdated},
+    utils::cluster_namespace,
     Result,
 };
 
@@ -24,10 +25,10 @@ pub async fn apply_manifest(
 ) -> Result<()> {
     let api = build_api_resource(&evt.kind);
 
-    let mut obj = DynamicObject::new(&evt.id, &api);
+    let mut obj = DynamicObject::new(&evt.name, &api);
     obj.metadata = ObjectMeta {
-        name: Some(evt.id),
-        namespace: Some(evt.project_namespace),
+        name: Some(evt.name),
+        namespace: Some(cluster_namespace(&evt.project_namespace)),
         ..Default::default()
     };
 
@@ -47,10 +48,10 @@ pub async fn patch_manifest(
     evt: ResourceUpdated,
 ) -> Result<()> {
     let api = build_api_resource(&evt.kind);
-    let mut obj = DynamicObject::new(&evt.id, &api);
+    let mut obj = DynamicObject::new(&evt.name, &api);
     obj.metadata = ObjectMeta {
-        name: Some(evt.id),
-        namespace: Some(evt.project_namespace),
+        name: Some(evt.name),
+        namespace: Some(cluster_namespace(&evt.project_namespace)),
         ..Default::default()
     };
 
@@ -71,10 +72,10 @@ pub async fn delete_manifest(
 ) -> Result<()> {
     let api = build_api_resource(&evt.kind);
 
-    let mut obj = DynamicObject::new(&evt.id, &api);
+    let mut obj = DynamicObject::new(&evt.name, &api);
     obj.metadata = ObjectMeta {
-        name: Some(evt.id),
-        namespace: Some(evt.project_namespace),
+        name: Some(evt.name),
+        namespace: Some(cluster_namespace(&evt.project_namespace)),
         ..Default::default()
     };
 
