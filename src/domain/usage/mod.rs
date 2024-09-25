@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use super::event::UsageCreated;
+use super::event::UsageUnitCreated;
 
 pub mod cache;
 pub mod cluster;
@@ -16,26 +16,29 @@ pub struct Usage {
     pub interval: u64,
     pub created_at: DateTime<Utc>,
 }
-impl From<UsageCreated> for Vec<Usage> {
-    fn from(evt: UsageCreated) -> Self {
-        evt.usages
-            .iter()
-            .map(|usage| Usage {
-                id: Uuid::new_v4().to_string(),
-                event_id: evt.id.clone(),
-                resource_id: usage.resource_id.clone(),
-                units: usage.units,
-                tier: usage.tier.clone(),
-                interval: usage.interval,
-                created_at: evt.created_at,
-            })
-            .collect()
+impl Usage {
+    pub fn from_usage_evt(
+        usage: &UsageUnitCreated,
+        resource_id: &str,
+        evt_id: &str,
+        evt_created_at: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            event_id: evt_id.into(),
+            resource_id: resource_id.into(),
+            units: usage.units,
+            tier: usage.tier.clone(),
+            interval: usage.interval,
+            created_at: evt_created_at,
+        }
     }
 }
 
 #[derive(Debug)]
 pub struct UsageUnit {
-    pub resource_id: String,
+    pub project_namespace: String,
+    pub resource_name: String,
     pub units: i64,
     pub tier: String,
     pub interval: u64,

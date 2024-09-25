@@ -16,6 +16,7 @@ use super::UsageUnit;
 pub trait UsageDrivenCluster: Send + Sync {
     async fn find_metrics(
         &self,
+        step: &str,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<UsageUnit>>;
@@ -25,11 +26,12 @@ pub async fn sync_usage(
     usage: Arc<dyn UsageDrivenCluster>,
     event: Arc<dyn EventDrivenBridge>,
     cluster_id: &str,
+    step: &str,
     cursor: DateTime<Utc>,
 ) -> Result<()> {
     let end = Utc::now();
 
-    let usages = usage.find_metrics(cursor, end).await?;
+    let usages = usage.find_metrics(step, cursor, end).await?;
     if usages.is_empty() {
         return Ok(());
     }
@@ -40,7 +42,8 @@ pub async fn sync_usage(
         usages: usages
             .into_iter()
             .map(|u| UsageUnitCreated {
-                resource_id: u.resource_id,
+                project_namespace: u.project_namespace,
+                resource_name: u.resource_name,
                 units: u.units,
                 tier: u.tier,
                 interval: u.interval,
@@ -70,7 +73,7 @@ mod tests {
         let mut usage = MockUsageDrivenCluster::new();
         usage
             .expect_find_metrics()
-            .return_once(|_, _| Ok(Default::default()));
+            .return_once(|_, _, _| Ok(Default::default()));
 
         let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
@@ -78,6 +81,7 @@ mod tests {
         let result = sync_usage(
             Arc::new(usage),
             Arc::new(event),
+            Default::default(),
             Default::default(),
             Default::default(),
         )

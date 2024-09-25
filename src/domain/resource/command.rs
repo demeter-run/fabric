@@ -67,12 +67,21 @@ pub async fn fetch_by_id(
 }
 
 pub async fn create(
+    resource_cache: Arc<dyn ResourceDrivenCache>,
     project_cache: Arc<dyn ProjectDrivenCache>,
     metadata: Arc<dyn MetadataDriven>,
     event: Arc<dyn EventDrivenBridge>,
     cmd: CreateCmd,
 ) -> Result<()> {
     assert_project_permission(project_cache.clone(), &cmd.credential, &cmd.project_id).await?;
+
+    if resource_cache
+        .find_by_name(&cmd.project_id, &cmd.name)
+        .await?
+        .is_some()
+    {
+        return Err(Error::Unexpected("invalid random name, try again".into()));
+    }
 
     let Some(crd) = metadata.find_by_kind(&cmd.kind).await? else {
         return Err(Error::CommandMalformed("kind not supported".into()));
@@ -110,7 +119,7 @@ pub async fn create(
         id: cmd.id,
         project_id: project.id,
         project_namespace: project.namespace,
-        name: cmd.name.clone(),
+        name: cmd.name,
         kind: cmd.kind.clone(),
         spec: serde_json::to_string(&spec)?,
         status: ResourceStatus::Active.to_string(),
@@ -144,6 +153,7 @@ pub async fn update(
         id: cmd.id.clone(),
         project_id: project.id,
         project_namespace: project.namespace,
+        name: resource.name,
         kind: resource.kind,
         spec_patch: serde_json::to_string(&cmd.spec)?,
         updated_at: Utc::now(),
@@ -177,10 +187,11 @@ pub async fn delete(
 
     let evt = ResourceDeleted {
         id: cmd.id,
-        kind: resource.kind.clone(),
-        status: ResourceStatus::Deleted.to_string(),
         project_id: project.id,
         project_namespace: project.namespace,
+        name: resource.name,
+        kind: resource.kind.clone(),
+        status: ResourceStatus::Deleted.to_string(),
         deleted_at: Utc::now(),
     };
 
@@ -203,8 +214,7 @@ pub fn build_key(project_id: &str, resource_id: &str) -> Result<Vec<u8>> {
 }
 
 pub fn encode_key(key: Vec<u8>, prefix: &str) -> Result<String> {
-    let prefix = format!("dmtr_{}", prefix.to_lowercase().replace("port", ""));
-    let hrp = Hrp::parse(&prefix)?;
+    let hrp = Hrp::parse(&prefix.to_lowercase().replace("port", ""))?;
     let bech = bech32::encode::<Bech32m>(hrp, &key)?;
 
     Ok(bech)
@@ -456,6 +466,11 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_create_resource() {
+        let mut resource_cache = MockResourceDrivenCache::new();
+        resource_cache
+            .expect_find_by_name()
+            .return_once(|_, _| Ok(None));
+
         let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
@@ -475,6 +490,7 @@ mod tests {
         let cmd = CreateCmd::default();
 
         let result = create(
+            Arc::new(resource_cache),
             Arc::new(project_cache),
             Arc::new(metadata),
             Arc::new(event),
@@ -486,6 +502,11 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_resource_when_crd_doesnt_exist() {
+        let mut resource_cache = MockResourceDrivenCache::new();
+        resource_cache
+            .expect_find_by_name()
+            .return_once(|_, _| Ok(None));
+
         let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
@@ -499,6 +520,7 @@ mod tests {
         let cmd = CreateCmd::default();
 
         let result = create(
+            Arc::new(resource_cache),
             Arc::new(project_cache),
             Arc::new(metadata),
             Arc::new(event),
@@ -510,6 +532,11 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_resource_when_project_doesnt_exist() {
+        let mut resource_cache = MockResourceDrivenCache::new();
+        resource_cache
+            .expect_find_by_name()
+            .return_once(|_, _| Ok(None));
+
         let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
@@ -526,6 +553,7 @@ mod tests {
         let cmd = CreateCmd::default();
 
         let result = create(
+            Arc::new(resource_cache),
             Arc::new(project_cache),
             Arc::new(metadata),
             Arc::new(event),
@@ -542,12 +570,14 @@ mod tests {
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
 
+        let resource_cache = MockResourceDrivenCache::new();
         let metadata = MockMetadataDriven::new();
         let event = MockEventDrivenBridge::new();
 
         let cmd = CreateCmd::default();
 
         let result = create(
+            Arc::new(resource_cache),
             Arc::new(project_cache),
             Arc::new(metadata),
             Arc::new(event),
@@ -558,6 +588,7 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_create_resource_when_secret_doesnt_have_permission() {
+        let resource_cache = MockResourceDrivenCache::new();
         let project_cache = MockProjectDrivenCache::new();
         let metadata = MockMetadataDriven::new();
         let event = MockEventDrivenBridge::new();
@@ -568,6 +599,7 @@ mod tests {
         };
 
         let result = create(
+            Arc::new(resource_cache),
             Arc::new(project_cache),
             Arc::new(metadata),
             Arc::new(event),

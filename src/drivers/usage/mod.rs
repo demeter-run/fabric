@@ -23,6 +23,7 @@ pub async fn schedule(config: UsageConfig) -> Result<()> {
             prometheus_driven.clone(),
             event_bridge.clone(),
             &config.cluster_id,
+            &config.prometheus_query_step,
             cursor,
         )
         .await;
@@ -40,6 +41,7 @@ pub async fn schedule(config: UsageConfig) -> Result<()> {
 pub struct UsageConfig {
     pub cluster_id: String,
     pub prometheus_url: String,
+    pub prometheus_query_step: String,
     pub delay: Duration,
     pub topic: String,
     pub kafka: HashMap<String, String>,

@@ -40,3 +40,7 @@ pub fn get_schema_from_crd(
     let schema = version.schema.clone()?.open_api_v3_schema?.properties?;
     schema.get(field)?.properties.clone()
 }
+
+pub fn cluster_namespace(namespace: &str) -> String {
+    format!("prj-{}", namespace)
+}

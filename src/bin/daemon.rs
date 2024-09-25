@@ -33,9 +33,15 @@ async fn main() -> Result<()> {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+struct Prometheus {
+    url: String,
+    query_step: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 struct Config {
     cluster_id: String,
-    prometheus_url: String,
+    prometheus: Prometheus,
     #[serde(deserialize_with = "deserialize_duration")]
     #[serde(rename(deserialize = "delay_sec"))]
     delay: Duration,
@@ -70,7 +76,8 @@ impl From<Config> for UsageConfig {
     fn from(value: Config) -> Self {
         Self {
             cluster_id: value.cluster_id,
-            prometheus_url: value.prometheus_url,
+            prometheus_url: value.prometheus.url,
+            prometheus_query_step: value.prometheus.query_step,
             delay: value.delay,
             kafka: value.kafka,
             topic: value.topic,

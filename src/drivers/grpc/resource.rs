@@ -111,6 +111,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
         let cmd = command::CreateCmd::new(credential, req.project_id, req.kind, spec);
 
         command::create(
+            self.resource_cache.clone(),
             self.project_cache.clone(),
             self.metadata.clone(),
             self.event.clone(),
