@@ -11,6 +11,7 @@ pub mod command;
 pub trait MetadataDriven: Send + Sync {
     async fn find(&self) -> Result<Vec<CustomResourceDefinition>>;
     async fn find_by_kind(&self, kind: &str) -> Result<Option<CustomResourceDefinition>>;
+    fn render_hbs(&self, name: &str, spec: &str) -> Result<String>;
 }
 
 pub enum KnownField {

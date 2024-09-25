@@ -1,0 +1,40 @@
+[
+  {
+    "label": "Network",
+    "value": "{{network}}"
+  },
+  {
+    "label": "Throughput Tier",
+    "value": "{{throughputTier}}"
+  },
+  {
+    "label": "Public hostname",
+    "value": "dbsync-v3.demeter.run",
+    "description": "Public hostname to use in your PostgreSQL connection"
+  },
+  {
+    "label": "Public port number",
+    "value": "5432",
+    "description": "Public port number to use in your PostgreSQL connection"
+  },
+  {
+    "label": "Database name",
+    "value": "dbsync-{{network}}",
+    "description": "Database name to use in your PostgreSQL connection"
+  },
+  {
+    "label": "Username",
+    "value": "{{username}}",
+    "description": "Username to access the Postgres."
+  },
+  {
+    "label": "Password",
+    "value": "{{password}}",
+    "description": "Password to access the Postgres."
+  },
+  {
+    "label": "Connection string",
+    "value": "postgresql://{{username}}:{{password}}@dbsync-v3.demeter.run:5432/dbsync-{{network}}",
+    "description": "Connection string to use in your PostgreSQL connection"
+  },
+]

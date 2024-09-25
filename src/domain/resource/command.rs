@@ -13,7 +13,7 @@ use crate::domain::{
     error::Error,
     event::{EventDrivenBridge, ResourceCreated, ResourceDeleted},
     metadata::{KnownField, MetadataDriven},
-    project::{cache::ProjectDrivenCache, Project},
+    project::cache::ProjectDrivenCache,
     resource::{ResourceStatus, ResourceUpdated},
     utils::{self, get_schema_from_crd},
     Result, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
@@ -24,31 +24,44 @@ use super::{cache::ResourceDrivenCache, Resource};
 pub async fn fetch(
     project_cache: Arc<dyn ProjectDrivenCache>,
     resource_cache: Arc<dyn ResourceDrivenCache>,
+    metadata: Arc<dyn MetadataDriven>,
     cmd: FetchCmd,
 ) -> Result<Vec<Resource>> {
     assert_project_permission(project_cache.clone(), &cmd.credential, &cmd.project_id).await?;
 
-    resource_cache
+    let resources = resource_cache
         .find(&cmd.project_id, &cmd.page, &cmd.page_size)
-        .await
+        .await?
+        .into_iter()
+        .map(|mut resource| {
+            if let Ok(annotations) =
+                metadata.render_hbs(&resource.kind.to_lowercase(), &resource.spec)
+            {
+                resource.annotations = Some(annotations);
+            }
+
+            resource
+        })
+        .collect();
+
+    Ok(resources)
 }
 
 pub async fn fetch_by_id(
     project_cache: Arc<dyn ProjectDrivenCache>,
     resource_cache: Arc<dyn ResourceDrivenCache>,
+    metadata: Arc<dyn MetadataDriven>,
     cmd: FetchByIdCmd,
 ) -> Result<Resource> {
-    assert_project_permission(project_cache.clone(), &cmd.credential, &cmd.project_id).await?;
-
-    let Some(project) = project_cache.find_by_id(&cmd.project_id).await? else {
-        return Err(Error::CommandMalformed("invalid project id".into()));
-    };
-
-    let Some(resource) = resource_cache.find_by_id(&cmd.resource_id).await? else {
+    let Some(mut resource) = resource_cache.find_by_id(&cmd.id).await? else {
         return Err(Error::CommandMalformed("invalid resource id".into()));
     };
 
-    assert_project_resource(&project, &resource)?;
+    assert_project_permission(project_cache.clone(), &cmd.credential, &resource.project_id).await?;
+
+    if let Ok(annotations) = metadata.render_hbs(&resource.kind.to_lowercase(), &resource.spec) {
+        resource.annotations = Some(annotations);
+    }
 
     Ok(resource)
 }
@@ -122,6 +135,7 @@ pub async fn update(
     };
 
     assert_project_permission(project_cache.clone(), &cmd.credential, &resource.project_id).await?;
+
     let Some(project) = project_cache.find_by_id(&resource.project_id).await? else {
         return Err(Error::CommandMalformed("invalid project id".into()));
     };
@@ -151,20 +165,18 @@ pub async fn delete(
     event: Arc<dyn EventDrivenBridge>,
     cmd: DeleteCmd,
 ) -> Result<()> {
-    assert_project_permission(project_cache.clone(), &cmd.credential, &cmd.project_id).await?;
-
-    let Some(project) = project_cache.find_by_id(&cmd.project_id).await? else {
-        return Err(Error::CommandMalformed("invalid project id".into()));
-    };
-
-    let Some(resource) = resource_cache.find_by_id(&cmd.resource_id).await? else {
+    let Some(resource) = resource_cache.find_by_id(&cmd.id).await? else {
         return Err(Error::CommandMalformed("invalid resource id".into()));
     };
 
-    assert_project_resource(&project, &resource)?;
+    assert_project_permission(project_cache.clone(), &cmd.credential, &resource.project_id).await?;
+
+    let Some(project) = project_cache.find_by_id(&resource.project_id).await? else {
+        return Err(Error::CommandMalformed("invalid project id".into()));
+    };
 
     let evt = ResourceDeleted {
-        id: cmd.resource_id,
+        id: cmd.id,
         kind: resource.kind.clone(),
         status: ResourceStatus::Deleted.to_string(),
         project_id: project.id,
@@ -175,13 +187,6 @@ pub async fn delete(
     event.dispatch(evt.into()).await?;
     info!(resource = resource.kind, "resource deleted");
 
-    Ok(())
-}
-
-fn assert_project_resource(project: &Project, resource: &Resource) -> Result<()> {
-    if project.id != resource.project_id {
-        return Err(Error::CommandMalformed("invalid resource id".into()));
-    }
     Ok(())
 }
 
@@ -240,8 +245,7 @@ impl FetchCmd {
 #[derive(Debug, Clone)]
 pub struct FetchByIdCmd {
     pub credential: Credential,
-    pub project_id: String,
-    pub resource_id: String,
+    pub id: String,
 }
 
 pub type Spec = serde_json::value::Map<String, serde_json::Value>;
@@ -293,8 +297,7 @@ impl UpdateCmd {
 #[derive(Debug, Clone)]
 pub struct DeleteCmd {
     pub credential: Credential,
-    pub project_id: String,
-    pub resource_id: String,
+    pub id: String,
 }
 
 #[cfg(test)]
@@ -324,8 +327,7 @@ mod tests {
         fn default() -> Self {
             Self {
                 credential: Credential::Auth0("user id".into()),
-                project_id: Uuid::new_v4().to_string(),
-                resource_id: Uuid::new_v4().to_string(),
+                id: Uuid::new_v4().to_string(),
             }
         }
     }
@@ -345,8 +347,7 @@ mod tests {
         fn default() -> Self {
             Self {
                 credential: Credential::Auth0("user id".into()),
-                resource_id: Uuid::new_v4().to_string(),
-                project_id: Uuid::new_v4().to_string(),
+                id: Uuid::new_v4().to_string(),
             }
         }
     }
@@ -363,9 +364,21 @@ mod tests {
             .expect_find()
             .return_once(|_, _, _| Ok(vec![Resource::default()]));
 
+        let mut metadata = MockMetadataDriven::new();
+        metadata
+            .expect_render_hbs()
+            .return_once(|_, _| Ok("[{}]".into()));
+
         let cmd = FetchCmd::default();
 
-        let result = fetch(Arc::new(project_cache), Arc::new(resource_cache), cmd).await;
+        let result = fetch(
+            Arc::new(project_cache),
+            Arc::new(resource_cache),
+            Arc::new(metadata),
+            cmd,
+        )
+        .await;
+
         assert!(result.is_ok());
     }
     #[tokio::test]
@@ -377,73 +390,68 @@ mod tests {
 
         let resource_cache = MockResourceDrivenCache::new();
 
+        let metadata = MockMetadataDriven::new();
+
         let cmd = FetchCmd::default();
 
-        let result = fetch(Arc::new(project_cache), Arc::new(resource_cache), cmd).await;
+        let result = fetch(
+            Arc::new(project_cache),
+            Arc::new(resource_cache),
+            Arc::new(metadata),
+            cmd,
+        )
+        .await;
         assert!(result.is_err());
     }
     #[tokio::test]
     async fn it_should_fail_fetch_project_resources_when_secret_doesnt_have_permission() {
         let project_cache = MockProjectDrivenCache::new();
         let resource_cache = MockResourceDrivenCache::new();
+        let metadata = MockMetadataDriven::new();
 
         let cmd = FetchCmd {
             credential: Credential::ApiKey(Uuid::new_v4().to_string()),
             ..Default::default()
         };
 
-        let result = fetch(Arc::new(project_cache), Arc::new(resource_cache), cmd).await;
+        let result = fetch(
+            Arc::new(project_cache),
+            Arc::new(resource_cache),
+            Arc::new(metadata),
+            cmd,
+        )
+        .await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn it_should_fetch_project_resources_by_id() {
-        let mut project_cache = MockProjectDrivenCache::new();
-        project_cache
-            .expect_find_user_permission()
-            .return_once(|_, _| Ok(Some(ProjectUser::default())));
-
-        let project = Project::default();
-
-        let project_cloned = project.clone();
-        project_cache
-            .expect_find_by_id()
-            .return_once(|_| Ok(Some(project_cloned)));
-
-        let mut resource_cache = MockResourceDrivenCache::new();
-        resource_cache.expect_find_by_id().return_once(|_| {
-            Ok(Some(Resource {
-                project_id: project.id,
-                ..Default::default()
-            }))
-        });
-
-        let cmd = FetchByIdCmd::default();
-
-        let result = fetch_by_id(Arc::new(project_cache), Arc::new(resource_cache), cmd).await;
-
-        assert!(result.is_ok());
-    }
-    #[tokio::test]
-    async fn it_should_fail_fetch_project_resources_by_id_when_resource_is_from_other_project() {
-        let mut project_cache = MockProjectDrivenCache::new();
-        project_cache
-            .expect_find_user_permission()
-            .return_once(|_, _| Ok(Some(ProjectUser::default())));
-        project_cache
-            .expect_find_by_id()
-            .return_once(|_| Ok(Some(Project::default())));
-
         let mut resource_cache = MockResourceDrivenCache::new();
         resource_cache
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Resource::default())));
 
+        let mut project_cache = MockProjectDrivenCache::new();
+        project_cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+
+        let mut metadata = MockMetadataDriven::new();
+        metadata
+            .expect_render_hbs()
+            .return_once(|_, _| Ok("[{}]".into()));
+
         let cmd = FetchByIdCmd::default();
 
-        let result = fetch_by_id(Arc::new(project_cache), Arc::new(resource_cache), cmd).await;
+        let result = fetch_by_id(
+            Arc::new(project_cache),
+            Arc::new(resource_cache),
+            Arc::new(metadata),
+            cmd,
+        )
+        .await;
 
-        assert!(result.is_err());
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
@@ -572,25 +580,18 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_delete_resource() {
+        let mut resource_cache = MockResourceDrivenCache::new();
+        resource_cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Resource::default())));
+
         let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
-
-        let project = Project::default();
-
-        let project_cloned = project.clone();
         project_cache
             .expect_find_by_id()
-            .return_once(|_| Ok(Some(project_cloned)));
-
-        let mut resource_cache = MockResourceDrivenCache::new();
-        resource_cache.expect_find_by_id().return_once(|_| {
-            Ok(Some(Resource {
-                project_id: project.id,
-                ..Default::default()
-            }))
-        });
+            .return_once(|_| Ok(Some(Project::default())));
 
         let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
@@ -609,12 +610,16 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_delete_resource_when_user_doesnt_have_permission() {
+        let mut resource_cache = MockResourceDrivenCache::new();
+        resource_cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Resource::default())));
+
         let mut project_cache = MockProjectDrivenCache::new();
         project_cache
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
 
-        let resource_cache = MockResourceDrivenCache::new();
         let event = MockEventDrivenBridge::new();
 
         let cmd = DeleteCmd::default();
@@ -631,43 +636,18 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_fail_delete_resource_when_secret_doesnt_have_permission() {
+        let mut resource_cache = MockResourceDrivenCache::new();
+        resource_cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Resource::default())));
+
         let project_cache = MockProjectDrivenCache::new();
-        let resource_cache = MockResourceDrivenCache::new();
         let event = MockEventDrivenBridge::new();
 
         let cmd = DeleteCmd {
             credential: Credential::ApiKey(Uuid::new_v4().to_string()),
             ..Default::default()
         };
-
-        let result = delete(
-            Arc::new(project_cache),
-            Arc::new(resource_cache),
-            Arc::new(event),
-            cmd,
-        )
-        .await;
-
-        assert!(result.is_err());
-    }
-    #[tokio::test]
-    async fn it_should_fail_delete_resource_when_resource_is_from_other_project() {
-        let mut project_cache = MockProjectDrivenCache::new();
-        project_cache
-            .expect_find_user_permission()
-            .return_once(|_, _| Ok(Some(ProjectUser::default())));
-        project_cache
-            .expect_find_by_id()
-            .return_once(|_| Ok(Some(Project::default())));
-
-        let mut resource_cache = MockResourceDrivenCache::new();
-        resource_cache
-            .expect_find_by_id()
-            .return_once(|_| Ok(Some(Resource::default())));
-
-        let event = MockEventDrivenBridge::new();
-
-        let cmd = DeleteCmd::default();
 
         let result = delete(
             Arc::new(project_cache),

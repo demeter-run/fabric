@@ -17,6 +17,7 @@ pub struct Resource {
     pub name: String,
     pub kind: String,
     pub spec: String,
+    pub annotations: Option<String>,
     pub status: ResourceStatus,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -31,6 +32,7 @@ impl TryFrom<ResourceCreated> for Resource {
             name: value.name,
             kind: value.kind,
             spec: value.spec,
+            annotations: None,
             status: value.status.parse()?,
             created_at: value.created_at,
             updated_at: value.updated_at,
@@ -97,6 +99,7 @@ mod tests {
                 kind: "CardanoNodePort".into(),
                 spec: "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
                     .into(),
+                annotations: None,
                 status: ResourceStatus::Active,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
