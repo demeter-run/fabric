@@ -175,6 +175,7 @@ impl FromRow<'_, SqliteRow> for Resource {
             project_id: row.try_get("project_id")?,
             kind: row.try_get("kind")?,
             spec: row.try_get("spec")?,
+            annotations: None,
             status: status
                 .parse()
                 .map_err(|err: Error| sqlx::Error::Decode(err.into()))?,
