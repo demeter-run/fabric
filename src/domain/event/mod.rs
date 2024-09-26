@@ -62,6 +62,14 @@ pub struct ProjectSecretCreated {
 into_event!(ProjectSecretCreated);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectSecretDeleted {
+    pub id: String,
+    pub deleted_by: String,
+    pub deleted_at: DateTime<Utc>,
+}
+into_event!(ProjectSecretDeleted);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectUserInviteCreated {
     pub id: String,
     pub project_id: String,
@@ -156,6 +164,7 @@ pub enum Event {
     ProjectUpdated(ProjectUpdated),
     ProjectDeleted(ProjectDeleted),
     ProjectSecretCreated(ProjectSecretCreated),
+    ProjectSecretDeleted(ProjectSecretDeleted),
     ProjectUserInviteCreated(ProjectUserInviteCreated),
     ProjectUserInviteAccepted(ProjectUserInviteAccepted),
     ProjectUserDeleted(ProjectUserDeleted),
@@ -171,6 +180,7 @@ impl Event {
             Event::ProjectUpdated(_) => "ProjectUpdated".into(),
             Event::ProjectDeleted(_) => "ProjectDeleted".into(),
             Event::ProjectSecretCreated(_) => "ProjectSecretCreated".into(),
+            Event::ProjectSecretDeleted(_) => "ProjectSecretDeleted".into(),
             Event::ProjectUserInviteCreated(_) => "ProjectUserInviteCreated".into(),
             Event::ProjectUserInviteAccepted(_) => "ProjectUserInviteAccepted".into(),
             Event::ProjectUserDeleted(_) => "ProjectUserDeleted".into(),
@@ -187,6 +197,9 @@ impl Event {
             "ProjectDeleted" => Ok(Self::ProjectDeleted(serde_json::from_slice(payload)?)),
             "ProjectSecretCreated" => {
                 Ok(Self::ProjectSecretCreated(serde_json::from_slice(payload)?))
+            }
+            "ProjectSecretDeleted" => {
+                Ok(Self::ProjectSecretDeleted(serde_json::from_slice(payload)?))
             }
             "ProjectUserInviteCreated" => Ok(Self::ProjectUserInviteCreated(
                 serde_json::from_slice(payload)?,
@@ -253,6 +266,15 @@ mod tests {
                 phc: PHC.into(),
                 secret: SECRET.as_bytes().to_vec(),
                 created_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ProjectSecretDeleted {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                deleted_by: Uuid::new_v4().to_string(),
+                deleted_at: Utc::now(),
             }
         }
     }

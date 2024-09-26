@@ -305,6 +305,41 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         Ok(secrets)
     }
+    async fn find_secret_by_id(&self, id: &str) -> Result<Option<ProjectSecret>> {
+        let secret = sqlx::query_as::<_, ProjectSecret>(
+            r#"
+                SELECT 
+                    ps.id, 
+                    ps.project_id, 
+                    ps.name, 
+                    ps.phc, 
+                    ps.secret, 
+                    ps.created_at
+                FROM project_secret ps 
+                WHERE ps.id = $1;
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        Ok(secret)
+    }
+    async fn delete_secret(&self, id: &str) -> Result<()> {
+        sqlx::query!(
+            r#"
+                DELETE FROM
+                    project_secret
+                WHERE 
+                    id=$1;
+            "#,
+            id,
+        )
+        .execute(&self.sqlite.db)
+        .await?;
+
+        Ok(())
+    }
     async fn find_user_permission(
         &self,
         user_id: &str,
@@ -735,6 +770,25 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 1);
+    }
+
+    #[tokio::test]
+    async fn it_should_find_secret_by_id() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let secret = ProjectSecret {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_secret(&secret).await.unwrap();
+
+        let result = cache.find_secret_by_id(&secret.id).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
     }
 
     #[tokio::test]

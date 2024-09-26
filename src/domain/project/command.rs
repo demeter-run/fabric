@@ -13,8 +13,9 @@ use crate::domain::{
     auth::{Auth0Driven, Credential, UserId},
     error::Error,
     event::{
-        EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated,
-        ProjectUserDeleted, ProjectUserInviteAccepted, ProjectUserInviteCreated,
+        EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectSecretCreated,
+        ProjectSecretDeleted, ProjectUpdated, ProjectUserDeleted, ProjectUserInviteAccepted,
+        ProjectUserInviteCreated,
     },
     project::{ProjectStatus, ProjectUserInviteStatus},
     utils, Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
@@ -232,6 +233,30 @@ pub async fn verify_secret(
     };
 
     Ok(secret)
+}
+pub async fn delete_secret(
+    cache: Arc<dyn ProjectDrivenCache>,
+    event: Arc<dyn EventDrivenBridge>,
+    cmd: DeleteSecretCmd,
+) -> Result<()> {
+    let user_id = assert_credential(&cmd.credential)?;
+
+    let Some(secret) = cache.find_secret_by_id(&cmd.id).await? else {
+        return Err(Error::CommandMalformed("invalid secret id".into()));
+    };
+
+    assert_permission(cache.clone(), &cmd.credential, &secret.project_id, None).await?;
+
+    let evt = ProjectSecretDeleted {
+        id: secret.id,
+        deleted_by: user_id,
+        deleted_at: Utc::now(),
+    };
+
+    event.dispatch(evt.into()).await?;
+    info!(secret = &cmd.id, "project secret deleted");
+
+    Ok(())
 }
 
 pub async fn fetch_user(
@@ -578,6 +603,17 @@ pub struct VerifySecretCmd {
 }
 
 #[derive(Debug, Clone)]
+pub struct DeleteSecretCmd {
+    pub credential: Credential,
+    pub id: String,
+}
+impl DeleteSecretCmd {
+    pub fn new(credential: Credential, id: String) -> Self {
+        Self { credential, id }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct FetchUserCmd {
     pub credential: Credential,
     pub page: u32,
@@ -783,6 +819,14 @@ mod tests {
             Self {
                 project_id: Default::default(),
                 key: KEY.into(),
+            }
+        }
+    }
+    impl Default for DeleteSecretCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                id: Uuid::new_v4().to_string(),
             }
         }
     }
@@ -1123,6 +1167,26 @@ mod tests {
 
         let result = verify_secret(Arc::new(cache), cmd).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn it_should_delete_secret() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+
+        cache
+            .expect_find_secret_by_id()
+            .return_once(|_| Ok(Some(ProjectSecret::default())));
+
+        let mut event = MockEventDrivenBridge::new();
+        event.expect_dispatch().return_once(|_| Ok(()));
+
+        let cmd = DeleteSecretCmd::default();
+
+        let result = delete_secret(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_ok());
     }
 
     #[tokio::test]

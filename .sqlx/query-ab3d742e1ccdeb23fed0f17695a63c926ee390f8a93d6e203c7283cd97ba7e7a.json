@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                DELETE FROM\n                    project_secret\n                WHERE \n                    id=$1;\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "ab3d742e1ccdeb23fed0f17695a63c926ee390f8a93d6e203c7283cd97ba7e7a"
+}
