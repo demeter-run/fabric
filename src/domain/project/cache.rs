@@ -2,8 +2,8 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
 use crate::domain::event::{
-    ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectUpdated, ProjectUserDeleted,
-    ProjectUserInviteAccepted, ProjectUserInviteCreated,
+    ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectSecretDeleted, ProjectUpdated,
+    ProjectUserDeleted, ProjectUserInviteAccepted, ProjectUserInviteCreated,
 };
 use crate::domain::Result;
 
@@ -20,6 +20,8 @@ pub trait ProjectDrivenCache: Send + Sync {
     async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
     async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
     async fn find_secrets(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
+    async fn find_secret_by_id(&self, id: &str) -> Result<Option<ProjectSecret>>;
+    async fn delete_secret(&self, id: &str) -> Result<()>;
     async fn find_users(
         &self,
         project_id: &str,
@@ -61,6 +63,12 @@ pub async fn create_secret(
     evt: ProjectSecretCreated,
 ) -> Result<()> {
     cache.create_secret(&evt.into()).await
+}
+pub async fn delete_secret(
+    cache: Arc<dyn ProjectDrivenCache>,
+    evt: ProjectSecretDeleted,
+) -> Result<()> {
+    cache.delete_secret(&evt.id).await
 }
 
 pub async fn create_user_invite(
@@ -109,6 +117,16 @@ mod tests {
         let evt = ProjectSecretCreated::default();
 
         let result = create_secret(Arc::new(cache), evt).await;
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_delete_project_secret_cache() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_delete_secret().return_once(|_| Ok(()));
+
+        let evt = ProjectSecretDeleted::default();
+
+        let result = delete_secret(Arc::new(cache), evt).await;
         assert!(result.is_ok());
     }
 

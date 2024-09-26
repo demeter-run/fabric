@@ -59,6 +59,9 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                     Event::ProjectSecretCreated(evt) => {
                         project::cache::create_secret(project_cache.clone(), evt.clone()).await
                     }
+                    Event::ProjectSecretDeleted(evt) => {
+                        project::cache::delete_secret(project_cache.clone(), evt.clone()).await
+                    }
                     Event::ProjectUserInviteCreated(evt) => {
                         project::cache::create_user_invite(project_cache.clone(), evt.clone()).await
                     }
