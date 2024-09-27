@@ -5,7 +5,7 @@ use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use bech32::{Bech32m, Hrp};
 use chrono::Utc;
 use rand::rngs::OsRng;
-use tracing::info;
+use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::domain::{
@@ -34,11 +34,10 @@ pub async fn fetch(
         .await?
         .into_iter()
         .map(|mut resource| {
-            if let Ok(annotations) =
-                metadata.render_hbs(&resource.kind.to_lowercase(), &resource.spec)
-            {
-                resource.annotations = Some(annotations);
-            }
+            match metadata.render_hbs(&resource.kind.to_lowercase(), &resource.spec) {
+                Ok(annotations) => resource.annotations = Some(annotations),
+                Err(error) => error!(?error),
+            };
 
             resource
         })
@@ -59,9 +58,10 @@ pub async fn fetch_by_id(
 
     assert_project_permission(project_cache.clone(), &cmd.credential, &resource.project_id).await?;
 
-    if let Ok(annotations) = metadata.render_hbs(&resource.kind.to_lowercase(), &resource.spec) {
-        resource.annotations = Some(annotations);
-    }
+    match metadata.render_hbs(&resource.kind.to_lowercase(), &resource.spec) {
+        Ok(annotations) => resource.annotations = Some(annotations),
+        Err(error) => error!(?error),
+    };
 
     Ok(resource)
 }
