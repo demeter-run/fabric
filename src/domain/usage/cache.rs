@@ -31,7 +31,7 @@ pub async fn create(
         .iter()
         .map(|usage| async {
             let Some(resource) = resouce_cache
-                .find_by_name_for_usage(&usage.project_namespace, &usage.resource_name)
+                .find_by_name_for_usage(&evt.project_namespace, &usage.resource_name)
                 .await?
             else {
                 return Err(Error::Unexpected("Resource name has not been found".into()));
