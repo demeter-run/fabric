@@ -83,7 +83,7 @@ pub async fn create(
         return Err(Error::Unexpected("invalid random name, try again".into()));
     }
 
-    let Some(crd) = metadata.find_by_kind(&cmd.kind).await? else {
+    let Some(metadata) = metadata.find_by_kind(&cmd.kind).await? else {
         return Err(Error::CommandMalformed("kind not supported".into()));
     };
 
@@ -92,7 +92,7 @@ pub async fn create(
     };
 
     let mut spec = cmd.spec.clone();
-    if let Some(status_schema) = get_schema_from_crd(&crd, "status") {
+    if let Some(status_schema) = get_schema_from_crd(&metadata.crd, "status") {
         for (key, _) in status_schema {
             if let Ok(status_field) = key.parse::<KnownField>() {
                 let value = match status_field {
@@ -315,8 +315,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::domain::event::MockEventDrivenBridge;
-    use crate::domain::metadata::tests::mock_crd;
-    use crate::domain::metadata::MockMetadataDriven;
+    use crate::domain::metadata::{MockMetadataDriven, ResourceMetadata};
     use crate::domain::project::cache::MockProjectDrivenCache;
     use crate::domain::project::{Project, ProjectUser};
     use crate::domain::resource::cache::MockResourceDrivenCache;
@@ -482,7 +481,7 @@ mod tests {
         let mut metadata = MockMetadataDriven::new();
         metadata
             .expect_find_by_kind()
-            .return_once(|_| Ok(Some(mock_crd())));
+            .return_once(|_| Ok(Some(ResourceMetadata::default())));
 
         let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
@@ -546,7 +545,7 @@ mod tests {
         let mut metadata = MockMetadataDriven::new();
         metadata
             .expect_find_by_kind()
-            .return_once(|_| Ok(Some(mock_crd())));
+            .return_once(|_| Ok(Some(ResourceMetadata::default())));
 
         let event = MockEventDrivenBridge::new();
 

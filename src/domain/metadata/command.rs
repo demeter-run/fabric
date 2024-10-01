@@ -1,12 +1,9 @@
 use std::sync::Arc;
 
-use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
+use super::{MetadataDriven, ResourceMetadata, Result};
 
-use super::{MetadataDriven, Result};
-
-pub async fn fetch(metadata: Arc<dyn MetadataDriven>) -> Result<Vec<CustomResourceDefinition>> {
-    let crds = metadata.find().await?;
-    Ok(crds)
+pub async fn fetch(metadata: Arc<dyn MetadataDriven>) -> Result<Vec<ResourceMetadata>> {
+    metadata.find().await
 }
 
 #[cfg(test)]
@@ -20,7 +17,7 @@ mod tests {
         let mut metadata = MockMetadataDriven::new();
         metadata
             .expect_find()
-            .return_once(|| Ok(vec![CustomResourceDefinition::default()]));
+            .return_once(|| Ok(vec![ResourceMetadata::default()]));
 
         let result = fetch(Arc::new(metadata)).await;
         assert!(result.is_ok());
