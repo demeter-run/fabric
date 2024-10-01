@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use tracing::error;
@@ -5,7 +7,7 @@ use tracing::error;
 use crate::{
     domain::{
         error::Error,
-        usage::{cluster::UsageDrivenCluster, UsageUnit},
+        usage::{cluster::UsageDrivenCluster, UsageMetric, UsageUnitMetric},
         Result,
     },
     driven::prometheus::deserialize_value,
@@ -20,7 +22,7 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
         step: &str,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
-    ) -> Result<Vec<UsageUnit>> {
+    ) -> Result<Vec<UsageMetric>> {
         let response = self
             .client
             .get(format!(
@@ -46,46 +48,49 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
 
         let response: PrometheusResponse = response.json().await?;
 
-        let usage_units: Vec<UsageUnit> = response
-            .data
-            .result
-            .iter()
-            .map(|r| {
-                let min = r.values.iter().min_by_key(|v| v.timestamp);
-                let max = r.values.iter().max_by_key(|v| v.timestamp);
+        let mut metrics: HashMap<String, UsageMetric> = HashMap::new();
+        for r in response.data.result.iter() {
+            let min = r.values.iter().min_by_key(|v| v.timestamp);
+            let max = r.values.iter().max_by_key(|v| v.timestamp);
 
-                let first_timestamp = match min {
-                    Some(v) => v.timestamp,
-                    None => 0,
-                };
-                let last_timestamp = match max {
-                    Some(v) => v.timestamp,
-                    None => 0,
-                };
+            let first_timestamp = match min {
+                Some(v) => v.timestamp,
+                None => 0,
+            };
+            let last_timestamp = match max {
+                Some(v) => v.timestamp,
+                None => 0,
+            };
 
-                let first_value = match min {
-                    Some(v) => v.value,
-                    None => 0,
-                };
-                let last_value = match max {
-                    Some(v) => v.value,
-                    None => 0,
-                };
+            let first_value = match min {
+                Some(v) => v.value,
+                None => 0,
+            };
+            let last_value = match max {
+                Some(v) => v.value,
+                None => 0,
+            };
 
-                let interval = last_timestamp - first_timestamp;
-                let units = last_value - first_value;
+            let interval = last_timestamp - first_timestamp;
+            let units = last_value - first_value;
 
-                UsageUnit {
+            let usage_unit = UsageUnitMetric {
+                resource_name: r.metric.resource_name.clone(),
+                units,
+                interval,
+                tier: r.metric.tier.clone(),
+            };
+
+            metrics
+                .entry(r.metric.project.clone())
+                .and_modify(|u| u.resources.push(usage_unit.clone()))
+                .or_insert(UsageMetric {
                     project_namespace: r.metric.project.clone(),
-                    resource_name: r.metric.resource_name.clone(),
-                    units,
-                    interval,
-                    tier: r.metric.tier.clone(),
-                }
-            })
-            .collect();
+                    resources: vec![usage_unit],
+                });
+        }
 
-        Ok(usage_units)
+        Ok(metrics.into_values().collect())
     }
 }
 

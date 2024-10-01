@@ -36,8 +36,12 @@ impl Usage {
 }
 
 #[derive(Debug)]
-pub struct UsageUnit {
+pub struct UsageMetric {
     pub project_namespace: String,
+    pub resources: Vec<UsageUnitMetric>,
+}
+#[derive(Debug, Clone)]
+pub struct UsageUnitMetric {
     pub resource_name: String,
     pub units: i64,
     pub tier: String,

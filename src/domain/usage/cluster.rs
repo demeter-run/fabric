@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use tracing::info;
+use futures::future::join_all;
+use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::domain::{
@@ -9,7 +10,7 @@ use crate::domain::{
     Result,
 };
 
-use super::UsageUnit;
+use super::UsageMetric;
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
@@ -19,7 +20,7 @@ pub trait UsageDrivenCluster: Send + Sync {
         step: &str,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
-    ) -> Result<Vec<UsageUnit>>;
+    ) -> Result<Vec<UsageMetric>>;
 }
 
 pub async fn sync_usage(
@@ -36,23 +37,31 @@ pub async fn sync_usage(
         return Ok(());
     }
 
-    let evt = UsageCreated {
-        id: Uuid::new_v4().to_string(),
-        cluster_id: cluster_id.into(),
-        usages: usages
-            .into_iter()
-            .map(|u| UsageUnitCreated {
-                project_namespace: u.project_namespace,
-                resource_name: u.resource_name,
-                units: u.units,
-                tier: u.tier,
-                interval: u.interval,
-            })
-            .collect(),
-        created_at: Utc::now(),
-    };
+    let tasks = usages.iter().map(|u| async {
+        let evt = UsageCreated {
+            id: Uuid::new_v4().to_string(),
+            cluster_id: cluster_id.into(),
+            project_namespace: u.project_namespace.clone(),
+            created_at: Utc::now(),
+            usages: u
+                .resources
+                .iter()
+                .map(|r| UsageUnitCreated {
+                    resource_name: r.resource_name.clone(),
+                    units: r.units,
+                    tier: r.tier.clone(),
+                    interval: r.interval,
+                })
+                .collect(),
+        };
 
-    event.dispatch(evt.into()).await?;
+        if let Err(error) = event.dispatch(evt.into()).await {
+            error!(?error, ?u.project_namespace, "fail to dispatch usage event");
+        }
+    });
+
+    join_all(tasks).await;
+
     info!(
         cursor = cursor.to_string(),
         end = end.to_string(),
