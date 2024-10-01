@@ -20,9 +20,9 @@ impl proto::metadata_service_server::MetadataService for MetadataServiceImpl {
         &self,
         _request: tonic::Request<proto::FetchMetadataRequest>,
     ) -> Result<tonic::Response<proto::FetchMetadataResponse>, tonic::Status> {
-        let crds = metadata::command::fetch(self.metadata.clone()).await?;
+        let metadata = metadata::command::fetch(self.metadata.clone()).await?;
 
-        let records: Vec<String> = crds
+        let records = metadata
             .iter()
             .map(serde_json::to_string)
             .collect::<Result<_, _>>()
