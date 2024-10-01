@@ -3,7 +3,10 @@ use std::sync::Arc;
 use dmtri::demeter::ops::v1alpha as proto;
 use tonic::async_trait;
 
-use crate::domain::metadata::{self, MetadataDriven};
+use crate::domain::{
+    error::Error,
+    metadata::{self, MetadataDriven},
+};
 
 pub struct MetadataServiceImpl {
     pub metadata: Arc<dyn MetadataDriven>,
@@ -22,11 +25,16 @@ impl proto::metadata_service_server::MetadataService for MetadataServiceImpl {
     ) -> Result<tonic::Response<proto::FetchMetadataResponse>, tonic::Status> {
         let metadata = metadata::command::fetch(self.metadata.clone()).await?;
 
-        let records = metadata
+        let records: Vec<proto::Metadata> = metadata
             .iter()
-            .map(serde_json::to_string)
+            .map(|m| {
+                Ok(proto::Metadata {
+                    options: serde_json::to_string(&m.options)?,
+                    crd: serde_json::to_string(&m.crd)?,
+                })
+            })
             .collect::<Result<_, _>>()
-            .map_err(|err| tonic::Status::internal(err.to_string()))?;
+            .map_err(|err: Error| tonic::Status::internal(err.to_string()))?;
 
         let message = proto::FetchMetadataResponse { records };
 
