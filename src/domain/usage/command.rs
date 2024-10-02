@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use crate::domain::{
-    auth::{assert_project_permission, Credential},
+    auth::{assert_permission, Credential},
     error::Error,
-    project::cache::ProjectDrivenCache,
+    project::{cache::ProjectDrivenCache, ProjectUserRole},
     Result, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
@@ -14,7 +14,13 @@ pub async fn fetch_report(
     usage_cache: Arc<dyn UsageDrivenCache>,
     cmd: FetchCmd,
 ) -> Result<Vec<UsageReport>> {
-    assert_project_permission(project_cache.clone(), &cmd.credential, &cmd.project_id).await?;
+    assert_permission(
+        project_cache.clone(),
+        &cmd.credential,
+        &cmd.project_id,
+        Some(ProjectUserRole::Owner),
+    )
+    .await?;
 
     usage_cache
         .find_report(&cmd.project_id, &cmd.page, &cmd.page_size)

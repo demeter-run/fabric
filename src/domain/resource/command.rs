@@ -9,7 +9,7 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::domain::{
-    auth::{assert_project_permission, Credential},
+    auth::{assert_permission, Credential},
     error::Error,
     event::{EventDrivenBridge, ResourceCreated, ResourceDeleted},
     metadata::{KnownField, MetadataDriven},
@@ -27,7 +27,13 @@ pub async fn fetch(
     metadata: Arc<dyn MetadataDriven>,
     cmd: FetchCmd,
 ) -> Result<Vec<Resource>> {
-    assert_project_permission(project_cache.clone(), &cmd.credential, &cmd.project_id).await?;
+    assert_permission(
+        project_cache.clone(),
+        &cmd.credential,
+        &cmd.project_id,
+        None,
+    )
+    .await?;
 
     let resources = resource_cache
         .find(&cmd.project_id, &cmd.page, &cmd.page_size)
@@ -56,7 +62,13 @@ pub async fn fetch_by_id(
         return Err(Error::CommandMalformed("invalid resource id".into()));
     };
 
-    assert_project_permission(project_cache.clone(), &cmd.credential, &resource.project_id).await?;
+    assert_permission(
+        project_cache.clone(),
+        &cmd.credential,
+        &resource.project_id,
+        None,
+    )
+    .await?;
 
     match metadata.render_hbs(&resource.kind.to_lowercase(), &resource.spec) {
         Ok(annotations) => resource.annotations = Some(annotations),
@@ -73,7 +85,13 @@ pub async fn create(
     event: Arc<dyn EventDrivenBridge>,
     cmd: CreateCmd,
 ) -> Result<()> {
-    assert_project_permission(project_cache.clone(), &cmd.credential, &cmd.project_id).await?;
+    assert_permission(
+        project_cache.clone(),
+        &cmd.credential,
+        &cmd.project_id,
+        None,
+    )
+    .await?;
 
     if resource_cache
         .find_by_name(&cmd.project_id, &cmd.name)
@@ -143,7 +161,13 @@ pub async fn update(
         return Err(Error::CommandMalformed("invalid resource id".into()));
     };
 
-    assert_project_permission(project_cache.clone(), &cmd.credential, &resource.project_id).await?;
+    assert_permission(
+        project_cache.clone(),
+        &cmd.credential,
+        &resource.project_id,
+        None,
+    )
+    .await?;
 
     let Some(project) = project_cache.find_by_id(&resource.project_id).await? else {
         return Err(Error::CommandMalformed("invalid project id".into()));
@@ -179,7 +203,13 @@ pub async fn delete(
         return Err(Error::CommandMalformed("invalid resource id".into()));
     };
 
-    assert_project_permission(project_cache.clone(), &cmd.credential, &resource.project_id).await?;
+    assert_permission(
+        project_cache.clone(),
+        &cmd.credential,
+        &resource.project_id,
+        None,
+    )
+    .await?;
 
     let Some(project) = project_cache.find_by_id(&resource.project_id).await? else {
         return Err(Error::CommandMalformed("invalid project id".into()));

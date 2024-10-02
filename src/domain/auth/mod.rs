@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use super::{error::Error, project::cache::ProjectDrivenCache};
+use super::{
+    error::Error,
+    project::{cache::ProjectDrivenCache, ProjectUserRole},
+};
 
 use crate::domain::Result;
 
@@ -20,10 +23,11 @@ pub enum Credential {
     ApiKey(SecretId),
 }
 
-pub async fn assert_project_permission(
+pub async fn assert_permission(
     project_cache: Arc<dyn ProjectDrivenCache>,
     credential: &Credential,
     project_id: &str,
+    role: Option<ProjectUserRole>,
 ) -> Result<()> {
     match credential {
         Credential::Auth0(user_id) => {
@@ -35,7 +39,16 @@ pub async fn assert_project_permission(
                 return Err(Error::Unauthorized("user doesnt have permission".into()));
             }
 
-            Ok(())
+            match role {
+                Some(role) => {
+                    let permission = result.unwrap();
+                    if role != permission.role {
+                        return Err(Error::Unauthorized("user doesnt have permission".into()));
+                    }
+                    Ok(())
+                }
+                None => Ok(()),
+            }
         }
         Credential::ApiKey(secret_project_id) => {
             if project_id != secret_project_id {
