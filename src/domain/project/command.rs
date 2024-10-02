@@ -504,6 +504,14 @@ pub struct FetchByNamespaceCmd {
     pub credential: Credential,
     pub namespace: String,
 }
+impl FetchByNamespaceCmd {
+    pub fn new(credential: Credential, namespace: String) -> Self {
+        Self {
+            credential,
+            namespace,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct CreateCmd {

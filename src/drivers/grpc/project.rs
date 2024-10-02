@@ -66,6 +66,27 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
+    async fn fetch_project_by_namespace(
+        &self,
+        request: tonic::Request<proto::FetchProjectByNamespaceRequest>,
+    ) -> Result<tonic::Response<proto::FetchProjectByNamespaceResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = project::command::FetchByNamespaceCmd::new(credential, req.namespace);
+
+        let project = project::command::fetch_by_namespace(self.cache.clone(), cmd.clone()).await?;
+
+        let message = proto::FetchProjectByNamespaceResponse {
+            records: vec![project.into()],
+        };
+
+        Ok(tonic::Response::new(message))
+    }
 
     async fn create_project(
         &self,
