@@ -87,6 +87,27 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
+    async fn fetch_project_by_id(
+        &self,
+        request: tonic::Request<proto::FetchProjectByIdRequest>,
+    ) -> Result<tonic::Response<proto::FetchProjectByIdResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = project::command::FetchByIdCmd::new(credential, req.id);
+
+        let project = project::command::fetch_by_id(self.cache.clone(), cmd.clone()).await?;
+
+        let message = proto::FetchProjectByIdResponse {
+            records: vec![project.into()],
+        };
+
+        Ok(tonic::Response::new(message))
+    }
 
     async fn create_project(
         &self,
