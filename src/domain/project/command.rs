@@ -32,6 +32,15 @@ pub async fn fetch(cache: Arc<dyn ProjectDrivenCache>, cmd: FetchCmd) -> Result<
     cache.find(&user_id, &cmd.page, &cmd.page_size).await
 }
 
+pub async fn fetch_by_id(cache: Arc<dyn ProjectDrivenCache>, cmd: FetchByIdCmd) -> Result<Project> {
+    let Some(project) = cache.find_by_id(&cmd.id).await? else {
+        return Err(Error::CommandMalformed("invalid project id".into()));
+    };
+    assert_permission(cache.clone(), &cmd.credential, &project.id, None).await?;
+
+    Ok(project)
+}
+
 pub async fn fetch_by_namespace(
     cache: Arc<dyn ProjectDrivenCache>,
     cmd: FetchByNamespaceCmd,
@@ -500,6 +509,17 @@ impl FetchCmd {
 }
 
 #[derive(Debug, Clone)]
+pub struct FetchByIdCmd {
+    pub credential: Credential,
+    pub id: String,
+}
+impl FetchByIdCmd {
+    pub fn new(credential: Credential, id: String) -> Self {
+        Self { credential, id }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct FetchByNamespaceCmd {
     pub credential: Credential,
     pub namespace: String,
@@ -784,6 +804,14 @@ mod tests {
             }
         }
     }
+    impl Default for FetchByIdCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                id: Uuid::new_v4().to_string(),
+            }
+        }
+    }
     impl Default for CreateCmd {
         fn default() -> Self {
             Self {
@@ -919,7 +947,39 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_should_fetch_project_by_name() {
+    async fn it_should_fetch_project_by_id() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let cmd = FetchByIdCmd::default();
+
+        let result = fetch_by_id(Arc::new(cache), cmd).await;
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_fail_fetch_project_by_id_when_invalid_permission() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(None));
+
+        let cmd = FetchByIdCmd::default();
+
+        let result = fetch_by_id(Arc::new(cache), cmd).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn it_should_fetch_project_by_namespace() {
         let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_user_permission()
@@ -932,6 +992,22 @@ mod tests {
 
         let result = fetch_by_namespace(Arc::new(cache), cmd).await;
         assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_fail_fetch_project_by_namespace_when_invalid_permission() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_by_namespace()
+            .return_once(|_| Ok(Some(Project::default())));
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(None));
+
+        let cmd = FetchByNamespaceCmd::default();
+
+        let result = fetch_by_namespace(Arc::new(cache), cmd).await;
+
+        assert!(result.is_err());
     }
 
     #[tokio::test]
