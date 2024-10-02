@@ -10,7 +10,7 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::domain::{
-    auth::{Auth0Driven, Credential, UserId},
+    auth::{assert_permission, Auth0Driven, Credential, UserId},
     error::Error,
     event::{
         EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectSecretCreated,
@@ -30,6 +30,18 @@ pub async fn fetch(cache: Arc<dyn ProjectDrivenCache>, cmd: FetchCmd) -> Result<
     let user_id = assert_credential(&cmd.credential)?;
 
     cache.find(&user_id, &cmd.page, &cmd.page_size).await
+}
+
+pub async fn fetch_by_namespace(
+    cache: Arc<dyn ProjectDrivenCache>,
+    cmd: FetchByNamespaceCmd,
+) -> Result<Project> {
+    let Some(project) = cache.find_by_namespace(&cmd.namespace).await? else {
+        return Err(Error::CommandMalformed("invalid project namespace".into()));
+    };
+    assert_permission(cache.clone(), &cmd.credential, &project.id, None).await?;
+
+    Ok(project)
 }
 
 pub async fn create(
@@ -461,33 +473,6 @@ fn assert_credential(credential: &Credential) -> Result<UserId> {
         )),
     }
 }
-async fn assert_permission(
-    cache: Arc<dyn ProjectDrivenCache>,
-    credential: &Credential,
-    project_id: &str,
-    role: Option<ProjectUserRole>,
-) -> Result<()> {
-    match credential {
-        Credential::Auth0(user_id) => {
-            let result = cache.find_user_permission(user_id, project_id).await?;
-            if result.is_none() {
-                return Err(Error::Unauthorized("user doesnt have permission".into()));
-            }
-
-            match role {
-                Some(role) => {
-                    let permission = result.unwrap();
-                    if role != permission.role {
-                        return Err(Error::Unauthorized("user doesnt have permission".into()));
-                    }
-                    Ok(())
-                }
-                None => Ok(()),
-            }
-        }
-        Credential::ApiKey(_) => Err(Error::Unauthorized("rpc doesnt support api-key".into())),
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct FetchCmd {
@@ -513,6 +498,13 @@ impl FetchCmd {
         })
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct FetchByNamespaceCmd {
+    pub credential: Credential,
+    pub namespace: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct CreateCmd {
     pub credential: Credential,
@@ -776,6 +768,14 @@ mod tests {
             }
         }
     }
+    impl Default for FetchByNamespaceCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                namespace: "sonic-vegas".into(),
+            }
+        }
+    }
     impl Default for CreateCmd {
         fn default() -> Self {
             Self {
@@ -907,6 +907,22 @@ mod tests {
         let cmd = FetchCmd::default();
 
         let result = fetch(Arc::new(cache), cmd).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_fetch_project_by_name() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_namespace()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let cmd = FetchByNamespaceCmd::default();
+
+        let result = fetch_by_namespace(Arc::new(cache), cmd).await;
         assert!(result.is_ok());
     }
 
