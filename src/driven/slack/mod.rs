@@ -20,9 +20,11 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
     async fn notify(&self, evt: Event) -> Result<()> {
         let key = &evt.key();
         let data: Option<String> = match evt {
-            Event::ProjectCreated(created_project) => {
-                Some(to_string_pretty(&created_project).unwrap())
-            }
+            Event::ProjectCreated(payload) => Some(to_string_pretty(&payload).unwrap()),
+            Event::ProjectDeleted(payload) => Some(to_string_pretty(&payload).unwrap()),
+            Event::ResourceCreated(payload) => Some(to_string_pretty(&payload).unwrap()),
+            Event::ResourceUpdated(payload) => Some(to_string_pretty(&payload).unwrap()),
+            Event::ResourceDeleted(payload) => Some(to_string_pretty(&payload).unwrap()),
             _ => None,
         };
 
