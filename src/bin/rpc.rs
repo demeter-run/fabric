@@ -73,6 +73,7 @@ struct Config {
     secret: String,
     topic: String,
     tls: Option<TlsConfig>,
+    slack_webhook_url: Option<String>,
     kafka_producer: HashMap<String, String>,
     kafka_consumer: HashMap<String, String>,
 }
@@ -125,6 +126,7 @@ impl From<Config> for CacheConfig {
             kafka: value.kafka_consumer,
             db_path: value.db_path,
             topic: value.topic,
+            slack_webhook_url: value.slack_webhook_url,
         }
     }
 }

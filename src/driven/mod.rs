@@ -5,4 +5,5 @@ pub mod kafka;
 pub mod metadata;
 pub mod prometheus;
 pub mod ses;
+pub mod slack;
 pub mod stripe;

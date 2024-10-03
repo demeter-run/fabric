@@ -4,6 +4,7 @@ pub mod auth;
 pub mod error;
 pub mod event;
 pub mod metadata;
+pub mod notify;
 pub mod project;
 pub mod resource;
 pub mod usage;

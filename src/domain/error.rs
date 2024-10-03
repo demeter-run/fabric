@@ -57,3 +57,8 @@ impl From<handlebars::RenderError> for Error {
         Self::Unexpected(value.to_string())
     }
 }
+impl From<slack_hook::Error> for Error {
+    fn from(value: slack_hook::Error) -> Self {
+        Self::Unexpected(format!("Invalid webhook URL: {}", value))
+    }
+}
