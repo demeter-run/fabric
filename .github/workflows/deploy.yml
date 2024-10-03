@@ -17,6 +17,7 @@ jobs:
       TF_VAR_auth0_client_secret: ${{ secrets.AUTH0_CLIENT_SECRET }} 
       TF_VAR_auth0_audience:  ${{ secrets.AUTH0_AUDIENCE }}
       TF_VAR_stripe_api_key:  ${{ secrets.STRIPE_API_KEY }}
+      TF_VAR_slack_webhook_url:  ${{ secrets.SLACK_WEBHOOK_URL }}
       TF_VAR_email_ses_access_key_id: ${{ secrets.EMAIL_SES_ACCESS_KEY_ID }}
       TF_VAR_email_ses_secret_access_key: ${{ secrets.EMAIL_SES_SECRET_ACCESS_KEY }}
     steps:
