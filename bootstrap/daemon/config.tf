@@ -8,14 +8,15 @@ resource "kubernetes_config_map_v1" "fabric_daemon_config" {
     "daemon.toml" = "${templatefile(
       "${path.module}/daemon.toml.tftpl",
       {
-        broker_urls          = var.broker_urls
-        consumer_name        = var.consumer_name
-        kafka_username       = var.kafka_username
-        kafka_password       = var.kafka_password
-        topic                = var.kafka_topic
-        cluster_id           = var.cluster_id
-        prometheus_url       = var.prometheus_url
-        prometheus_delay_sec = var.prometheus_delay_sec
+        broker_urls           = var.broker_urls
+        consumer_name         = var.consumer_name
+        kafka_username        = var.kafka_username
+        kafka_password        = var.kafka_password
+        topic                 = var.kafka_topic
+        cluster_id            = var.cluster_id
+        prometheus_url        = var.prometheus_url
+        prometheus_delay_sec  = var.prometheus_delay_sec
+        prometheus_query_step = var.prometheus_query_step
       }
     )}"
   }

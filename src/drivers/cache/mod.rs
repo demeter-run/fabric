@@ -5,13 +5,16 @@ use rdkafka::{
     ClientConfig, Message,
 };
 use std::{borrow::Borrow, collections::HashMap, path::Path, sync::Arc};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::{
-    domain::{event::Event, project, resource, usage},
-    driven::cache::{
-        project::SqliteProjectDrivenCache, resource::SqliteResourceDrivenCache,
-        usage::SqliteUsageDrivenCache, SqliteCache,
+    domain::{event::Event, notify::NotifyDriven, project, resource, usage},
+    driven::{
+        cache::{
+            project::SqliteProjectDrivenCache, resource::SqliteResourceDrivenCache,
+            usage::SqliteUsageDrivenCache, SqliteCache,
+        },
+        slack::SlackNotifyDrivenImpl,
     },
 };
 
@@ -22,6 +25,11 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
     let project_cache = Arc::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
     let resource_cache = Arc::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
     let usage_cache = Arc::new(SqliteUsageDrivenCache::new(sqlite_cache.clone()));
+
+    let mut slack_notify_driven = None;
+    if let Some(webhook_url) = config.slack_webhook_url {
+        slack_notify_driven = Some(SlackNotifyDrivenImpl::try_new(&webhook_url)?)
+    }
 
     let mut client_config = ClientConfig::new();
     for (k, v) in config.kafka.iter() {
@@ -94,6 +102,12 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                     }
                 };
 
+                if let Some(notify) = &slack_notify_driven {
+                    if let Err(err) = notify.notify(event.clone()).await {
+                        warn!(err = err.to_string(), "Failed to send Slack notification.")
+                    }
+                }
+
                 match event_application {
                     Ok(_) => info!("Succesfully handled event {:?}", event),
                     Err(err) => error!(
@@ -115,4 +129,5 @@ pub struct CacheConfig {
     pub db_path: String,
     pub topic: String,
     pub kafka: HashMap<String, String>,
+    pub slack_webhook_url: Option<String>,
 }
