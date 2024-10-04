@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::domain::{
     auth::{assert_permission, Credential},
     error::Error,
-    project::{cache::ProjectDrivenCache, ProjectUserRole},
+    project::cache::ProjectDrivenCache,
     Result, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
@@ -18,7 +18,7 @@ pub async fn fetch_report(
         project_cache.clone(),
         &cmd.credential,
         &cmd.project_id,
-        Some(ProjectUserRole::Owner),
+        None,
     )
     .await?;
 
