@@ -58,6 +58,7 @@ impl From<UsageReport> for proto::UsageReport {
             resource_spec: value.resource_spec,
             units: value.units,
             tier: value.tier,
+            cost: 0.0,
             period: value.period,
         }
     }
