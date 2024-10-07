@@ -37,11 +37,11 @@ variable "email_ses_secret_access_key" {}
 locals {
   namespace                   = "demeter-global"
   replicas                    = 1
-  broker_urls                 = "redpanda-0.fabric-queue.demeter.run:31092,redpanda-1.fabric-queue.demeter.run:31092,redpanda-2.fabric-queue.demeter.run:31092"
+  broker_urls                 = "cs01k9hsakr3s8si3o00.any.us-east-1.mpx.prd.cloud.redpanda.com:9092"
   secret                      = var.secret
   kafka_rpc_username          = "rpc"
   kafka_rpc_password          = var.kafka_rpc_password
-  kafka_topic                 = "events"
+  kafka_topic                 = "events-stg"
   auth0_client_id             = var.auth0_client_id
   auth0_client_secret         = var.auth0_client_secret
   auth0_audience              = var.auth0_audience
@@ -59,7 +59,7 @@ module "fabric_rpc" {
   namespace                   = local.namespace
   image                       = var.rpc_image
   broker_urls                 = local.broker_urls
-  consumer_name               = "rpc-ahid04"
+  consumer_name               = "rpc-ahid05"
   kafka_username              = local.kafka_rpc_username
   kafka_password              = local.kafka_rpc_password
   kafka_topic                 = local.kafka_topic
