@@ -43,6 +43,7 @@ data:
     topic = "events"
     cluster_id = "625e6681-8a74-4454-b5ad-861b45c6a42e"
     delay_sec = 60
+    mode = "full"
 
     [kafka]
     "bootstrap.servers" = "redpanda.demeter-kafka.svc.cluster.local:19092"
