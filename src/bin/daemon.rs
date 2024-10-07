@@ -25,13 +25,13 @@ async fn main() -> Result<()> {
     let config = Config::new()?;
 
     match config.mode {
-        Some(Mode::Usage) => {
+        Mode::Usage => {
             fabric::drivers::usage::schedule(config.clone().into()).await?;
         }
-        Some(Mode::Monitor) => {
+        Mode::Monitor => {
             fabric::drivers::monitor::subscribe(config.clone().into()).await?;
         }
-        None => {
+        Mode::Full => {
             let schedule = fabric::drivers::usage::schedule(config.clone().into());
             let subscribe = fabric::drivers::monitor::subscribe(config.clone().into());
 
@@ -46,6 +46,7 @@ async fn main() -> Result<()> {
 enum Mode {
     Usage,
     Monitor,
+    Full,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -63,7 +64,7 @@ struct Config {
     delay: Duration,
     topic: String,
     kafka: HashMap<String, String>,
-    mode: Option<Mode>,
+    mode: Mode,
 }
 impl Config {
     pub fn new() -> Result<Self> {

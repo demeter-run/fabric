@@ -37,6 +37,11 @@ variable "kafka_topic" {
   default = "events"
 }
 
+variable "mode" {
+  type    = string
+  default = "full"
+}
+
 variable "replicas" {
   type    = number
   default = 1
