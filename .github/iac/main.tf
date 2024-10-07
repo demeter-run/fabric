@@ -88,7 +88,7 @@ module "fabric_daemon" {
 
   namespace      = local.daemon_namespace
   image          = var.daemon_image
-  cluster_id     = ""
+  cluster_id     = "txpipe-us-east-2-m2"
   broker_urls    = local.broker_urls
   consumer_name  = "daemon-ahid01"
   kafka_username = local.kafka_daemon_username
