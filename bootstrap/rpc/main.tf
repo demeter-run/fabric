@@ -46,7 +46,8 @@ variable "stripe_api_key" {
 }
 
 variable "slack_webhook_url" {
-  type = string
+  type    = string
+  default = null
 }
 
 variable "kafka_topic" {
