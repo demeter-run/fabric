@@ -16,6 +16,7 @@ pub async fn schedule(config: UsageConfig) -> Result<()> {
 
     let mut cursor = Utc::now();
 
+    info!("Usage schedule running");
     loop {
         sleep(config.delay).await;
 

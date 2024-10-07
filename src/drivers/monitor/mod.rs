@@ -21,7 +21,7 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
     let consumer: StreamConsumer = client_config.create()?;
     consumer.subscribe(&[&config.topic])?;
 
-    info!("Subscriber running");
+    info!("Monitor subscribe running");
     loop {
         match consumer.recv().await {
             Err(error) => error!(?error, "kafka subscribe error"),
