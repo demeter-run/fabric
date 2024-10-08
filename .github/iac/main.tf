@@ -45,7 +45,7 @@ locals {
   secret                      = var.secret
   kafka_rpc_username          = "rpc"
   kafka_rpc_password          = var.kafka_rpc_password
-  kafka_daemon_username       = "daemon"
+  kafka_daemon_username       = "daemon-us-west-2-m2"
   kafka_daemon_password       = var.kafka_daemon_password
   kafka_topic                 = "events-stg"
   auth0_client_id             = var.auth0_client_id
@@ -90,7 +90,7 @@ module "fabric_daemon" {
   image          = var.daemon_image
   cluster_id     = "txpipe-us-east-2-m2"
   broker_urls    = local.broker_urls
-  consumer_name  = "daemon-ahid01"
+  consumer_name  = "daemon-us-west-2-m2-hi6"
   kafka_username = local.kafka_daemon_username
   kafka_password = local.kafka_daemon_password
   kafka_topic    = local.kafka_topic
