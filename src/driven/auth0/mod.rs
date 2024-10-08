@@ -6,6 +6,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
+use crate::domain::auth::Auth0Profile;
 use crate::domain::error::Error;
 use crate::domain::{auth::Auth0Driven, Result};
 
@@ -45,6 +46,41 @@ impl Auth0DrivenImpl {
             jwks,
         })
     }
+
+    async fn auth0_api_token(&self) -> Result<String> {
+        let request_payload = RequestAccessToken {
+            client_id: self.client_id.clone(),
+            client_secret: self.client_secret.clone(),
+            audience: self.audience.clone(),
+            grant_type: "client_credentials".into(),
+        };
+
+        // TODO: consider token expiration
+        let access_token_response = self
+            .client
+            .post(format!("{}/oauth/token", &self.url))
+            .json(&request_payload)
+            .send()
+            .await?;
+
+        let access_token_status = access_token_response.status();
+        if access_token_status.is_client_error() || access_token_status.is_server_error() {
+            error!(
+                status = access_token_status.to_string(),
+                "Auth0 request error to get access token"
+            );
+            return Err(Error::Unexpected(format!(
+                "Auth0 request error to get access token. Status: {}",
+                access_token_status
+            )));
+        }
+        let access_token = access_token_response
+            .json::<ResponseAccessToken>()
+            .await?
+            .access_token;
+
+        Ok(access_token)
+    }
 }
 
 #[async_trait::async_trait]
@@ -82,37 +118,8 @@ impl Auth0Driven for Auth0DrivenImpl {
         Ok(decoded_token.claims.sub)
     }
 
-    async fn find_info(&self, user_id: &str) -> Result<(String, String)> {
-        let request_payload = RequestAccessToken {
-            client_id: self.client_id.clone(),
-            client_secret: self.client_secret.clone(),
-            audience: self.audience.clone(),
-            grant_type: "client_credentials".into(),
-        };
-
-        // TODO: consider token expiration
-        let access_token_response = self
-            .client
-            .post(format!("{}/oauth/token", &self.url))
-            .json(&request_payload)
-            .send()
-            .await?;
-
-        let access_token_status = access_token_response.status();
-        if access_token_status.is_client_error() || access_token_status.is_server_error() {
-            error!(
-                status = access_token_status.to_string(),
-                "Auth0 request error to get access token"
-            );
-            return Err(Error::Unexpected(format!(
-                "Auth0 request error to get access token. Status: {}",
-                access_token_status
-            )));
-        }
-        let access_token = access_token_response
-            .json::<ResponseAccessToken>()
-            .await?
-            .access_token;
+    async fn find_info(&self, user_id: &str) -> Result<Auth0Profile> {
+        let access_token = self.auth0_api_token().await?;
 
         let profile_response = self
             .client
@@ -135,21 +142,46 @@ impl Auth0Driven for Auth0DrivenImpl {
                 profile_status
             )));
         }
-        let profile = profile_response.json::<ResponseProfile>().await?;
+        let profile = profile_response.json::<Auth0Profile>().await?;
 
-        Ok((profile.name, profile.email))
+        Ok(profile)
+    }
+
+    async fn find_info_by_ids(&self, ids: &[String]) -> Result<Vec<Auth0Profile>> {
+        let access_token = self.auth0_api_token().await?;
+
+        let profile_response = self
+            .client
+            .get(format!("{}/api/v2/users", &self.url))
+            .query(&[("q", format!("id {}", ids.join(" ")))])
+            .header(
+                AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {access_token}")).unwrap(),
+            )
+            .send()
+            .await?;
+
+        let profile_status = profile_response.status();
+        if profile_status.is_client_error() || profile_status.is_server_error() {
+            error!(
+                status = profile_status.to_string(),
+                "Auth0 request error to get user info"
+            );
+            return Err(Error::Unexpected(format!(
+                "Auth0 request error to get user info. Status: {}",
+                profile_status
+            )));
+        }
+
+        let profiles = profile_response.json::<Vec<Auth0Profile>>().await?;
+
+        Ok(profiles)
     }
 }
 
 #[derive(Deserialize)]
 struct Claims {
     sub: String,
-}
-
-#[derive(Deserialize)]
-struct ResponseProfile {
-    name: String,
-    email: String,
 }
 
 #[derive(Serialize)]

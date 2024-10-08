@@ -7,8 +7,8 @@ use crate::domain::{
     auth::{Auth0Driven, Credential},
     event::EventDrivenBridge,
     project::{
-        self, cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret, ProjectUser,
-        ProjectUserInvite, StripeDriven,
+        self, cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret,
+        ProjectUserAggregated, ProjectUserInvite, StripeDriven,
     },
 };
 
@@ -272,7 +272,9 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             req.project_id,
         )?;
 
-        let users = project::command::fetch_user(self.cache.clone(), cmd.clone()).await?;
+        let users =
+            project::command::fetch_user(self.cache.clone(), self.auth0.clone(), cmd.clone())
+                .await?;
 
         let records = users.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchProjectUsersResponse { records };
@@ -432,10 +434,12 @@ impl From<ProjectUserInvite> for proto::ProjectUserInvite {
     }
 }
 
-impl From<ProjectUser> for proto::ProjectUser {
-    fn from(value: ProjectUser) -> Self {
+impl From<ProjectUserAggregated> for proto::ProjectUser {
+    fn from(value: ProjectUserAggregated) -> Self {
         Self {
             user_id: value.user_id,
+            name: value.name,
+            email: value.email,
             project_id: value.project_id,
             role: value.role.to_string(),
             created_at: value.created_at.to_rfc3339(),
