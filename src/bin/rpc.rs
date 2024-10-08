@@ -3,7 +3,7 @@ use std::{collections::HashMap, env, path::PathBuf, time::Duration};
 use anyhow::Result;
 use dotenv::dotenv;
 use fabric::drivers::{
-    cache::CacheConfig,
+    cache::{CacheConfig, CacheNotifyConfig},
     grpc::{GrpcConfig, GrpcTlsConfig},
 };
 use serde::{de::Visitor, Deserialize, Deserializer};
@@ -126,7 +126,13 @@ impl From<Config> for CacheConfig {
             kafka: value.kafka_consumer,
             db_path: value.db_path,
             topic: value.topic,
-            slack_webhook_url: value.slack_webhook_url,
+            notify: value.slack_webhook_url.map(|url| CacheNotifyConfig {
+                slack_webhook_url: url,
+                auth_url: value.auth.url,
+                auth_client_id: value.auth.client_id,
+                auth_client_secret: value.auth.client_secret,
+                auth_audience: value.auth.audience,
+            }),
         }
     }
 }

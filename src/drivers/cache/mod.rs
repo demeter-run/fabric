@@ -10,6 +10,7 @@ use tracing::{error, info, warn};
 use crate::{
     domain::{event::Event, notify::NotifyDriven, project, resource, usage},
     driven::{
+        auth0::Auth0DrivenImpl,
         cache::{
             project::SqliteProjectDrivenCache, resource::SqliteResourceDrivenCache,
             usage::SqliteUsageDrivenCache, SqliteCache,
@@ -27,8 +28,20 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
     let usage_cache = Arc::new(SqliteUsageDrivenCache::new(sqlite_cache.clone()));
 
     let mut slack_notify_driven = None;
-    if let Some(webhook_url) = config.slack_webhook_url {
-        slack_notify_driven = Some(SlackNotifyDrivenImpl::try_new(&webhook_url)?)
+    let mut auth0_driven = None;
+    if let Some(notify_config) = config.notify {
+        slack_notify_driven = Some(SlackNotifyDrivenImpl::try_new(
+            &notify_config.slack_webhook_url,
+        )?);
+        auth0_driven = Some(Arc::new(
+            Auth0DrivenImpl::try_new(
+                &notify_config.auth_url,
+                &notify_config.auth_client_id,
+                &notify_config.auth_client_secret,
+                &notify_config.auth_audience,
+            )
+            .await?,
+        ));
     }
 
     let mut client_config = ClientConfig::new();
@@ -103,7 +116,10 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                 };
 
                 if let Some(notify) = &slack_notify_driven {
-                    if let Err(err) = notify.notify(event.clone()).await {
+                    if let Err(err) = notify
+                        .notify(event.clone(), auth0_driven.clone().unwrap().clone())
+                        .await
+                    {
                         warn!(err = err.to_string(), "Failed to send Slack notification.")
                     }
                 }
@@ -125,9 +141,17 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
     }
 }
 
+pub struct CacheNotifyConfig {
+    pub slack_webhook_url: String,
+    pub auth_url: String,
+    pub auth_client_id: String,
+    pub auth_client_secret: String,
+    pub auth_audience: String,
+}
+
 pub struct CacheConfig {
     pub db_path: String,
     pub topic: String,
     pub kafka: HashMap<String, String>,
-    pub slack_webhook_url: Option<String>,
+    pub notify: Option<CacheNotifyConfig>,
 }
