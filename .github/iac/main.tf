@@ -24,6 +24,7 @@ provider "helm" {
 }
 
 variable "rpc_image" {}
+variable "daemon_image" {}
 variable "kafka_rpc_password" {}
 variable "kafka_daemon_password" {}
 variable "secret" {}
@@ -35,7 +36,6 @@ variable "slack_webhook_url" {}
 variable "email_ses_access_key_id" {}
 variable "email_ses_secret_access_key" {}
 
-variable "daemon_image" {}
 
 locals {
   rpc_namespace               = "demeter-global"
