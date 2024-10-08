@@ -6,20 +6,55 @@ on:
     workflows: [Build]
     types: [completed]
 
+env:
+   TF_VAR_rpc_image: ghcr.io/demeter-run/fabric-rpc:${{ github.sha }}
+   TF_VAR_kafka_rpc_password: ${{ secrets.KAFKA_RPC_PASSWORD }}
+   TF_VAR_secret: ${{ secrets.SECRET }}
+   TF_VAR_auth0_client_id: ${{ secrets.AUTH0_CLIENT_ID }}
+   TF_VAR_auth0_client_secret: ${{ secrets.AUTH0_CLIENT_SECRET }} 
+   TF_VAR_auth0_audience:  ${{ secrets.AUTH0_AUDIENCE }}
+   TF_VAR_stripe_api_key:  ${{ secrets.STRIPE_API_KEY }}
+   TF_VAR_slack_webhook_url:  ${{ secrets.SLACK_WEBHOOK_URL }}
+   TF_VAR_email_ses_access_key_id: ${{ secrets.EMAIL_SES_ACCESS_KEY_ID }}
+   TF_VAR_email_ses_secret_access_key: ${{ secrets.EMAIL_SES_SECRET_ACCESS_KEY }}
+   TF_VAR_daemon_image: ghcr.io/demeter-run/fabric-daemon:${{ github.sha }}
+   TF_VAR_kafka_daemon_password: ${{ secrets.KAFKA_DAEMON_PASSWORD }}
+
 jobs:
   rpc:
     runs-on: ubuntu-latest
-    env:
-      TF_VAR_rpc_image: ghcr.io/demeter-run/fabric-rpc:${{ github.sha }}
-      TF_VAR_kafka_rpc_password: ${{ secrets.KAFKA_RPC_PASSWORD }}
-      TF_VAR_secret: ${{ secrets.SECRET }}
-      TF_VAR_auth0_client_id: ${{ secrets.AUTH0_CLIENT_ID }}
-      TF_VAR_auth0_client_secret: ${{ secrets.AUTH0_CLIENT_SECRET }} 
-      TF_VAR_auth0_audience:  ${{ secrets.AUTH0_AUDIENCE }}
-      TF_VAR_stripe_api_key:  ${{ secrets.STRIPE_API_KEY }}
-      TF_VAR_slack_webhook_url:  ${{ secrets.SLACK_WEBHOOK_URL }}
-      TF_VAR_email_ses_access_key_id: ${{ secrets.EMAIL_SES_ACCESS_KEY_ID }}
-      TF_VAR_email_ses_secret_access_key: ${{ secrets.EMAIL_SES_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ClusterAdminRole
+          role-session-name: Github-Actions-Demeter
+          role-duration-seconds: 1200
+
+      - name: setup kubeconfig
+        run: aws eks update-kubeconfig --name ${{ secrets.AWS_CLUSTER_NAME }}
+
+      - name: setup terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: init terraform
+        working-directory: .github/iac
+        run: terraform init
+
+      - name: validate terraform
+        working-directory: .github/iac
+        run: terraform validate
+
+      - name: apply terraform
+        working-directory: .github/iac
+        run: terraform apply -auto-approve -input=false
+
+  daemon:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
 
