@@ -56,7 +56,7 @@ variable "prometheus_url" {
 variable "prometheus_delay_sec" {
   type        = number
   description = "Delay between usage report loops."
-  default     = 60
+  default     = 3600
 }
 
 variable "prometheus_query_step" {

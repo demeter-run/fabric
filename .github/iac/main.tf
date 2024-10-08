@@ -24,7 +24,9 @@ provider "helm" {
 }
 
 variable "rpc_image" {}
+variable "daemon_image" {}
 variable "kafka_rpc_password" {}
+variable "kafka_daemon_password" {}
 variable "secret" {}
 variable "auth0_client_id" {}
 variable "auth0_client_secret" {}
@@ -34,13 +36,17 @@ variable "slack_webhook_url" {}
 variable "email_ses_access_key_id" {}
 variable "email_ses_secret_access_key" {}
 
+
 locals {
-  namespace                   = "demeter-global"
+  rpc_namespace               = "demeter-global"
+  daemon_namespace            = "demeter-system"
   replicas                    = 1
   broker_urls                 = "cs01k9hsakr3s8si3o00.any.us-east-1.mpx.prd.cloud.redpanda.com:9092"
   secret                      = var.secret
   kafka_rpc_username          = "rpc"
   kafka_rpc_password          = var.kafka_rpc_password
+  kafka_daemon_username       = "daemon-us-west-2-m2"
+  kafka_daemon_password       = var.kafka_daemon_password
   kafka_topic                 = "events-stg"
   auth0_client_id             = var.auth0_client_id
   auth0_client_secret         = var.auth0_client_secret
@@ -54,9 +60,9 @@ locals {
 }
 
 module "fabric_rpc" {
-  source = "../../../fabric/bootstrap/rpc"
+  source = "../../bootstrap/rpc"
 
-  namespace                   = local.namespace
+  namespace                   = local.rpc_namespace
   image                       = var.rpc_image
   broker_urls                 = local.broker_urls
   consumer_name               = "rpc-ahid05"
@@ -75,4 +81,18 @@ module "fabric_rpc" {
   email_ses_secret_access_key = local.email_ses_secret_access_key
   email_ses_verified_email    = local.email_ses_verified_email
   url_prefix                  = "rpc"
+}
+
+module "fabric_daemon" {
+  source = "../../bootstrap/daemon"
+
+  namespace      = local.daemon_namespace
+  image          = var.daemon_image
+  cluster_id     = "txpipe-us-east-2-m2"
+  broker_urls    = local.broker_urls
+  consumer_name  = "daemon-us-west-2-m2-hi6"
+  kafka_username = local.kafka_daemon_username
+  kafka_password = local.kafka_daemon_password
+  kafka_topic    = local.kafka_topic
+  mode           = "usage"
 }
