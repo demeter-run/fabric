@@ -303,8 +303,8 @@ pub async fn fetch_user(
             let mut project_user = ProjectUserAggregated {
                 user_id: p.user_id.clone(),
                 project_id: p.project_id,
-                name: "unknow".into(),
-                email: "unknow".into(),
+                name: "unknown".into(),
+                email: "unknown".into(),
                 role: p.role,
                 created_at: p.created_at,
             };
