@@ -22,14 +22,14 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
         let key = &evt.key();
         let data: Option<String> = match evt {
             Event::ProjectCreated(payload) => match auth_driven.find_info(&payload.owner).await {
-                Ok((name, email)) => {
+                Ok(profile) => {
                     let mut new_paload_as_value = serde_json::to_value(payload).unwrap();
                     let new_payload = new_paload_as_value.as_object_mut().unwrap();
                     new_payload.insert(
                         "user".to_string(),
                         serde_json::json!({
-                            "name": name,
-                            "email": email
+                            "name": profile.name,
+                            "email": profile.email
                         }),
                     );
                     Some(to_string_pretty(&new_payload).unwrap())
