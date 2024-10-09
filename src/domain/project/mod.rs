@@ -219,6 +219,16 @@ impl TryFrom<ProjectUserInviteAccepted> for ProjectUser {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ProjectUserAggregated {
+    pub user_id: String,
+    pub project_id: String,
+    pub role: ProjectUserRole,
+    pub name: String,
+    pub email: String,
+    pub created_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectUserRole {
     Owner,

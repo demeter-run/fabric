@@ -39,7 +39,7 @@ variable "email_ses_secret_access_key" {}
 
 locals {
   rpc_namespace               = "demeter-global"
-  daemon_namespace            = "demeter-system"
+  daemon_namespace            = "demeter-fabric"
   replicas                    = 1
   broker_urls                 = "cs01k9hsakr3s8si3o00.any.us-east-1.mpx.prd.cloud.redpanda.com:9092"
   secret                      = var.secret

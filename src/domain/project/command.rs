@@ -17,13 +17,13 @@ use crate::domain::{
         ProjectSecretDeleted, ProjectUpdated, ProjectUserDeleted, ProjectUserInviteAccepted,
         ProjectUserInviteCreated,
     },
-    project::{ProjectStatus, ProjectUserInviteStatus},
+    project::{ProjectStatus, ProjectUserAggregated, ProjectUserInviteStatus},
     utils, Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
 use super::{
-    cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret, ProjectUser,
-    ProjectUserInvite, ProjectUserRole, StripeDriven,
+    cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret, ProjectUserInvite,
+    ProjectUserRole, StripeDriven,
 };
 
 pub async fn fetch(cache: Arc<dyn ProjectDrivenCache>, cmd: FetchCmd) -> Result<Vec<Project>> {
@@ -66,8 +66,10 @@ pub async fn create(
         return Err(Error::CommandMalformed("invalid project namespace".into()));
     }
 
-    let (name, email) = auth0.find_info(&user_id).await?;
-    let billing_provider_id = stripe.create_customer(&name, &email).await?;
+    let profile = auth0.find_info(&user_id).await?;
+    let billing_provider_id = stripe
+        .create_customer(&profile.name, &profile.email)
+        .await?;
 
     let evt = ProjectCreated {
         id: cmd.id,
@@ -282,15 +284,43 @@ pub async fn delete_secret(
 
 pub async fn fetch_user(
     cache: Arc<dyn ProjectDrivenCache>,
+    auth0: Arc<dyn Auth0Driven>,
     cmd: FetchUserCmd,
-) -> Result<Vec<ProjectUser>> {
+) -> Result<Vec<ProjectUserAggregated>> {
     assert_credential(&cmd.credential)?;
     assert_permission(cache.clone(), &cmd.credential, &cmd.project_id, None).await?;
 
-    cache
+    let project_users = cache
         .find_users(&cmd.project_id, &cmd.page, &cmd.page_size)
-        .await
+        .await?;
+
+    let ids: Vec<String> = project_users.iter().map(|p| p.user_id.clone()).collect();
+    let profiles = auth0.find_info_by_ids(&ids).await?;
+
+    let project_users_aggregated = project_users
+        .into_iter()
+        .map(|p| {
+            let mut project_user = ProjectUserAggregated {
+                user_id: p.user_id.clone(),
+                project_id: p.project_id,
+                name: "unknown".into(),
+                email: "unknown".into(),
+                role: p.role,
+                created_at: p.created_at,
+            };
+
+            if let Some(profile) = profiles.iter().find(|a| a.user_id == p.user_id) {
+                project_user.name.clone_from(&profile.name);
+                project_user.email.clone_from(&profile.email)
+            }
+
+            project_user
+        })
+        .collect();
+
+    Ok(project_users_aggregated)
 }
+
 pub async fn delete_user(
     cache: Arc<dyn ProjectDrivenCache>,
     event: Arc<dyn EventDrivenBridge>,
@@ -412,8 +442,8 @@ pub async fn accept_user_invite(
         ));
     }
 
-    let (_, email) = auth0.find_info(&user_id).await?;
-    if user_invite.email != email {
+    let profile = auth0.find_info(&user_id).await?;
+    if user_invite.email != profile.email {
         return Err(Error::CommandMalformed(
             "user email doesnt match with invite".into(),
         ));
@@ -778,7 +808,7 @@ mod tests {
 
     use super::*;
     use crate::domain::{
-        auth::MockAuth0Driven,
+        auth::{Auth0Profile, MockAuth0Driven},
         event::MockEventDrivenBridge,
         project::{
             cache::MockProjectDrivenCache, MockProjectEmailDriven, MockStripeDriven, ProjectUser,
@@ -1018,7 +1048,7 @@ mod tests {
         let mut auth0 = MockAuth0Driven::new();
         auth0
             .expect_find_info()
-            .return_once(|_| Ok(("user name".into(), "user email".into())));
+            .return_once(|_| Ok(Auth0Profile::default()));
 
         let mut stripe = MockStripeDriven::new();
         stripe
@@ -1390,9 +1420,12 @@ mod tests {
             .return_once(|_, _| Ok(None));
 
         let mut auth0 = MockAuth0Driven::new();
-        auth0
-            .expect_find_info()
-            .return_once(|_| Ok(("user name".into(), invite_email)));
+        auth0.expect_find_info().return_once(|_| {
+            Ok(Auth0Profile {
+                email: invite_email,
+                ..Default::default()
+            })
+        });
 
         let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
@@ -1448,7 +1481,7 @@ mod tests {
         let mut auth0 = MockAuth0Driven::new();
         auth0
             .expect_find_info()
-            .return_once(|_| Ok(("user name".into(), "user email".into())));
+            .return_once(|_| Ok(Auth0Profile::default()));
 
         let event = MockEventDrivenBridge::new();
 
@@ -1598,9 +1631,14 @@ mod tests {
             .expect_find_users()
             .return_once(|_, _, _| Ok(vec![ProjectUser::default()]));
 
+        let mut auth0 = MockAuth0Driven::new();
+        auth0
+            .expect_find_info_by_ids()
+            .return_once(|_| Ok(vec![Auth0Profile::default()]));
+
         let cmd = FetchUserCmd::default();
 
-        let result = fetch_user(Arc::new(cache), cmd).await;
+        let result = fetch_user(Arc::new(cache), Arc::new(auth0), cmd).await;
         assert!(result.is_ok());
     }
 
