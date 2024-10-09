@@ -115,7 +115,7 @@ impl From<Config> for CacheConfig {
             kafka: value.kafka_consumer,
             db_path: value.db_path,
             topic: value.topic,
-            slack_webhook_url: None,
+            notify: None,
         }
     }
 }
