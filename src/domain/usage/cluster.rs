@@ -61,7 +61,7 @@ pub async fn sync_usage(
 
         let usages = usages.unwrap();
 
-        if usages.iter().find(|u| u.tier == tier).is_none() {
+        if !usages.iter().any(|u| u.tier == tier) {
             let unit = UsageUnitMetric {
                 resource_id: r.resource_id.clone(),
                 resource_name: r.resource_name.clone(),
@@ -103,7 +103,7 @@ pub async fn sync_usage(
         }
     }
 
-    let tasks = metrics.iter().map(|(_, u)| async {
+    let tasks = metrics.values().map(|u| async {
         let evt = UsageCreated {
             id: Uuid::new_v4().to_string(),
             cluster_id: cluster_id.into(),
