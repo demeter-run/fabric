@@ -100,6 +100,7 @@ impl From<Config> for MonitorConfig {
 impl From<Config> for UsageConfig {
     fn from(value: Config) -> Self {
         Self {
+            db_path: value.db_path,
             cluster_id: value.cluster_id,
             prometheus_url: value.prometheus.url,
             prometheus_query_step: value.prometheus.query_step,

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use tracing::error;
@@ -7,7 +5,7 @@ use tracing::error;
 use crate::{
     domain::{
         error::Error,
-        usage::{cluster::UsageDrivenCluster, UsageMetric, UsageUnitMetric},
+        usage::{cluster::UsageDrivenCluster, UsageResourceUnit},
         Result,
     },
     driven::prometheus::deserialize_value,
@@ -19,14 +17,16 @@ use super::PrometheusUsageDriven;
 impl UsageDrivenCluster for PrometheusUsageDriven {
     async fn find_metrics(
         &self,
+        project_name: &str,
+        resource_name: &str,
         step: &str,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
-    ) -> Result<Vec<UsageMetric>> {
+    ) -> Result<Vec<UsageResourceUnit>> {
         let response = self
             .client
             .get(format!(
-                "{}/query_range?query=sum by (project, resource_name, tier) (usage)",
+                "{}/query_range?query=sum by (project, resource_name, tier) (usage{{project=\"{project_name}\",resource_name=\"{resource_name}\"}})",
                 &self.url
             ))
             .query(&[
@@ -48,8 +48,7 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
 
         let response: PrometheusResponse = response.json().await?;
 
-        let mut metrics: HashMap<String, UsageMetric> = HashMap::new();
-        for r in response.data.result.iter() {
+        let units = response.data.result.iter().map(|r| {
             let min = r.values.iter().min_by_key(|v| v.timestamp);
             let max = r.values.iter().max_by_key(|v| v.timestamp);
 
@@ -74,23 +73,14 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
             let interval = last_timestamp - first_timestamp;
             let units = last_value - first_value;
 
-            let usage_unit = UsageUnitMetric {
-                resource_name: r.metric.resource_name.clone(),
+            UsageResourceUnit {
                 units,
                 interval,
                 tier: r.metric.tier.clone(),
-            };
+            }
+        });
 
-            metrics
-                .entry(r.metric.project.clone())
-                .and_modify(|u| u.resources.push(usage_unit.clone()))
-                .or_insert(UsageMetric {
-                    project_namespace: r.metric.project.clone(),
-                    resources: vec![usage_unit],
-                });
-        }
-
-        Ok(metrics.into_values().collect())
+        Ok(units.collect())
     }
 }
 
@@ -119,7 +109,5 @@ struct PrometheusValue {
 }
 #[derive(Debug, Deserialize)]
 pub struct PrometheusUsageMetric {
-    project: String,
-    resource_name: String,
     tier: String,
 }

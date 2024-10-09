@@ -142,6 +142,7 @@ into_event!(ResourceDeleted);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsageUnitCreated {
+    pub resource_id: String,
     pub resource_name: String,
     pub tier: String,
     pub units: i64,
@@ -151,6 +152,7 @@ pub struct UsageUnitCreated {
 pub struct UsageCreated {
     pub id: String,
     pub cluster_id: String,
+    pub project_id: String,
     pub project_namespace: String,
     pub usages: Vec<UsageUnitCreated>,
     pub created_at: DateTime<Utc>,
@@ -336,8 +338,10 @@ mod tests {
             Self {
                 id: Uuid::new_v4().to_string(),
                 cluster_id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
                 project_namespace: "test".into(),
                 usages: vec![UsageUnitCreated {
+                    resource_id: Uuid::new_v4().to_string(),
                     resource_name: format!("cardanonode-{}", get_random_salt()),
                     units: 120,
                     tier: "0".into(),

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use super::event::UsageUnitCreated;
+use super::event::UsageCreated;
 
 pub mod cache;
 pub mod cluster;
@@ -16,32 +16,33 @@ pub struct Usage {
     pub interval: u64,
     pub created_at: DateTime<Utc>,
 }
-impl Usage {
-    pub fn from_usage_evt(
-        usage: &UsageUnitCreated,
-        resource_id: &str,
-        evt_id: &str,
-        evt_created_at: DateTime<Utc>,
-    ) -> Self {
-        Self {
-            id: Uuid::new_v4().to_string(),
-            event_id: evt_id.into(),
-            resource_id: resource_id.into(),
-            units: usage.units,
-            tier: usage.tier.clone(),
-            interval: usage.interval,
-            created_at: evt_created_at,
-        }
+impl From<UsageCreated> for Vec<Usage> {
+    fn from(value: UsageCreated) -> Self {
+        value
+            .usages
+            .into_iter()
+            .map(|u| Usage {
+                id: Uuid::new_v4().to_string(),
+                event_id: value.id.clone(),
+                resource_id: u.resource_id,
+                units: u.units,
+                tier: u.tier.clone(),
+                interval: u.interval,
+                created_at: value.created_at,
+            })
+            .collect()
     }
 }
 
 #[derive(Debug)]
 pub struct UsageMetric {
+    pub project_id: String,
     pub project_namespace: String,
     pub resources: Vec<UsageUnitMetric>,
 }
 #[derive(Debug, Clone)]
 pub struct UsageUnitMetric {
+    pub resource_id: String,
     pub resource_name: String,
     pub units: i64,
     pub tier: String,
@@ -56,6 +57,22 @@ pub struct UsageReport {
     pub tier: String,
     pub units: i64,
     pub period: String,
+}
+
+#[derive(Debug)]
+pub struct UsageResource {
+    pub project_id: String,
+    pub project_namespace: String,
+    pub resource_id: String,
+    pub resource_name: String,
+    pub resource_spec: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct UsageResourceUnit {
+    pub units: i64,
+    pub tier: String,
+    pub interval: u64,
 }
 
 #[derive(Debug)]
@@ -105,6 +122,20 @@ mod tests {
                 units: 120,
                 tier: "0".into(),
                 period: "08-2024".into(),
+            }
+        }
+    }
+
+    impl Default for UsageResource {
+        fn default() -> Self {
+            Self {
+                project_id: Uuid::new_v4().to_string(),
+                project_namespace: "xxx".into(),
+                resource_id: Uuid::new_v4().to_string(),
+                resource_name: "cardanonode-xxx".into(),
+                resource_spec:
+                    "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
+                        .into(),
             }
         }
     }

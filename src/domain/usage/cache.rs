@@ -1,12 +1,8 @@
 use std::sync::Arc;
 
-use futures::future::try_join_all;
+use crate::domain::{event::UsageCreated, Result};
 
-use crate::domain::{
-    error::Error, event::UsageCreated, resource::cache::ResourceDrivenCache, Result,
-};
-
-use super::{Usage, UsageReport, UsageReportAggregated};
+use super::{Usage, UsageReport, UsageReportAggregated, UsageResource};
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
@@ -18,33 +14,12 @@ pub trait UsageDrivenCache: Send + Sync {
         page_size: &u32,
     ) -> Result<Vec<UsageReport>>;
     async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReportAggregated>>;
+    async fn find_resouces(&self) -> Result<Vec<UsageResource>>;
     async fn create(&self, usage: Vec<Usage>) -> Result<()>;
 }
 
-pub async fn create(
-    usage_cache: Arc<dyn UsageDrivenCache>,
-    resouce_cache: Arc<dyn ResourceDrivenCache>,
-    evt: UsageCreated,
-) -> Result<()> {
-    let tasks = evt
-        .usages
-        .iter()
-        .map(|usage| async {
-            let Some(resource) = resouce_cache
-                .find_by_name_for_usage(&evt.project_namespace, &usage.resource_name)
-                .await?
-            else {
-                return Err(Error::Unexpected("Resource name has not been found".into()));
-            };
-
-            let usage = Usage::from_usage_evt(usage, &resource.id, &evt.id, evt.created_at);
-            Ok(usage)
-        })
-        .collect::<Vec<_>>();
-
-    let usages = try_join_all(tasks).await?;
-
-    usage_cache.create(usages).await
+pub async fn create(cache: Arc<dyn UsageDrivenCache>, evt: UsageCreated) -> Result<()> {
+    cache.create(evt.into()).await
 }
 
 pub async fn find_report_aggregated(
@@ -56,8 +31,6 @@ pub async fn find_report_aggregated(
 
 #[cfg(test)]
 mod tests {
-    use crate::domain::resource::{cache::MockResourceDrivenCache, Resource};
-
     use super::*;
 
     #[tokio::test]
@@ -65,14 +38,9 @@ mod tests {
         let mut usage_cache = MockUsageDrivenCache::new();
         usage_cache.expect_create().return_once(|_| Ok(()));
 
-        let mut resource_cache = MockResourceDrivenCache::new();
-        resource_cache
-            .expect_find_by_name_for_usage()
-            .return_once(|_, _| Ok(Some(Resource::default())));
-
         let evt = UsageCreated::default();
 
-        let result = create(Arc::new(usage_cache), Arc::new(resource_cache), evt).await;
+        let result = create(Arc::new(usage_cache), evt).await;
         assert!(result.is_ok());
     }
 
