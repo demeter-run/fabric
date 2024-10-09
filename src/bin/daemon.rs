@@ -2,7 +2,7 @@ use std::{collections::HashMap, env, time::Duration};
 
 use anyhow::Result;
 use dotenv::dotenv;
-use fabric::drivers::{monitor::MonitorConfig, usage::UsageConfig};
+use fabric::drivers::{cache::CacheConfig, monitor::MonitorConfig, usage::UsageConfig};
 use serde::{de::Visitor, Deserialize, Deserializer};
 use tokio::try_join;
 use tracing::Level;
@@ -26,16 +26,20 @@ async fn main() -> Result<()> {
 
     match config.mode {
         Mode::Usage => {
-            fabric::drivers::usage::schedule(config.clone().into()).await?;
+            let cache = fabric::drivers::cache::subscribe(config.clone().into());
+            let schedule = fabric::drivers::usage::schedule(config.clone().into());
+
+            try_join!(cache, schedule)?;
         }
         Mode::Monitor => {
             fabric::drivers::monitor::subscribe(config.clone().into()).await?;
         }
         Mode::Full => {
+            let cache = fabric::drivers::cache::subscribe(config.clone().into());
             let schedule = fabric::drivers::usage::schedule(config.clone().into());
             let subscribe = fabric::drivers::monitor::subscribe(config.clone().into());
 
-            try_join!(schedule, subscribe)?;
+            try_join!(cache, schedule, subscribe)?;
         }
     };
 
@@ -57,13 +61,16 @@ struct Prometheus {
 
 #[derive(Debug, Deserialize, Clone)]
 struct Config {
+    db_path: String,
     cluster_id: String,
     prometheus: Prometheus,
     #[serde(deserialize_with = "deserialize_duration")]
     #[serde(rename(deserialize = "delay_sec"))]
     delay: Duration,
     topic: String,
-    kafka: HashMap<String, String>,
+    kafka_producer: HashMap<String, String>,
+    kafka_monitor: HashMap<String, String>,
+    kafka_cache: HashMap<String, String>,
     mode: Mode,
 }
 impl Config {
@@ -84,7 +91,7 @@ impl Config {
 impl From<Config> for MonitorConfig {
     fn from(value: Config) -> Self {
         Self {
-            kafka: value.kafka,
+            kafka: value.kafka_monitor,
             topic: value.topic,
         }
     }
@@ -97,8 +104,19 @@ impl From<Config> for UsageConfig {
             prometheus_url: value.prometheus.url,
             prometheus_query_step: value.prometheus.query_step,
             delay: value.delay,
-            kafka: value.kafka,
+            kafka: value.kafka_producer,
             topic: value.topic,
+        }
+    }
+}
+
+impl From<Config> for CacheConfig {
+    fn from(value: Config) -> Self {
+        Self {
+            kafka: value.kafka_cache,
+            db_path: value.db_path,
+            topic: value.topic,
+            notify: None,
         }
     }
 }
