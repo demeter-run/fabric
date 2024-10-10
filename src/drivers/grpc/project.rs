@@ -384,6 +384,26 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
+    async fn delete_project_user_invite(
+        &self,
+        request: tonic::Request<proto::DeleteProjectUserInviteRequest>,
+    ) -> Result<tonic::Response<proto::DeleteProjectUserInviteResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = project::command::DeleteUserInviteCmd::new(credential, req.id);
+
+        project::command::delete_user_invite(self.cache.clone(), self.event.clone(), cmd.clone())
+            .await?;
+
+        let message = proto::DeleteProjectUserInviteResponse {};
+
+        Ok(tonic::Response::new(message))
+    }
 
     async fn delete_project_user(
         &self,
