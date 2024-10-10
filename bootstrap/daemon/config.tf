@@ -9,7 +9,8 @@ resource "kubernetes_config_map_v1" "fabric_daemon_config" {
       "${path.module}/daemon.toml.tftpl",
       {
         broker_urls           = var.broker_urls
-        consumer_name         = var.consumer_name
+        consumer_cache_name   = var.consumer_cache_name
+        consumer_monitor_name = var.consumer_monitor_name
         kafka_username        = var.kafka_username
         kafka_password        = var.kafka_password
         topic                 = var.kafka_topic

@@ -86,13 +86,14 @@ module "fabric_rpc" {
 module "fabric_daemon" {
   source = "../../bootstrap/daemon"
 
-  namespace      = local.daemon_namespace
-  image          = var.daemon_image
-  cluster_id     = "txpipe-us-east-2-m2"
-  broker_urls    = local.broker_urls
-  consumer_name  = "daemon-us-west-2-m2-hi6"
-  kafka_username = local.kafka_daemon_username
-  kafka_password = local.kafka_daemon_password
-  kafka_topic    = local.kafka_topic
-  mode           = "usage"
+  namespace             = local.daemon_namespace
+  image                 = var.daemon_image
+  cluster_id            = "txpipe-us-east-2-m2"
+  broker_urls           = local.broker_urls
+  consumer_monitor_name = "daemon-us-west-2-m2-monitor-hi6"
+  consumer_cache_name   = "daemon-us-west-2-m2-cache-hi6"
+  kafka_username        = local.kafka_daemon_username
+  kafka_password        = local.kafka_daemon_password
+  kafka_topic           = local.kafka_topic
+  mode                  = "usage"
 }

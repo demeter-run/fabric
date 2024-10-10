@@ -9,13 +9,27 @@ mode = "${mode}"
 url = "${prometheus_url}"
 query_step = "${prometheus_query_step}"
 
-[kafka]
+[kafka_producer]
 "bootstrap.servers" = "${broker_urls}"
-"group.id"= "${consumer_name}"
-
 "security.protocol" = "SASL_SSL"
 "sasl.mechanisms" = "SCRAM-SHA-256"
 "sasl.username" = "${kafka_username}"
 "sasl.password" = "${kafka_password}"
 
+[kafka_monitor]
+"bootstrap.servers" = "${broker_urls}"
+"group.id"= "${consumer_monitor_name}"
 "auto.offset.reset" = "earliest"
+"security.protocol" = "SASL_SSL"
+"sasl.mechanisms" = "SCRAM-SHA-256"
+"sasl.username" = "${kafka_username}"
+"sasl.password" = "${kafka_password}"
+
+[kafka_cache]
+"bootstrap.servers" = "${broker_urls}"
+"group.id"= "${consumer_cache_name}"
+"auto.offset.reset" = "earliest"
+"security.protocol" = "SASL_SSL"
+"sasl.mechanisms" = "SCRAM-SHA-256"
+"sasl.username" = "${kafka_username}"
+"sasl.password" = "${kafka_password}"

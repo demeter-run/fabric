@@ -20,7 +20,11 @@ variable "broker_urls" {
   description = "Comma separated values of the queue broker urls."
 }
 
-variable "consumer_name" {
+variable "consumer_monitor_name" {
+  type = string
+}
+
+variable "consumer_cache_name" {
   type = string
 }
 
