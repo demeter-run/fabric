@@ -62,7 +62,7 @@ resource "kubernetes_stateful_set_v1" "daemon" {
 
           volume_mount {
             name       = "config"
-            mount_path = "/fabric/config"
+            mount_path = "/fabric"
           }
 
           resources {

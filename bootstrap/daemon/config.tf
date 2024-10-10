@@ -8,6 +8,7 @@ resource "kubernetes_config_map_v1" "fabric_daemon_config" {
     "daemon.toml" = "${templatefile(
       "${path.module}/daemon.toml.tftpl",
       {
+        db_path               = "/var/cache/${var.consumer_cache_name}.db",
         broker_urls           = var.broker_urls
         consumer_cache_name   = var.consumer_cache_name
         consumer_monitor_name = var.consumer_monitor_name
