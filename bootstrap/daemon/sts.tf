@@ -2,7 +2,7 @@ locals {
   role = "fabric-daemon"
 }
 
-resource "kubernetes_deployment_v1" "daemon" {
+resource "kubernetes_stateful_set_v1" "daemon" {
   wait_for_rollout = false
 
   metadata {
@@ -14,7 +14,23 @@ resource "kubernetes_deployment_v1" "daemon" {
   }
 
   spec {
-    replicas = var.replicas
+    replicas     = var.replicas
+    service_name = "fabric-daemon"
+
+    volume_claim_template {
+      metadata {
+        name = "cache"
+      }
+      spec {
+        access_modes = ["ReadWriteOnce"]
+        resources {
+          requests = {
+            storage = var.resources.storage.size
+          }
+        }
+        storage_class_name = var.resources.storage.class
+      }
+    }
 
     selector {
       match_labels = {
@@ -39,13 +55,14 @@ resource "kubernetes_deployment_v1" "daemon" {
             value = "/fabric/daemon.toml"
           }
 
-          port {
-            container_port = local.port
+          volume_mount {
+            name       = "cache"
+            mount_path = "/var/cache"
           }
 
           volume_mount {
             name       = "config"
-            mount_path = "/fabric"
+            mount_path = "/fabric/config"
           }
 
           resources {
