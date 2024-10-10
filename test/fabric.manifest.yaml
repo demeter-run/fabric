@@ -44,10 +44,20 @@ data:
     cluster_id = "625e6681-8a74-4454-b5ad-861b45c6a42e"
     delay_sec = 60
     mode = "full"
+    db_path="test.db"
 
-    [kafka]
+    [kafka_producer]
     "bootstrap.servers" = "redpanda.demeter-kafka.svc.cluster.local:19092"
-    "group.id" = "demeter-daemon"
+    
+    [kafka_monitor]
+    "bootstrap.servers" = "redpanda.demeter-kafka.svc.cluster.local:19092"
+    "group.id"= "daemon-monitor-1"
+    "auto.offset.reset" = "earliest"
+    
+    [kafka_cache]
+    "bootstrap.servers" = "redpanda.demeter-kafka.svc.cluster.local:19092"
+    "group.id"= "daemon-cache-1"
+    "auto.offset.reset" = "earliest"
 
     [prometheus]
     url = "http://prometheus:9090/api/v1"

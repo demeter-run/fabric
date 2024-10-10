@@ -2,7 +2,8 @@ use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
 use crate::domain::{
-    usage::{cache::UsageDrivenCache, Usage, UsageReport, UsageReportAggregated},
+    resource::ResourceStatus,
+    usage::{cache::UsageDrivenCache, Usage, UsageReport, UsageReportAggregated, UsageResource},
     Result,
 };
 
@@ -83,6 +84,29 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
         Ok(report_aggregated)
     }
 
+    async fn find_resouces(&self) -> Result<Vec<UsageResource>> {
+        let resources = sqlx::query_as::<_, UsageResource>(
+            r#"
+                SELECT
+                	p.id as project_id,
+                	p.namespace as project_namespace,
+                	r.id as resource_id,
+                	r.name as resource_name,
+                	r.spec as resource_spec
+                FROM
+                	resource r
+                INNER JOIN project p ON
+                	p.id = r.project_id
+                WHERE r.status != $1;
+            "#,
+        )
+        .bind(ResourceStatus::Deleted.to_string())
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(resources)
+    }
+
     async fn create(&self, usages: Vec<Usage>) -> Result<()> {
         let mut tx = self.sqlite.db.begin().await?;
 
@@ -161,6 +185,18 @@ impl FromRow<'_, SqliteRow> for UsageReportAggregated {
             interval: interval as u64,
             units: row.try_get("units")?,
             period: row.try_get("period")?,
+        })
+    }
+}
+
+impl FromRow<'_, SqliteRow> for UsageResource {
+    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        Ok(Self {
+            project_id: row.try_get("project_id")?,
+            project_namespace: row.try_get("project_namespace")?,
+            resource_id: row.try_get("resource_id")?,
+            resource_name: row.try_get("resource_name")?,
+            resource_spec: row.try_get("resource_spec")?,
         })
     }
 }
@@ -271,6 +307,20 @@ mod tests {
         let result = cache
             .find_report_aggregated(&Utc::now().format("%m-%Y").to_string())
             .await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().len() == 1);
+    }
+
+    #[tokio::test]
+    async fn it_should_find_resources() {
+        let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
+        let cache = SqliteUsageDrivenCache::new(sqlite_cache.clone());
+
+        let project = mock_project(sqlite_cache.clone()).await;
+        mock_resource(sqlite_cache.clone(), &project.id).await;
+
+        let result = cache.find_resouces().await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 1);

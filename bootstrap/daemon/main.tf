@@ -20,7 +20,11 @@ variable "broker_urls" {
   description = "Comma separated values of the queue broker urls."
 }
 
-variable "consumer_name" {
+variable "consumer_monitor_name" {
+  type = string
+}
+
+variable "consumer_cache_name" {
   type = string
 }
 
@@ -105,6 +109,10 @@ variable "resources" {
       cpu    = string
       memory = string
     })
+    storage = object({
+      size  = string
+      class = string
+    })
   })
   default = {
     requests = {
@@ -114,6 +122,10 @@ variable "resources" {
     limits = {
       cpu    = "500m"
       memory = "500Mi"
+    }
+    storage = {
+      size  = "10Gi"
+      class = "fast"
     }
   }
 }

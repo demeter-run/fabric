@@ -1,12 +1,8 @@
 /target
 .env
-dev.db*
-dev.billing.db*
+dev.*.db*
+config.*.toml
 grpcurl*
-config.toml
-config.billing.toml
-config.daemon.toml
-rpc.toml
 test/.terraform*
 test/local.tfstate*
 crds-path/
