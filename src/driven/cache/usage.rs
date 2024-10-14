@@ -32,6 +32,7 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                 SELECT 
                 	  r.id as resource_id,
                 	  r.kind as resource_kind,
+                	  r.name as resource_name,
                 	  r.spec as resource_spec,
                 	  u.tier, 
                     SUM(u.interval) as interval,
@@ -65,6 +66,7 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                 	  p.billing_provider_id as project_billing_provider_id,
                 	  r.id as resource_id,
                 	  r.kind as resource_kind,
+                	  r.name as resource_name,
                 	  u.tier as tier, 
                 	  SUM(u.interval) as interval, 
                 	  SUM(u.units) as units, 
@@ -163,6 +165,7 @@ impl FromRow<'_, SqliteRow> for UsageReport {
         Ok(Self {
             resource_id: row.try_get("resource_id")?,
             resource_kind: row.try_get("resource_kind")?,
+            resource_name: row.try_get("resource_name")?,
             resource_spec: row.try_get("resource_spec")?,
             units: row.try_get("units")?,
             tier: row.try_get("tier")?,
@@ -181,6 +184,7 @@ impl FromRow<'_, SqliteRow> for UsageReportAggregated {
             project_billing_provider_id: row.try_get("project_billing_provider_id")?,
             resource_id: row.try_get("resource_id")?,
             resource_kind: row.try_get("resource_kind")?,
+            resource_name: row.try_get("resource_name")?,
             tier: row.try_get("tier")?,
             interval: interval as u64,
             units: row.try_get("units")?,

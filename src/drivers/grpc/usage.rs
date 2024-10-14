@@ -55,6 +55,7 @@ impl From<UsageReport> for proto::UsageReport {
         Self {
             resource_id: value.resource_id,
             resource_kind: value.resource_kind,
+            resource_name: value.resource_name,
             resource_spec: value.resource_spec,
             units: value.units,
             tier: value.tier,

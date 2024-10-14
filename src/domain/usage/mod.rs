@@ -53,6 +53,7 @@ pub struct UsageUnitMetric {
 pub struct UsageReport {
     pub resource_id: String,
     pub resource_kind: String,
+    pub resource_name: String,
     pub resource_spec: String,
     pub tier: String,
     pub units: i64,
@@ -84,6 +85,7 @@ pub struct UsageReportAggregated {
     pub project_billing_provider_id: String,
     pub resource_id: String,
     pub resource_kind: String,
+    pub resource_name: String,
     pub tier: String,
     pub interval: u64,
     pub units: i64,
@@ -94,6 +96,8 @@ pub struct UsageReportAggregated {
 #[cfg(test)]
 mod tests {
     use uuid::Uuid;
+
+    use crate::domain::utils;
 
     use super::*;
 
@@ -116,6 +120,7 @@ mod tests {
             Self {
                 resource_id: Uuid::new_v4().to_string(),
                 resource_kind: "CardanoNodePort".into(),
+                resource_name: format!("cardanonode-{}", utils::get_random_salt()),
                 resource_spec:
                     "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
                         .into(),
@@ -132,7 +137,7 @@ mod tests {
                 project_id: Uuid::new_v4().to_string(),
                 project_namespace: "xxx".into(),
                 resource_id: Uuid::new_v4().to_string(),
-                resource_name: "cardanonode-xxx".into(),
+                resource_name: format!("cardanonode-{}", utils::get_random_salt()),
                 resource_spec:
                     "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
                         .into(),
