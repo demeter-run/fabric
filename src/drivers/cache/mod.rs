@@ -93,6 +93,9 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
                         )
                         .await
                     }
+                    Event::ProjectUserInviteDeleted(evt) => {
+                        project::cache::delete_user_invite(project_cache.clone(), evt.clone()).await
+                    }
                     Event::ProjectUserDeleted(evt) => {
                         project::cache::delete_user(project_cache.clone(), evt.clone()).await
                     }

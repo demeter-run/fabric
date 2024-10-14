@@ -92,6 +92,15 @@ pub struct ProjectUserInviteAccepted {
 into_event!(ProjectUserInviteAccepted);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectUserInviteDeleted {
+    pub id: String,
+    pub project_id: String,
+    pub deleted_by: String,
+    pub deleted_at: DateTime<Utc>,
+}
+into_event!(ProjectUserInviteDeleted);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectUserDeleted {
     pub id: String,
     pub project_id: String,
@@ -169,6 +178,7 @@ pub enum Event {
     ProjectSecretDeleted(ProjectSecretDeleted),
     ProjectUserInviteCreated(ProjectUserInviteCreated),
     ProjectUserInviteAccepted(ProjectUserInviteAccepted),
+    ProjectUserInviteDeleted(ProjectUserInviteDeleted),
     ProjectUserDeleted(ProjectUserDeleted),
     ResourceCreated(ResourceCreated),
     ResourceUpdated(ResourceUpdated),
@@ -185,6 +195,7 @@ impl Event {
             Event::ProjectSecretDeleted(_) => "ProjectSecretDeleted".into(),
             Event::ProjectUserInviteCreated(_) => "ProjectUserInviteCreated".into(),
             Event::ProjectUserInviteAccepted(_) => "ProjectUserInviteAccepted".into(),
+            Event::ProjectUserInviteDeleted(_) => "ProjectUserInviteDeleted".into(),
             Event::ProjectUserDeleted(_) => "ProjectUserDeleted".into(),
             Event::ResourceCreated(_) => "ResourceCreated".into(),
             Event::ResourceUpdated(_) => "ResourceUpdated".into(),
@@ -207,6 +218,9 @@ impl Event {
                 serde_json::from_slice(payload)?,
             )),
             "ProjectUserInviteAccepted" => Ok(Self::ProjectUserInviteAccepted(
+                serde_json::from_slice(payload)?,
+            )),
+            "ProjectUserInviteDeleted" => Ok(Self::ProjectUserInviteDeleted(
                 serde_json::from_slice(payload)?,
             )),
             "ProjectUserDeleted" => Ok(Self::ProjectUserDeleted(serde_json::from_slice(payload)?)),
@@ -301,6 +315,16 @@ mod tests {
                 user_id: "user id".into(),
                 role: ProjectUserRole::Owner.to_string(),
                 created_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ProjectUserInviteDeleted {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                deleted_by: Uuid::new_v4().to_string(),
+                deleted_at: Utc::now(),
             }
         }
     }

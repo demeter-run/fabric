@@ -554,6 +554,22 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         Ok(())
     }
 
+    async fn delete_user_invite(&self, invite_id: &str) -> Result<()> {
+        sqlx::query!(
+            r#"
+                DELETE FROM
+                    project_user_invite
+                WHERE 
+                    id=$1;
+            "#,
+            invite_id,
+        )
+        .execute(&self.sqlite.db)
+        .await?;
+
+        Ok(())
+    }
+
     async fn delete_user(&self, project_id: &str, id: &str) -> Result<()> {
         sqlx::query!(
             r#"
@@ -953,6 +969,24 @@ mod tests {
         let result = cache
             .create_user_acceptance(&invite.id, &project_user)
             .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_delete_user_invite() {
+        let cache = get_cache().await;
+
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let invite = ProjectUserInvite {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        cache.create_user_invite(&invite).await.unwrap();
+
+        let result = cache.delete_user_invite(&invite.id).await;
 
         assert!(result.is_ok());
     }
