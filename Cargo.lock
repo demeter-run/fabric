@@ -1094,7 +1094,7 @@ dependencies = [
 [[package]]
 name = "dmtri"
 version = "0.1.0"
-source = "git+https://github.com/demeter-run/specs.git#69e7b9189f6c5d22bd4915b3a481591c30e625d1"
+source = "git+https://github.com/demeter-run/specs.git#9d5c598077508410f4b804d31da296a9a1dfe680"
 dependencies = [
  "bytes 1.7.2",
  "pbjson",
@@ -1220,6 +1220,7 @@ dependencies = [
  "dotenv",
  "futures 0.3.31",
  "handlebars",
+ "include_dir",
  "json-patch",
  "jsonwebtoken",
  "k8s-openapi",
@@ -2048,6 +2049,25 @@ checksum = "634d9b1461af396cad843f47fdba5597a4f9e6ddd4bfb6ff5d85028c25cb12f6"
 dependencies = [
  "unicode-bidi",
  "unicode-normalization",
+]
+
+[[package]]
+name = "include_dir"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "923d117408f1e49d914f1a379a309cffe4f18c05cf4e3d12e613a15fc81bd0dd"
+dependencies = [
+ "include_dir_macros",
+]
+
+[[package]]
+name = "include_dir_macros"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cab85a7ed0bd5f0e76d93846e0147172bed2e2d3f859bcc33a8d9699cad1a75"
+dependencies = [
+ "proc-macro2",
+ "quote",
 ]
 
 [[package]]

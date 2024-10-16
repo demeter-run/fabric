@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use serde::{Deserialize, Serialize};
@@ -8,10 +8,9 @@ use super::{error::Error, Result};
 pub mod command;
 
 #[cfg_attr(test, mockall::automock)]
-#[async_trait::async_trait]
 pub trait MetadataDriven: Send + Sync {
-    async fn find(&self) -> Result<Vec<ResourceMetadata>>;
-    async fn find_by_kind(&self, kind: &str) -> Result<Option<ResourceMetadata>>;
+    fn find(&self) -> Result<Vec<ResourceMetadata>>;
+    fn find_by_kind(&self, kind: &str) -> Result<Option<ResourceMetadata>>;
     fn render_hbs(&self, name: &str, spec: &str) -> Result<String>;
 }
 
@@ -34,7 +33,14 @@ impl FromStr for KnownField {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceMetadataCost {
+    pub minimum: i64,
+    pub delta: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceMetadata {
+    pub cost: HashMap<String, ResourceMetadataCost>,
     pub options: serde_json::Value,
     pub crd: CustomResourceDefinition,
 }
@@ -50,10 +56,7 @@ pub mod tests {
 
     impl Default for ResourceMetadata {
         fn default() -> Self {
-            Self {
-                crd: serde_json::from_str(CARDANO_NODE_PORT_CRD).unwrap(),
-                options: serde_json::Value::default(),
-            }
+            serde_json::from_str(CARDANO_NODE_PORT_CRD).unwrap()
         }
     }
 }

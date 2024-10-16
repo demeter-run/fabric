@@ -3,7 +3,7 @@ use std::sync::Arc;
 use super::{MetadataDriven, ResourceMetadata, Result};
 
 pub async fn fetch(metadata: Arc<dyn MetadataDriven>) -> Result<Vec<ResourceMetadata>> {
-    metadata.find().await
+    metadata.find()
 }
 
 #[cfg(test)]

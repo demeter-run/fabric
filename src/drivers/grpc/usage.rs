@@ -4,6 +4,7 @@ use tonic::{async_trait, Status};
 
 use crate::domain::{
     auth::Credential,
+    metadata::MetadataDriven,
     project::cache::ProjectDrivenCache,
     usage::{cache::UsageDrivenCache, command, UsageReport},
 };
@@ -11,15 +12,18 @@ use crate::domain::{
 pub struct UsageServiceImpl {
     pub project_cache: Arc<dyn ProjectDrivenCache>,
     pub usage_cache: Arc<dyn UsageDrivenCache>,
+    pub metadata: Arc<dyn MetadataDriven>,
 }
 impl UsageServiceImpl {
     pub fn new(
         project_cache: Arc<dyn ProjectDrivenCache>,
         usage_cache: Arc<dyn UsageDrivenCache>,
+        metadata: Arc<dyn MetadataDriven>,
     ) -> Self {
         Self {
             project_cache,
             usage_cache,
+            metadata,
         }
     }
 }
@@ -39,9 +43,13 @@ impl proto::usage_service_server::UsageService for UsageServiceImpl {
 
         let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)?;
 
-        let usage_report =
-            command::fetch_report(self.project_cache.clone(), self.usage_cache.clone(), cmd)
-                .await?;
+        let usage_report = command::fetch_report(
+            self.project_cache.clone(),
+            self.usage_cache.clone(),
+            self.metadata.clone(),
+            cmd,
+        )
+        .await?;
 
         let records = usage_report.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchUsageReportResponse { records };
@@ -59,8 +67,9 @@ impl From<UsageReport> for proto::UsageReport {
             resource_spec: value.resource_spec,
             units: value.units,
             tier: value.tier,
-            cost: 0.0,
             period: value.period,
+            units_cost: value.units_cost,
+            minimum_cost: value.minimum_cost,
         }
     }
 }

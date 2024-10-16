@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::domain::{event::UsageCreated, Result};
 
-use super::{Usage, UsageReport, UsageReportAggregated, UsageResource};
+use super::{Usage, UsageReport, UsageResource};
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
@@ -13,7 +13,7 @@ pub trait UsageDrivenCache: Send + Sync {
         page: &u32,
         page_size: &u32,
     ) -> Result<Vec<UsageReport>>;
-    async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReportAggregated>>;
+    async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReport>>;
     async fn find_resouces(&self) -> Result<Vec<UsageResource>>;
     async fn create(&self, usage: Vec<Usage>) -> Result<()>;
 }
@@ -25,7 +25,7 @@ pub async fn create(cache: Arc<dyn UsageDrivenCache>, evt: UsageCreated) -> Resu
 pub async fn find_report_aggregated(
     cache: Arc<dyn UsageDrivenCache>,
     period: &str,
-) -> Result<Vec<UsageReportAggregated>> {
+) -> Result<Vec<UsageReport>> {
     cache.find_report_aggregated(period).await
 }
 

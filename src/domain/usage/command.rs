@@ -3,15 +3,17 @@ use std::sync::Arc;
 use crate::domain::{
     auth::{assert_permission, Credential},
     error::Error,
+    metadata::MetadataDriven,
     project::cache::ProjectDrivenCache,
     Result, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
-use super::{cache::UsageDrivenCache, UsageReport};
+use super::{cache::UsageDrivenCache, UsageReport, UsageReportImpl};
 
 pub async fn fetch_report(
     project_cache: Arc<dyn ProjectDrivenCache>,
     usage_cache: Arc<dyn UsageDrivenCache>,
+    metadata: Arc<dyn MetadataDriven>,
     cmd: FetchCmd,
 ) -> Result<Vec<UsageReport>> {
     assert_permission(
@@ -22,9 +24,12 @@ pub async fn fetch_report(
     )
     .await?;
 
-    usage_cache
+    let usage = usage_cache
         .find_report(&cmd.project_id, &cmd.page, &cmd.page_size)
-        .await
+        .await?
+        .calculate_cost(metadata.clone());
+
+    Ok(usage)
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +70,7 @@ mod tests {
 
     use super::*;
     use crate::domain::{
+        metadata::{MockMetadataDriven, ResourceMetadata},
         project::{cache::MockProjectDrivenCache, ProjectUser},
         usage::cache::MockUsageDrivenCache,
     };
@@ -92,9 +98,20 @@ mod tests {
             .expect_find_report()
             .return_once(|_, _, _| Ok(vec![UsageReport::default()]));
 
+        let mut metadata = MockMetadataDriven::new();
+        metadata
+            .expect_find_by_kind()
+            .return_once(|_| Ok(Some(ResourceMetadata::default())));
+
         let cmd = FetchCmd::default();
 
-        let result = fetch_report(Arc::new(project_cache), Arc::new(usage_cache), cmd).await;
+        let result = fetch_report(
+            Arc::new(project_cache),
+            Arc::new(usage_cache),
+            Arc::new(metadata),
+            cmd,
+        )
+        .await;
         assert!(result.is_ok());
     }
     #[tokio::test]
@@ -108,7 +125,15 @@ mod tests {
 
         let cmd = FetchCmd::default();
 
-        let result = fetch_report(Arc::new(project_cache), Arc::new(usage_cache), cmd).await;
+        let metadata = MockMetadataDriven::new();
+
+        let result = fetch_report(
+            Arc::new(project_cache),
+            Arc::new(usage_cache),
+            Arc::new(metadata),
+            cmd,
+        )
+        .await;
         assert!(result.is_err());
     }
     #[tokio::test]
@@ -121,7 +146,15 @@ mod tests {
             ..Default::default()
         };
 
-        let result = fetch_report(Arc::new(project_cache), Arc::new(usage_cache), cmd).await;
+        let metadata = MockMetadataDriven::new();
+
+        let result = fetch_report(
+            Arc::new(project_cache),
+            Arc::new(usage_cache),
+            Arc::new(metadata),
+            cmd,
+        )
+        .await;
         assert!(result.is_err());
     }
 }

@@ -101,7 +101,7 @@ pub async fn create(
         return Err(Error::Unexpected("invalid random name, try again".into()));
     }
 
-    let Some(metadata) = metadata.find_by_kind(&cmd.kind).await? else {
+    let Some(metadata) = metadata.find_by_kind(&cmd.kind)? else {
         return Err(Error::CommandMalformed("kind not supported".into()));
     };
 
