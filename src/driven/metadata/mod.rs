@@ -57,7 +57,7 @@ impl<'a> FileMetadata<'a> {
         for file in dir.files() {
             match file.path().extension().and_then(|e| e.to_str()) {
                 Some("json") => {
-                    metadata.push(serde_json::from_slice(&file.contents())?);
+                    metadata.push(serde_json::from_slice(file.contents())?);
                 }
                 Some("hbs") => {
                     let name = file

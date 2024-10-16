@@ -84,7 +84,7 @@ impl UsageReportImpl for Vec<UsageReport> {
         let days = (next_month - first_day).num_days();
         let max_interval = days * 24 * 60 * 60;
 
-        self.into_iter().for_each(|usage| {
+        self.iter_mut().for_each(|usage| {
             match metadata.find_by_kind(&usage.resource_kind) {
                 Ok(metadata) => match metadata {
                     Some(metadata) => match metadata.cost.get(&usage.tier) {
