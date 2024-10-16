@@ -1,20 +1,8 @@
 {
   "cost": {
     "0": {
-      "fixed": 0,
-      "usageBased": 0
-    },
-    "1": {
-      "fixed": 0,
-      "usageBased": 1.2
-    },
-    "2": {
-      "fixed": 100,
-      "usageBased": 0.4
-    },
-    "3": {
-      "fixed": 200,
-      "usageBased": 0.3
+      "minimum": 200,
+      "delta": 0.3
     }
   },
   "options": [
