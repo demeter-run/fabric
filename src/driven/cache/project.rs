@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sqlx::{sqlite::SqliteRow, FromRow, Row};
+use sqlx::{sqlite::SqliteRow, Execute, FromRow, Row};
 use std::sync::Arc;
 
 use crate::domain::{
@@ -403,6 +403,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         page_size: &u32,
     ) -> Result<Vec<ProjectUserInvite>> {
         let offset = page_size * (page - 1);
+        let status = ProjectUserInviteStatus::Sent.to_string();
 
         let invites = sqlx::query_as::<_, ProjectUserInvite>(
             r#"
@@ -417,15 +418,17 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     pui.created_at,
                     pui.updated_at
                 FROM project_user_invite pui
-                WHERE pui.project_id = $1
+                WHERE pui.project_id = $1 AND DATETIME($5) <= DATETIME(pui.expires_in) AND pui.status = $2
                 ORDER BY pui.created_at DESC
-                LIMIT $2
-                OFFSET $3;
+                LIMIT $3
+                OFFSET $4;
             "#,
         )
         .bind(project_id)
+        .bind(status)
         .bind(page_size)
         .bind(offset)
+        .bind(chrono::Utc::now())
         .fetch_all(&self.sqlite.db)
         .await?;
 
