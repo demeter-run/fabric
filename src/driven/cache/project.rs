@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sqlx::{sqlite::SqliteRow, Execute, FromRow, Row};
+use sqlx::{sqlite::SqliteRow, FromRow, Row};
 use std::sync::Arc;
 
 use crate::domain::{
