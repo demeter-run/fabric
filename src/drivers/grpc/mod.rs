@@ -96,7 +96,8 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
     let metadata_inner = metadata::MetadataServiceImpl::new(metadata.clone());
     let metadata_service = MetadataServiceServer::new(metadata_inner);
 
-    let usage_inner = usage::UsageServiceImpl::new(project_cache.clone(), usage_cache.clone());
+    let usage_inner =
+        usage::UsageServiceImpl::new(project_cache.clone(), usage_cache.clone(), metadata.clone());
     let usage_service = UsageServiceServer::with_interceptor(usage_inner, auth_interceptor.clone());
 
     let address = SocketAddr::from_str(&config.addr)?;

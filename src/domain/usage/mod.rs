@@ -1,7 +1,10 @@
-use chrono::{DateTime, Utc};
+use std::sync::Arc;
+
+use chrono::{DateTime, Datelike, Utc};
+use tracing::{error, warn};
 use uuid::Uuid;
 
-use super::event::UsageCreated;
+use super::{event::UsageCreated, metadata::MetadataDriven};
 
 pub mod cache;
 pub mod cluster;
@@ -49,15 +52,68 @@ pub struct UsageUnitMetric {
     pub interval: u64,
 }
 
-#[derive(Debug)]
+pub trait UsageReportImpl {
+    fn calculate_cost(&mut self, metadata: Arc<dyn MetadataDriven>) -> Self;
+}
+#[derive(Debug, Clone)]
 pub struct UsageReport {
+    pub project_id: String,
+    pub project_namespace: String,
+    pub project_billing_provider: String,
+    pub project_billing_provider_id: String,
     pub resource_id: String,
     pub resource_kind: String,
     pub resource_name: String,
     pub resource_spec: String,
     pub tier: String,
     pub units: i64,
+    pub interval: i64,
     pub period: String,
+    pub units_cost: Option<f64>,
+    pub minimum_cost: Option<f64>,
+}
+impl UsageReportImpl for Vec<UsageReport> {
+    fn calculate_cost(&mut self, metadata: Arc<dyn MetadataDriven>) -> Self {
+        let now = chrono::Utc::now();
+        let next_month = if now.month() == 12 {
+            chrono::NaiveDate::from_ymd_opt(now.year() + 1, 1, 1).unwrap()
+        } else {
+            chrono::NaiveDate::from_ymd_opt(now.year(), now.month() + 1, 1).unwrap()
+        };
+        let first_day = chrono::NaiveDate::from_ymd_opt(now.year(), now.month(), 1).unwrap();
+        let days = (next_month - first_day).num_days();
+        let month_interval = (days * 24 * 60 * 60) as f64;
+
+        self.iter_mut().for_each(|usage| {
+            match metadata.find_by_kind(&usage.resource_kind) {
+                Ok(metadata) => match metadata {
+                    Some(metadata) => match metadata.cost.get(&usage.tier) {
+                        Some(cost) => {
+                            let value = (usage.units as f64) * cost.delta;
+                            let rounded = (value * 100.0).round() / 100.0;
+
+                            usage.units_cost = Some(rounded);
+
+                            if cost.minimum > 0. {
+                                let value =
+                                    (cost.minimum / month_interval) * (usage.interval as f64);
+                                let rounded = (value * 100.0).round() / 100.0;
+
+                                usage.minimum_cost = Some(rounded);
+                            }
+                        }
+                        None => {
+                            warn!("tier cost not found for the kind {}", usage.resource_kind)
+                        }
+                    },
+                    None => warn!("metadata not found for the kind {}", usage.resource_kind),
+                },
+                Err(error) => error!(?error, "fail to find the metadata"),
+            };
+        });
+
+        self.to_vec()
+    }
 }
 
 #[derive(Debug)]
@@ -74,23 +130,6 @@ pub struct UsageResourceUnit {
     pub units: i64,
     pub tier: String,
     pub interval: u64,
-}
-
-#[derive(Debug)]
-pub struct UsageReportAggregated {
-    pub project_id: String,
-    pub project_namespace: String,
-    #[allow(dead_code)]
-    pub project_billing_provider: String,
-    pub project_billing_provider_id: String,
-    pub resource_id: String,
-    pub resource_kind: String,
-    pub resource_name: String,
-    pub tier: String,
-    pub interval: u64,
-    pub units: i64,
-    #[allow(dead_code)]
-    pub period: String,
 }
 
 #[cfg(test)]
@@ -118,6 +157,10 @@ mod tests {
     impl Default for UsageReport {
         fn default() -> Self {
             Self {
+                project_id: Uuid::new_v4().to_string(),
+                project_namespace: "xxx".into(),
+                project_billing_provider: "stripe".into(),
+                project_billing_provider_id: "xxx".into(),
                 resource_id: Uuid::new_v4().to_string(),
                 resource_kind: "CardanoNodePort".into(),
                 resource_name: format!("cardanonode-{}", utils::get_random_salt()),
@@ -125,8 +168,11 @@ mod tests {
                     "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
                         .into(),
                 units: 120,
+                interval: 60,
                 tier: "0".into(),
                 period: "08-2024".into(),
+                units_cost: Some(0.),
+                minimum_cost: Some(0.),
             }
         }
     }

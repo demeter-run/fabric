@@ -1,12 +1,14 @@
 use std::{fs, path::Path};
 
 use anyhow::Result as AnyhowResult;
+use include_dir::Dir;
 
 use crate::domain::{
     metadata::{MetadataDriven, ResourceMetadata},
     Result,
 };
 
+#[derive(Debug)]
 pub struct FileMetadata<'a> {
     metadata: Vec<ResourceMetadata>,
     hbs: handlebars::Handlebars<'a>,
@@ -47,14 +49,45 @@ impl<'a> FileMetadata<'a> {
 
         Ok(Self { metadata, hbs })
     }
+
+    pub fn from_dir(dir: Dir) -> AnyhowResult<Self> {
+        let mut metadata: Vec<ResourceMetadata> = Vec::new();
+        let mut hbs = handlebars::Handlebars::new();
+
+        for file in dir.files() {
+            match file.path().extension().and_then(|e| e.to_str()) {
+                Some("json") => {
+                    metadata.push(serde_json::from_slice(file.contents())?);
+                }
+                Some("hbs") => {
+                    let name = file
+                        .path()
+                        .file_stem()
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .to_string();
+
+                    let template = match file.contents_utf8() {
+                        Some(template) => template.to_string(),
+                        None => Default::default(),
+                    };
+
+                    hbs.register_template_string(&name, template)?;
+                }
+                _ => continue,
+            };
+        }
+
+        Ok(Self { metadata, hbs })
+    }
 }
 
-#[async_trait::async_trait]
 impl<'a> MetadataDriven for FileMetadata<'a> {
-    async fn find(&self) -> Result<Vec<ResourceMetadata>> {
+    fn find(&self) -> Result<Vec<ResourceMetadata>> {
         Ok(self.metadata.clone())
     }
-    async fn find_by_kind(&self, kind: &str) -> Result<Option<ResourceMetadata>> {
+    fn find_by_kind(&self, kind: &str) -> Result<Option<ResourceMetadata>> {
         Ok(self
             .metadata
             .clone()

@@ -1,4 +1,22 @@
 {
+  "cost": {
+    "0": {
+      "minimum": 0,
+      "delta": 0
+    },
+    "1": {
+      "minimum": 0,
+      "delta": 0.000013889
+    },
+    "2": {
+      "minimum": 100,
+      "delta": 0.00000463
+    },
+    "3": {
+      "minimum": 200,
+      "delta": 0.000003472
+    }
+  },
   "options": [
     {
       "description": "mainnet - stable (9.1.1)",

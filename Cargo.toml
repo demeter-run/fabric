@@ -43,6 +43,7 @@ comfy-table = "7.1.1"
 csv = "1.3.0"
 handlebars = "6.1.0"
 slack-hook = "0.8.0"
+include_dir = "0.7.4"
 
 [dev-dependencies]
 mockall = "0.12.1"
