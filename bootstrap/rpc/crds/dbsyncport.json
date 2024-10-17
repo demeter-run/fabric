@@ -1,5 +1,22 @@
 {
-  "cost": {},
+  "cost": {
+    "0": {
+      "minimum": 0,
+      "delta": 0
+    },
+    "1": {
+      "minimum": 0,
+      "delta": 0.000007407
+    },
+    "2": {
+      "minimum": 100,
+      "delta": 0.000006713
+    },
+    "3": {
+      "minimum": 300,
+      "delta": 0.000005556
+    }
+  },
   "options": [
     {
       "description": "mainnet",
