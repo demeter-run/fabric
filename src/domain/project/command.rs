@@ -450,7 +450,7 @@ pub async fn accept_user_invite(
     }
 
     let evt = ProjectUserInviteAccepted {
-        id: cmd.id,
+        id: user_invite.id,
         project_id: user_invite.project_id,
         user_id,
         role: user_invite.role.to_string(),
@@ -812,18 +812,11 @@ impl CreateUserInviteCmd {
 #[derive(Debug, Clone)]
 pub struct AcceptUserInviteCmd {
     pub credential: Credential,
-    pub id: String,
     pub code: String,
 }
 impl AcceptUserInviteCmd {
     pub fn new(credential: Credential, code: String) -> Self {
-        let id = Uuid::new_v4().to_string();
-
-        Self {
-            credential,
-            id,
-            code,
-        }
+        Self { credential, code }
     }
 }
 
@@ -969,7 +962,6 @@ mod tests {
         fn default() -> Self {
             Self {
                 credential: Credential::Auth0("user id".into()),
-                id: Uuid::new_v4().to_string(),
                 code: "123".into(),
             }
         }
