@@ -88,8 +88,8 @@ fn csv(report: Vec<UsageReport>, period: &str) {
             &r.tier,
             &format!("{:.1}h", ((r.interval as f64) / 60.) / 60.),
             &r.units.to_string(),
-            &format!("${:.3}", r.units_cost.unwrap_or(0.)),
-            &format!("${:.3}", r.minimum_cost.unwrap_or(0.)),
+            &format!("${:.2}", r.units_cost.unwrap_or(0.)),
+            &format!("${:.2}", r.minimum_cost.unwrap_or(0.)),
         ]);
         if let Err(error) = result {
             error!(?error);
@@ -153,8 +153,8 @@ fn table(report: Vec<UsageReport>) {
             &r.tier,
             &format!("{:.1}h", ((r.interval as f64) / 60.) / 60.),
             &r.units.to_string(),
-            &format!("${:.3}", r.units_cost.unwrap_or(0.)),
-            &format!("${:.3}", r.minimum_cost.unwrap_or(0.)),
+            &format!("${:.2}", r.units_cost.unwrap_or(0.)),
+            &format!("${:.2}", r.minimum_cost.unwrap_or(0.)),
         ]);
     }
 

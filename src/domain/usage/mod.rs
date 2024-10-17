@@ -82,20 +82,24 @@ impl UsageReportImpl for Vec<UsageReport> {
         };
         let first_day = chrono::NaiveDate::from_ymd_opt(now.year(), now.month(), 1).unwrap();
         let days = (next_month - first_day).num_days();
-        let max_interval = days * 24 * 60 * 60;
+        let month_interval = (days * 24 * 60 * 60) as f64;
 
         self.iter_mut().for_each(|usage| {
             match metadata.find_by_kind(&usage.resource_kind) {
                 Ok(metadata) => match metadata {
                     Some(metadata) => match metadata.cost.get(&usage.tier) {
                         Some(cost) => {
-                            usage.units_cost = Some((usage.units as f64) * cost.delta);
+                            let value = (usage.units as f64) * cost.delta;
+                            let rounded = (value * 100.0).round() / 100.0;
 
-                            if cost.minimum > 0 {
-                                usage.minimum_cost = Some(
-                                    ((cost.minimum as f64) / (max_interval as f64))
-                                        * (usage.interval as f64),
-                                );
+                            usage.units_cost = Some(rounded);
+
+                            if cost.minimum > 0. {
+                                let value =
+                                    (cost.minimum / month_interval) * (usage.interval as f64);
+                                let rounded = (value * 100.0).round() / 100.0;
+
+                                usage.minimum_cost = Some(rounded);
                             }
                         }
                         None => {

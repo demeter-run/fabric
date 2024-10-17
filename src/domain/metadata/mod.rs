@@ -34,7 +34,7 @@ impl FromStr for KnownField {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceMetadataCost {
-    pub minimum: i64,
+    pub minimum: f64,
     pub delta: f64,
 }
 
