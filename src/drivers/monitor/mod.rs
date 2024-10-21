@@ -95,11 +95,11 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
                             ),
                         }
 
-                        consumer.commit_message(&message, CommitMode::Async)?;
+                        consumer.commit_message(message, CommitMode::Async)?;
                     }
                     Err(error) => {
                         error!(?error, "fail to convert message to event");
-                        consumer.commit_message(&message, CommitMode::Async)?;
+                        consumer.commit_message(message, CommitMode::Async)?;
                     }
                 }
             }
