@@ -11,6 +11,9 @@ use crate::domain::{
     Result,
 };
 
+const NAME: &str = env!("CARGO_PKG_NAME");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub struct KafkaProducer {
     producer: FutureProducer,
     topic: String,
@@ -34,7 +37,14 @@ impl KafkaProducer {
 #[async_trait::async_trait]
 impl EventDrivenBridge for KafkaProducer {
     async fn dispatch(&self, event: Event) -> Result<()> {
-        let data = serde_json::to_vec(&event)?;
+        let annotation = HashMap::from([("source", format!("{NAME}-{VERSION}"))]);
+
+        let Some(mut payload) = serde_json::to_value(&event)?.as_object().cloned() else {
+            return Err(Error::Unexpected("invalid event structure".into()));
+        };
+        payload.insert("annotation".into(), serde_json::to_value(annotation)?);
+
+        let data = serde_json::to_vec(&payload)?;
         let key = event.key();
 
         self.producer
