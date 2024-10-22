@@ -321,6 +321,37 @@ pub async fn fetch_user(
     Ok(project_users_aggregated)
 }
 
+pub async fn fetch_me_user(
+    cache: Arc<dyn ProjectDrivenCache>,
+    auth0: Arc<dyn Auth0Driven>,
+    cmd: FetchMeUserCmd,
+) -> Result<ProjectUserAggregated> {
+    let user_id = assert_credential(&cmd.credential)?;
+    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id, None).await?;
+
+    let Some(project_user) = cache
+        .find_user_permission(&user_id, &cmd.project_id)
+        .await?
+    else {
+        return Err(Error::CommandMalformed(
+            "invalid project and user id".into(),
+        ));
+    };
+
+    let profile = auth0.find_info(&project_user.user_id).await?;
+
+    let project_user_aggregated = ProjectUserAggregated {
+        user_id: project_user.user_id.clone(),
+        project_id: project_user.project_id,
+        name: profile.name,
+        email: profile.email,
+        role: project_user.role,
+        created_at: project_user.created_at,
+    };
+
+    Ok(project_user_aggregated)
+}
+
 pub async fn delete_user(
     cache: Arc<dyn ProjectDrivenCache>,
     event: Arc<dyn EventDrivenBridge>,
@@ -732,6 +763,20 @@ impl FetchUserCmd {
 }
 
 #[derive(Debug, Clone)]
+pub struct FetchMeUserCmd {
+    pub credential: Credential,
+    pub project_id: String,
+}
+impl FetchMeUserCmd {
+    pub fn new(credential: Credential, project_id: String) -> Result<Self> {
+        Ok(Self {
+            credential,
+            project_id,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct DeleteUserCmd {
     pub credential: Credential,
     pub project_id: String,
@@ -988,6 +1033,14 @@ mod tests {
                 credential: Credential::Auth0("user id".into()),
                 page: 1,
                 page_size: 12,
+                project_id: Uuid::new_v4().to_string(),
+            }
+        }
+    }
+    impl Default for FetchMeUserCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
                 project_id: Uuid::new_v4().to_string(),
             }
         }
@@ -1836,5 +1889,23 @@ mod tests {
 
         let result = delete(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn it_should_fetch_me_project_user() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .returning(|_, _| Ok(Some(ProjectUser::default())));
+
+        let mut auth0 = MockAuth0Driven::new();
+        auth0
+            .expect_find_info()
+            .return_once(|_| Ok(Auth0Profile::default()));
+
+        let cmd = FetchMeUserCmd::default();
+
+        let result = fetch_me_user(Arc::new(cache), Arc::new(auth0), cmd).await;
+        assert!(result.is_ok());
     }
 }
