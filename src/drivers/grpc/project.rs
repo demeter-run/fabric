@@ -281,6 +281,29 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
+    async fn fetch_me_project_user(
+        &self,
+        request: tonic::Request<proto::FetchMeProjectUserRequest>,
+    ) -> Result<tonic::Response<proto::FetchMeProjectUserResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = project::command::FetchMeUserCmd::new(credential, req.project_id)?;
+
+        let user =
+            project::command::fetch_me_user(self.cache.clone(), self.auth0.clone(), cmd.clone())
+                .await?;
+
+        let message = proto::FetchMeProjectUserResponse {
+            records: vec![user.into()],
+        };
+
+        Ok(tonic::Response::new(message))
+    }
     async fn fetch_project_user_invites(
         &self,
         request: tonic::Request<proto::FetchProjectUserInvitesRequest>,
