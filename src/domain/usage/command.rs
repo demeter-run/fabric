@@ -4,7 +4,7 @@ use crate::domain::{
     auth::{assert_permission, Credential},
     error::Error,
     metadata::MetadataDriven,
-    project::cache::ProjectDrivenCache,
+    project::{cache::ProjectDrivenCache, ProjectUserRole},
     Result, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
@@ -20,7 +20,7 @@ pub async fn fetch_report(
         project_cache.clone(),
         &cmd.credential,
         &cmd.project_id,
-        None,
+        Some(ProjectUserRole::Owner),
     )
     .await?;
 
@@ -156,5 +156,34 @@ mod tests {
         )
         .await;
         assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_update_project_when_invalid_permission_member() {
+        let mut project_cache = MockProjectDrivenCache::new();
+        project_cache
+            .expect_find_user_permission()
+            .return_once(|_, _| {
+                Ok(Some(ProjectUser {
+                    role: ProjectUserRole::Member,
+                    ..Default::default()
+                }))
+            });
+
+        let usage_cache = MockUsageDrivenCache::new();
+
+        let metadata = MockMetadataDriven::new();
+
+        let cmd = FetchCmd::default();
+
+        let result = fetch_report(
+            Arc::new(project_cache),
+            Arc::new(usage_cache),
+            Arc::new(metadata),
+            cmd,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
     }
 }
