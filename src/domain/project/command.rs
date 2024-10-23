@@ -96,7 +96,13 @@ pub async fn update(
     cmd: UpdateCmd,
 ) -> Result<Project> {
     assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.id, None).await?;
+    assert_permission(
+        cache.clone(),
+        &cmd.credential,
+        &cmd.id,
+        Some(ProjectUserRole::Owner),
+    )
+    .await?;
 
     let evt = ProjectUpdated {
         id: cmd.id.clone(),
@@ -121,7 +127,13 @@ pub async fn delete(
     cmd: DeleteCmd,
 ) -> Result<()> {
     let user_id = assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.id, None).await?;
+    assert_permission(
+        cache.clone(),
+        &cmd.credential,
+        &cmd.id,
+        Some(ProjectUserRole::Owner),
+    )
+    .await?;
 
     let project = match cache.find_by_id(&cmd.id).await? {
         Some(project) => project,
@@ -151,7 +163,13 @@ pub async fn fetch_secret(
     cmd: FetchSecretCmd,
 ) -> Result<Vec<ProjectSecret>> {
     assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id, None).await?;
+    assert_permission(
+        cache.clone(),
+        &cmd.credential,
+        &cmd.project_id,
+        Some(ProjectUserRole::Owner),
+    )
+    .await?;
 
     cache.find_secrets(&cmd.project_id).await
 }
@@ -162,7 +180,13 @@ pub async fn create_secret(
     cmd: CreateSecretCmd,
 ) -> Result<String> {
     assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id, None).await?;
+    assert_permission(
+        cache.clone(),
+        &cmd.credential,
+        &cmd.project_id,
+        Some(ProjectUserRole::Owner),
+    )
+    .await?;
 
     let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
         return Err(Error::CommandMalformed("invalid project id".into()));
@@ -268,7 +292,13 @@ pub async fn delete_secret(
         return Err(Error::CommandMalformed("invalid secret id".into()));
     };
 
-    assert_permission(cache.clone(), &cmd.credential, &secret.project_id, None).await?;
+    assert_permission(
+        cache.clone(),
+        &cmd.credential,
+        &secret.project_id,
+        Some(ProjectUserRole::Owner),
+    )
+    .await?;
 
     let evt = ProjectSecretDeleted {
         id: secret.id,
@@ -288,7 +318,13 @@ pub async fn fetch_user(
     cmd: FetchUserCmd,
 ) -> Result<Vec<ProjectUserAggregated>> {
     assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id, None).await?;
+    assert_permission(
+        cache.clone(),
+        &cmd.credential,
+        &cmd.project_id,
+        Some(ProjectUserRole::Owner),
+    )
+    .await?;
 
     let project_users = cache
         .find_users(&cmd.project_id, &cmd.page, &cmd.page_size)
@@ -398,7 +434,13 @@ pub async fn fetch_user_invite(
     cmd: FetchUserInviteCmd,
 ) -> Result<Vec<ProjectUserInvite>> {
     assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id, None).await?;
+    assert_permission(
+        cache.clone(),
+        &cmd.credential,
+        &cmd.project_id,
+        Some(ProjectUserRole::Owner),
+    )
+    .await?;
 
     cache
         .find_user_invites(&cmd.project_id, &cmd.page, &cmd.page_size)
@@ -412,7 +454,13 @@ pub async fn create_user_invite(
     cmd: CreateUserInviteCmd,
 ) -> Result<()> {
     assert_credential(&cmd.credential)?;
-    assert_permission(cache.clone(), &cmd.credential, &cmd.project_id, None).await?;
+    assert_permission(
+        cache.clone(),
+        &cmd.credential,
+        &cmd.project_id,
+        Some(ProjectUserRole::Owner),
+    )
+    .await?;
 
     let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
         return Err(Error::CommandMalformed("invalid project id".into()));
@@ -509,7 +557,7 @@ pub async fn resend_user_invite(
         cache.clone(),
         &cmd.credential,
         &user_invite.project_id,
-        None,
+        Some(ProjectUserRole::Owner),
     )
     .await?;
 
@@ -550,7 +598,7 @@ pub async fn delete_user_invite(
         cache.clone(),
         &cmd.credential,
         &user_invite.project_id,
-        None,
+        Some(ProjectUserRole::Owner),
     )
     .await?;
 
@@ -1239,6 +1287,24 @@ mod tests {
         let result = update(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_ok());
     }
+    #[tokio::test]
+    async fn it_should_fail_update_project_when_invalid_permission_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_user_permission().return_once(|_, _| {
+            Ok(Some(ProjectUser {
+                role: ProjectUserRole::Member,
+                ..Default::default()
+            }))
+        });
+
+        let event = MockEventDrivenBridge::new();
+
+        let cmd = UpdateCmd::default();
+
+        let result = update(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
+    }
 
     #[tokio::test]
     async fn it_should_fetch_project_secrets() {
@@ -1254,6 +1320,22 @@ mod tests {
 
         let result = fetch_secret(Arc::new(cache), cmd).await;
         assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_fail_fetch_project_secrets_when_invalid_permission_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_user_permission().return_once(|_, _| {
+            Ok(Some(ProjectUser {
+                role: ProjectUserRole::Member,
+                ..Default::default()
+            }))
+        });
+
+        let cmd = FetchSecretCmd::default();
+
+        let result = fetch_secret(Arc::new(cache), cmd).await;
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
     }
     #[tokio::test]
     async fn it_should_create_project_secret() {
@@ -1315,6 +1397,23 @@ mod tests {
 
         let result = create_secret(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_create_project_secret_when_invalid_permission_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_user_permission().return_once(|_, _| {
+            Ok(Some(ProjectUser {
+                role: ProjectUserRole::Member,
+                ..Default::default()
+            }))
+        });
+        let event = MockEventDrivenBridge::new();
+
+        let cmd = CreateSecretCmd::default();
+
+        let result = create_secret(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
     }
     #[tokio::test]
     async fn it_should_fail_create_project_secret_when_max_secret_exceeded() {
@@ -1400,7 +1499,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_should_delete_secret() {
+    async fn it_should_delete_project_secret() {
         let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_user_permission()
@@ -1418,6 +1517,27 @@ mod tests {
         let result = delete_secret(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_ok());
     }
+    #[tokio::test]
+    async fn it_should_fail_delete_project_secret_when_invalid_permission_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_user_permission().return_once(|_, _| {
+            Ok(Some(ProjectUser {
+                role: ProjectUserRole::Member,
+                ..Default::default()
+            }))
+        });
+        cache
+            .expect_find_secret_by_id()
+            .return_once(|_| Ok(Some(ProjectSecret::default())));
+
+        let event = MockEventDrivenBridge::new();
+
+        let cmd = DeleteSecretCmd::default();
+
+        let result = delete_secret(Arc::new(cache), Arc::new(event), cmd).await;
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
+    }
 
     #[tokio::test]
     async fn it_should_fetch_project_user_invites() {
@@ -1434,6 +1554,23 @@ mod tests {
         let result = fetch_user_invite(Arc::new(cache), cmd).await;
         assert!(result.is_ok());
     }
+    #[tokio::test]
+    async fn it_should_fail_fetch_project_user_invites_when_invalid_permission_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_user_permission().return_once(|_, _| {
+            Ok(Some(ProjectUser {
+                role: ProjectUserRole::Member,
+                ..Default::default()
+            }))
+        });
+
+        let cmd = FetchUserInviteCmd::default();
+
+        let result = fetch_user_invite(Arc::new(cache), cmd).await;
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
+    }
+
     #[tokio::test]
     async fn it_should_create_project_user_invite() {
         let mut cache = MockProjectDrivenCache::new();
@@ -1504,6 +1641,27 @@ mod tests {
         let result =
             create_user_invite(Arc::new(cache), Arc::new(email), Arc::new(event), cmd).await;
         assert!(result.is_err());
+    }
+    #[tokio::test]
+    async fn it_should_fail_create_project_user_invite_when_invalid_permission_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_user_permission().return_once(|_, _| {
+            Ok(Some(ProjectUser {
+                role: ProjectUserRole::Member,
+                ..Default::default()
+            }))
+        });
+
+        let email = MockProjectEmailDriven::new();
+        let event = MockEventDrivenBridge::new();
+
+        let cmd = CreateUserInviteCmd::default();
+
+        let result =
+            create_user_invite(Arc::new(cache), Arc::new(email), Arc::new(event), cmd).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
     }
 
     #[tokio::test]
@@ -1720,6 +1878,28 @@ mod tests {
 
         assert!(result.is_err());
     }
+    #[tokio::test]
+    async fn it_should_fail_resend_project_user_invite_when_invalid_permission_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_user_permission().return_once(|_, _| {
+            Ok(Some(ProjectUser {
+                role: ProjectUserRole::Member,
+                ..Default::default()
+            }))
+        });
+        cache
+            .expect_find_user_invite_by_id()
+            .return_once(|_| Ok(Some(ProjectUserInvite::default())));
+
+        let email = MockProjectEmailDriven::new();
+
+        let cmd = ResendUserInviteCmd::default();
+
+        let result = resend_user_invite(Arc::new(cache), Arc::new(email), cmd).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
+    }
 
     #[tokio::test]
     async fn it_should_delete_project_user_invite() {
@@ -1776,6 +1956,28 @@ mod tests {
 
         assert!(result.is_err());
     }
+    #[tokio::test]
+    async fn it_should_fail_delete_project_user_invite_when_invalid_permission_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_user_permission().return_once(|_, _| {
+            Ok(Some(ProjectUser {
+                role: ProjectUserRole::Member,
+                ..Default::default()
+            }))
+        });
+        cache
+            .expect_find_user_invite_by_id()
+            .return_once(|_| Ok(Some(ProjectUserInvite::default())));
+
+        let event = MockEventDrivenBridge::new();
+
+        let cmd = DeleteUserInviteCmd::default();
+
+        let result = delete_user_invite(Arc::new(cache), Arc::new(event), cmd).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
+    }
 
     #[tokio::test]
     async fn it_should_fetch_project_users() {
@@ -1797,6 +1999,25 @@ mod tests {
         let result = fetch_user(Arc::new(cache), Arc::new(auth0), cmd).await;
         assert!(result.is_ok());
     }
+    #[tokio::test]
+    async fn it_should_fail_fetch_project_users_when_invalid_permission_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_user_permission().return_once(|_, _| {
+            Ok(Some(ProjectUser {
+                role: ProjectUserRole::Member,
+                ..Default::default()
+            }))
+        });
+
+        let auth0 = MockAuth0Driven::new();
+
+        let cmd = FetchUserCmd::default();
+
+        let result = fetch_user(Arc::new(cache), Arc::new(auth0), cmd).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
+    }
 
     #[tokio::test]
     async fn it_should_delete_project_user() {
@@ -1817,7 +2038,25 @@ mod tests {
         let result = delete_user(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_ok());
     }
+    #[tokio::test]
+    async fn it_should_fail_delete_project_user_when_invalid_permission_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_user_permission().return_once(|_, _| {
+            Ok(Some(ProjectUser {
+                role: ProjectUserRole::Member,
+                ..Default::default()
+            }))
+        });
 
+        let event = MockEventDrivenBridge::new();
+
+        let cmd = DeleteUserCmd::default();
+
+        let result = delete_user(Arc::new(cache), Arc::new(event), cmd).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
+    }
     #[tokio::test]
     async fn it_should_fail_delete_project_user_when_the_project_owner_is_the_user() {
         let mut cache = MockProjectDrivenCache::new();
@@ -1865,7 +2104,25 @@ mod tests {
         let result = delete(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_ok());
     }
+    #[tokio::test]
+    async fn it_should_fail_delete_project_when_invalid_permission_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_user_permission().return_once(|_, _| {
+            Ok(Some(ProjectUser {
+                role: ProjectUserRole::Member,
+                ..Default::default()
+            }))
+        });
 
+        let event = MockEventDrivenBridge::new();
+
+        let cmd = DeleteCmd::default();
+
+        let result = delete(Arc::new(cache), Arc::new(event), cmd).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
+    }
     #[tokio::test]
     async fn it_should_fail_delete_project_when_user_is_not_creator() {
         let mut cache = MockProjectDrivenCache::new();
