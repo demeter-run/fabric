@@ -95,5 +95,5 @@ module "fabric_daemon" {
   kafka_username        = local.kafka_daemon_username
   kafka_password        = local.kafka_daemon_password
   kafka_topic           = local.kafka_topic
-  mode                  = "usage"
+  mode                  = "full"
 }
