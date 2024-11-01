@@ -65,7 +65,7 @@ module "fabric_rpc" {
   namespace                   = local.rpc_namespace
   image                       = var.rpc_image
   broker_urls                 = local.broker_urls
-  consumer_name               = "rpc-ahid01"
+  consumer_name               = "rpc-ahid02"
   kafka_username              = local.kafka_rpc_username
   kafka_password              = local.kafka_rpc_password
   kafka_topic                 = local.kafka_topic
@@ -90,8 +90,8 @@ module "fabric_daemon" {
   image                 = var.daemon_image
   cluster_id            = "txpipe-us-east-2-m2"
   broker_urls           = local.broker_urls
-  consumer_monitor_name = "daemon-us-west-2-m2-monitor-hi1"
-  consumer_cache_name   = "daemon-us-west-2-m2-cache-hi1"
+  consumer_monitor_name = "daemon-us-west-2-m2-monitor-hi2"
+  consumer_cache_name   = "daemon-us-west-2-m2-cache-hi2"
   kafka_username        = local.kafka_daemon_username
   kafka_password        = local.kafka_daemon_password
   kafka_topic           = local.kafka_topic
