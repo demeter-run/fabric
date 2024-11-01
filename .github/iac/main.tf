@@ -41,13 +41,13 @@ locals {
   rpc_namespace               = "demeter-global"
   daemon_namespace            = "demeter-fabric"
   replicas                    = 1
-  broker_urls                 = "cs01k9hsakr3s8si3o00.any.us-east-1.mpx.prd.cloud.redpanda.com:9092"
+  broker_urls                 = "csihobu921nrmk52flsg.any.us-east-1.mpx.prd.cloud.redpanda.com:9092"
   secret                      = var.secret
   kafka_rpc_username          = "rpc"
   kafka_rpc_password          = var.kafka_rpc_password
   kafka_daemon_username       = "daemon-us-west-2-m2"
   kafka_daemon_password       = var.kafka_daemon_password
-  kafka_topic                 = "events-stg"
+  kafka_topic                 = "events"
   auth0_client_id             = var.auth0_client_id
   auth0_client_secret         = var.auth0_client_secret
   auth0_audience              = var.auth0_audience
