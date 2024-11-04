@@ -5,8 +5,9 @@ use std::sync::Arc;
 use crate::domain::{
     error::Error,
     project::{
-        cache::ProjectDrivenCache, Project, ProjectSecret, ProjectStatus, ProjectUpdate,
-        ProjectUser, ProjectUserInvite, ProjectUserInviteStatus, ProjectUserRole,
+        cache::{ProjectDrivenCache, ProjectDrivenCacheBilling},
+        Project, ProjectSecret, ProjectStatus, ProjectUpdate, ProjectUser, ProjectUserInvite,
+        ProjectUserInviteStatus, ProjectUserRole,
     },
     resource::ResourceStatus,
     Result,
@@ -34,8 +35,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     p.namespace, 
                     p.name, 
                     p.owner, 
-                    p.status, 
-                    p.billing_provider,
+                    p.status, p.billing_provider,
                     p.billing_provider_id,
                     p.billing_subscription_id,
                     p.created_at, 
@@ -588,6 +588,37 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         .await?;
 
         Ok(())
+    }
+}
+#[async_trait::async_trait]
+impl ProjectDrivenCacheBilling for SqliteProjectDrivenCache {
+    async fn find_by_user_id(&self, id: &str) -> Result<Vec<Project>> {
+        let projects = sqlx::query_as::<_, Project>(
+            r#"
+                SELECT
+                    p.id,
+                    p.namespace,
+                    p.name,
+                    p.owner,
+                    p.status,
+                    p.billing_provider,
+                    p.billing_provider_id,
+                    p.billing_subscription_id,
+                    p.created_at,
+                    p.updated_at
+                FROM 
+                	  project p
+                INNER JOIN project_user pu ON
+                	  pu.project_id = p.id
+                WHERE
+                	  pu.user_id = $1;
+            "#,
+        )
+        .bind(id)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(projects)
     }
 }
 

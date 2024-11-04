@@ -30,10 +30,32 @@ pub struct BillingArgs {
     /// format that will be returned table(log in terminal), json(log in terminal), csv(save a file e.g 09-2024.csv)
     pub output: String,
 }
+
+#[derive(Parser, Clone)]
+pub struct ProjectArgs {
+    /// Owner user email
+    pub email: String,
+}
+
+#[derive(Parser, Clone)]
+pub struct ResourceArgs {
+    /// Project namespace
+    pub namespace: String,
+}
+
 #[derive(Subcommand)]
 enum Commands {
-    /// Send the billing invoices
+    /// Sync cache
+    Sync,
+
+    /// Get the billing data
     Billing(BillingArgs),
+
+    /// Find projects by user
+    Project(ProjectArgs),
+
+    /// Find resource by project namespace
+    Resource(ResourceArgs),
 }
 
 #[tokio::main]
@@ -54,6 +76,9 @@ async fn main() -> Result<()> {
     let config = Config::new(&cli.config)?;
 
     match cli.command {
+        Commands::Sync => {
+            fabric::drivers::cache::subscribe(config.clone().into()).await?;
+        }
         Commands::Billing(args) => {
             info!("sincronizing cache");
 
@@ -64,14 +89,26 @@ async fn main() -> Result<()> {
                 _ => bail!("invalid output format"),
             };
 
-            fabric::drivers::cache::subscribe(config.clone().into()).await?;
             fabric::drivers::billing::run(config.clone().into(), &args.period, output).await?;
+        }
+        Commands::Project(args) => {
+            fabric::drivers::billing::fetch_projects(config.clone().into(), &args.email).await?;
+        }
+        Commands::Resource(_args) => {
+            todo!()
         }
     }
 
     Ok(())
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct AuthConfig {
+    url: String,
+    client_id: String,
+    client_secret: String,
+    audience: String,
+}
 #[derive(Debug, Clone, Deserialize)]
 struct TlsConfig {
     ssl_crt_path: PathBuf,
@@ -83,6 +120,7 @@ struct Config {
     topic: String,
     tls: Option<TlsConfig>,
     kafka_consumer: HashMap<String, String>,
+    auth: AuthConfig,
 }
 impl Config {
     pub fn new(path: &str) -> Result<Self> {
@@ -105,6 +143,10 @@ impl From<Config> for BillingConfig {
                 ssl_key_path: value.ssl_key_path,
                 ssl_crt_path: value.ssl_crt_path,
             }),
+            auth_url: value.auth.url,
+            auth_client_id: value.auth.client_id,
+            auth_client_secret: value.auth.client_secret,
+            auth_audience: value.auth.audience,
         }
     }
 }

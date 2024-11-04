@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use comfy_table::Table;
 use include_dir::{include_dir, Dir};
 use serde_json::json;
@@ -12,10 +12,13 @@ use tracing::{error, info};
 use crate::{
     domain::{
         self,
+        auth::Auth0Driven,
+        project::cache::ProjectDrivenCacheBilling,
         usage::{UsageReport, UsageReportImpl},
     },
     driven::{
-        cache::{usage::SqliteUsageDrivenCache, SqliteCache},
+        auth0::Auth0DrivenImpl,
+        cache::{project::SqliteProjectDrivenCache, usage::SqliteUsageDrivenCache, SqliteCache},
         metadata::FileMetadata,
     },
 };
@@ -47,6 +50,49 @@ pub async fn run(config: BillingConfig, period: &str, output: OutputFormat) -> R
         OutputFormat::Json => json(report),
         OutputFormat::Csv => csv(report, period),
     };
+
+    Ok(())
+}
+
+pub async fn fetch_projects(config: BillingConfig, email: &str) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let auth0: Box<dyn Auth0Driven> = Box::new(
+        Auth0DrivenImpl::try_new(
+            &config.auth_url,
+            &config.auth_client_id,
+            &config.auth_client_secret,
+            &config.auth_audience,
+        )
+        .await?,
+    );
+    let project_cache: Box<dyn ProjectDrivenCacheBilling> =
+        Box::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+
+    let Some(user) = auth0.find_info_by_email(email).await? else {
+        bail!("Invalid email")
+    };
+
+    let projects = project_cache.find_by_user_id(&user.user_id).await?;
+    if projects.is_empty() {
+        bail!("No one project was found")
+    }
+
+    let mut table = Table::new();
+    table.set_header(vec!["", "name", "namespace", "status", "createdAt"]);
+
+    for (i, p) in projects.iter().enumerate() {
+        table.add_row(vec![
+            &(i + 1).to_string(),
+            &p.name,
+            &p.namespace,
+            &p.status.to_string(),
+            &p.created_at.to_rfc3339(),
+        ]);
+    }
+
+    println!("{table}");
 
     Ok(())
 }
@@ -173,4 +219,9 @@ pub struct BillingConfig {
     pub topic: String,
     pub kafka: HashMap<String, String>,
     pub tls_config: Option<BillingTlsConfig>,
+
+    pub auth_url: String,
+    pub auth_client_id: String,
+    pub auth_client_secret: String,
+    pub auth_audience: String,
 }

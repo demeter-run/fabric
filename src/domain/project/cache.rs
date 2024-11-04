@@ -48,6 +48,12 @@ pub trait ProjectDrivenCache: Send + Sync {
     async fn delete_user(&self, project_id: &str, id: &str) -> Result<()>;
 }
 
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
+pub trait ProjectDrivenCacheBilling: Send + Sync {
+    async fn find_by_user_id(&self, id: &str) -> Result<Vec<Project>>;
+}
+
 pub async fn create(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectCreated) -> Result<()> {
     cache.create(&evt.try_into()?).await
 }
