@@ -21,6 +21,12 @@ pub trait ResourceDrivenCache: Send + Sync {
     async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
 }
 
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
+pub trait ResourceDrivenCacheBilling: Send + Sync {
+    async fn find_by_project_namespace(&self, namespace: &str) -> Result<Vec<Resource>>;
+}
+
 pub async fn create(cache: Arc<dyn ResourceDrivenCache>, evt: ResourceCreated) -> Result<()> {
     cache.create(&evt.try_into()?).await
 }

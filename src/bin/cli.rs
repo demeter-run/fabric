@@ -94,8 +94,9 @@ async fn main() -> Result<()> {
         Commands::Project(args) => {
             fabric::drivers::billing::fetch_projects(config.clone().into(), &args.email).await?;
         }
-        Commands::Resource(_args) => {
-            todo!()
+        Commands::Resource(args) => {
+            fabric::drivers::billing::fetch_resources(config.clone().into(), &args.namespace)
+                .await?;
         }
     }
 

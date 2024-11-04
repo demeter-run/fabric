@@ -4,7 +4,10 @@ use std::sync::Arc;
 
 use crate::domain::{
     error::Error,
-    resource::{cache::ResourceDrivenCache, Resource, ResourceStatus, ResourceUpdate},
+    resource::{
+        cache::{ResourceDrivenCache, ResourceDrivenCacheBilling},
+        Resource, ResourceStatus, ResourceUpdate,
+    },
     Result,
 };
 
@@ -192,6 +195,36 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
         .await?;
 
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceDrivenCacheBilling for SqliteResourceDrivenCache {
+    async fn find_by_project_namespace(&self, namespace: &str) -> Result<Vec<Resource>> {
+        let resources = sqlx::query_as::<_, Resource>(
+            r#"
+                SELECT
+                    r.id,
+                    r.project_id,
+                    r.name,
+                    r.kind,
+                    r.spec,
+                    r.status,
+                    r.created_at,
+                    r.updated_at
+                FROM
+                    resource r
+                INNER JOIN project p ON
+                    p.id = r.project_id
+                WHERE
+                    p.namespace = $1;
+            "#,
+        )
+        .bind(namespace)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(resources)
     }
 }
 

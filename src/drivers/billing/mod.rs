@@ -14,11 +14,15 @@ use crate::{
         self,
         auth::Auth0Driven,
         project::cache::ProjectDrivenCacheBilling,
+        resource::cache::ResourceDrivenCacheBilling,
         usage::{UsageReport, UsageReportImpl},
     },
     driven::{
         auth0::Auth0DrivenImpl,
-        cache::{project::SqliteProjectDrivenCache, usage::SqliteUsageDrivenCache, SqliteCache},
+        cache::{
+            project::SqliteProjectDrivenCache, resource::SqliteResourceDrivenCache,
+            usage::SqliteUsageDrivenCache, SqliteCache,
+        },
         metadata::FileMetadata,
     },
 };
@@ -89,6 +93,60 @@ pub async fn fetch_projects(config: BillingConfig, email: &str) -> Result<()> {
             &p.namespace,
             &p.status.to_string(),
             &p.created_at.to_rfc3339(),
+        ]);
+    }
+
+    println!("{table}");
+
+    Ok(())
+}
+
+pub async fn fetch_resources(config: BillingConfig, project_namespace: &str) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let billing_cache: Box<dyn ResourceDrivenCacheBilling> =
+        Box::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
+
+    let resouces = billing_cache
+        .find_by_project_namespace(project_namespace)
+        .await?;
+
+    if resouces.is_empty() {
+        bail!("No one resouce was found")
+    }
+
+    let mut table = Table::new();
+    table.set_header(vec![
+        "",
+        "name",
+        "kind",
+        "status",
+        "tier",
+        "network",
+        "createdAt",
+    ]);
+
+    for (i, r) in resouces.iter().enumerate() {
+        let spec: serde_json::Value = serde_json::from_str(&r.spec).unwrap();
+
+        let tier = match spec.get("throughputTier") {
+            Some(v) => v.as_str().unwrap(),
+            None => "unknown",
+        };
+        let network = match spec.get("network") {
+            Some(v) => v.as_str().unwrap(),
+            None => "unknown",
+        };
+
+        table.add_row(vec![
+            &(i + 1).to_string(),
+            &r.name,
+            &r.kind,
+            &r.status.to_string(),
+            tier,
+            network,
+            &r.created_at.to_rfc3339(),
         ]);
     }
 
