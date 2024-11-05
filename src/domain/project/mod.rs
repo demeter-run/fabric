@@ -258,6 +258,7 @@ impl Display for ProjectUserRole {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ProjectUserProject {
     pub user_id: String,
     pub role: ProjectUserRole,
