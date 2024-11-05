@@ -24,10 +24,10 @@ struct Cli {
 
 #[derive(Parser, Clone)]
 pub struct BillingArgs {
-    /// period to collect the data (month-year) e.g 09-2024
+    /// period to collect the data (year-month) e.g 2024-09
     pub period: String,
 
-    /// format that will be returned table(log in terminal), json(log in terminal), csv(save a file e.g 09-2024.csv)
+    /// format that will be returned table(log in terminal), json(log in terminal), csv(save a file e.g 2024-09.csv)
     pub output: String,
 }
 
@@ -43,6 +43,12 @@ pub struct ResourceArgs {
     pub namespace: String,
 }
 
+#[derive(Parser, Clone)]
+pub struct NewUsersArgs {
+    /// collect new users after this date (year-month-day) e.g 2024-09-01
+    pub after: String,
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Sync cache
@@ -51,11 +57,14 @@ enum Commands {
     /// Get the billing data
     Billing(BillingArgs),
 
-    /// Find projects by user
+    /// Get projects by user
     Project(ProjectArgs),
 
-    /// Find resource by project namespace
+    /// Get resource by project namespace
     Resource(ResourceArgs),
+
+    /// Get new users since a date
+    NewUsers(NewUsersArgs),
 }
 
 #[tokio::main]
@@ -89,7 +98,8 @@ async fn main() -> Result<()> {
                 _ => bail!("invalid output format"),
             };
 
-            fabric::drivers::billing::run(config.clone().into(), &args.period, output).await?;
+            fabric::drivers::billing::fetch_usage(config.clone().into(), &args.period, output)
+                .await?;
         }
         Commands::Project(args) => {
             fabric::drivers::billing::fetch_projects(config.clone().into(), &args.email).await?;
@@ -97,6 +107,9 @@ async fn main() -> Result<()> {
         Commands::Resource(args) => {
             fabric::drivers::billing::fetch_resources(config.clone().into(), &args.namespace)
                 .await?;
+        }
+        Commands::NewUsers(args) => {
+            fabric::drivers::billing::fetch_new_users(config.clone().into(), &args.after).await?;
         }
     }
 

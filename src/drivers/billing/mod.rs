@@ -7,15 +7,14 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use tracing::{error, info};
+use tracing::error;
 
 use crate::{
     domain::{
-        self,
         auth::Auth0Driven,
         project::cache::ProjectDrivenCacheBilling,
         resource::cache::ResourceDrivenCacheBilling,
-        usage::{UsageReport, UsageReportImpl},
+        usage::{cache::UsageDrivenCacheBilling, UsageReport, UsageReportImpl},
     },
     driven::{
         auth0::Auth0DrivenImpl,
@@ -35,17 +34,17 @@ pub enum OutputFormat {
 
 static METADATA: Dir = include_dir!("bootstrap/rpc/crds");
 
-pub async fn run(config: BillingConfig, period: &str, output: OutputFormat) -> Result<()> {
+pub async fn fetch_usage(config: BillingConfig, period: &str, output: OutputFormat) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     sqlite_cache.migrate().await?;
 
-    let usage_cache = Arc::new(SqliteUsageDrivenCache::new(sqlite_cache.clone()));
+    let usage_cache: Box<dyn UsageDrivenCacheBilling> =
+        Box::new(SqliteUsageDrivenCache::new(sqlite_cache.clone()));
 
     let metadata = Arc::new(FileMetadata::from_dir(METADATA.clone())?);
 
-    info!("Collecting data");
-
-    let report = domain::usage::cache::find_report_aggregated(usage_cache.clone(), period)
+    let report = usage_cache
+        .find_report_aggregated(period)
         .await?
         .calculate_cost(metadata.clone());
 
@@ -111,7 +110,6 @@ pub async fn fetch_resources(config: BillingConfig, project_namespace: &str) -> 
     let resouces = billing_cache
         .find_by_project_namespace(project_namespace)
         .await?;
-
     if resouces.is_empty() {
         bail!("No one resouce was found")
     }
@@ -147,6 +145,65 @@ pub async fn fetch_resources(config: BillingConfig, project_namespace: &str) -> 
             tier,
             network,
             &r.created_at.to_rfc3339(),
+        ]);
+    }
+
+    println!("{table}");
+
+    Ok(())
+}
+
+pub async fn fetch_new_users(config: BillingConfig, after: &str) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let auth0: Box<dyn Auth0Driven> = Box::new(
+        Auth0DrivenImpl::try_new(
+            &config.auth_url,
+            &config.auth_client_id,
+            &config.auth_client_secret,
+            &config.auth_audience,
+        )
+        .await?,
+    );
+    let project_cache: Box<dyn ProjectDrivenCacheBilling> =
+        Box::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+
+    let project_users = project_cache.find_new_users(after).await?;
+    if project_users.is_empty() {
+        bail!("No one new user was found")
+    }
+
+    let ids: Vec<String> = project_users.iter().map(|p| p.user_id.clone()).collect();
+    let profiles = auth0.find_info_by_ids(&ids).await?;
+
+    let mut table = Table::new();
+    table.set_header(vec![
+        "",
+        "id",
+        "name",
+        "email",
+        "role",
+        "project",
+        "stripe ID",
+        "createdAt",
+    ]);
+
+    for (i, u) in project_users.iter().enumerate() {
+        let (name, email) = match profiles.iter().find(|a| a.user_id == u.user_id) {
+            Some(a) => (a.name.clone(), a.email.clone()),
+            None => ("unknown".into(), "unknown".into()),
+        };
+
+        table.add_row(vec![
+            &(i + 1).to_string(),
+            &u.user_id,
+            &name,
+            &email,
+            &u.role.to_string(),
+            &u.project_namespace,
+            &u.project_billing_provider_id,
+            &u.created_at.to_rfc3339(),
         ]);
     }
 

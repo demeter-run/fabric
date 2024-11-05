@@ -3,7 +3,10 @@ use std::sync::Arc;
 
 use crate::domain::{
     resource::ResourceStatus,
-    usage::{cache::UsageDrivenCache, Usage, UsageReport, UsageResource},
+    usage::{
+        cache::{UsageDrivenCache, UsageDrivenCacheBilling},
+        Usage, UsageReport, UsageResource,
+    },
     Result,
 };
 
@@ -41,11 +44,11 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                 	  u.tier, 
                     SUM(u.interval) as interval,
                 	  SUM(u.units) as units, 
-                	  STRFTIME('%m-%Y', 'now') as period 
+                	  STRFTIME('%Y-%m', 'now') as period 
                 FROM "usage" u 
                 INNER JOIN resource r ON r.id == u.resource_id
                 INNER JOIN project p ON p.id == r.project_id 
-                WHERE STRFTIME('%m-%Y', u.created_at) = STRFTIME('%m-%Y', 'now') AND r.project_id = $1 
+                WHERE STRFTIME('%Y-%m', u.created_at) = STRFTIME('%Y-%m', 'now') AND r.project_id = $1 
                 GROUP BY resource_id, tier 
                 ORDER BY units DESC
                 LIMIT $2
@@ -59,37 +62,6 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
         .await?;
 
         Ok(report)
-    }
-
-    async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReport>> {
-        let report_aggregated = sqlx::query_as::<_, UsageReport>(
-            r#"
-                SELECT
-                	  p.id as project_id,
-                	  p.namespace as project_namespace,
-                	  p.billing_provider as project_billing_provider,
-                	  p.billing_provider_id as project_billing_provider_id,
-                	  r.id as resource_id,
-                	  r.kind as resource_kind,
-                	  r.name as resource_name,
-                	  r.spec as resource_spec,
-                	  u.tier as tier, 
-                	  SUM(u.interval) as interval, 
-                	  SUM(u.units) as units, 
-                	  STRFTIME('%m-%Y', 'now') as period 
-                FROM "usage" u 
-                INNER JOIN resource r ON r.id == u.resource_id
-                INNER JOIN project p ON p.id == r.project_id 
-                WHERE STRFTIME('%m-%Y', u.created_at) = $1
-                GROUP BY resource_id, tier 
-                ORDER BY project_namespace, resource_id ASC;
-            "#,
-        )
-        .bind(period)
-        .fetch_all(&self.sqlite.db)
-        .await?;
-
-        Ok(report_aggregated)
     }
 
     async fn find_resouces(&self) -> Result<Vec<UsageResource>> {
@@ -148,6 +120,39 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
         tx.commit().await?;
 
         Ok(())
+    }
+}
+#[async_trait::async_trait]
+impl UsageDrivenCacheBilling for SqliteUsageDrivenCache {
+    async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReport>> {
+        let report_aggregated = sqlx::query_as::<_, UsageReport>(
+            r#"
+                SELECT
+                	  p.id as project_id,
+                	  p.namespace as project_namespace,
+                	  p.billing_provider as project_billing_provider,
+                	  p.billing_provider_id as project_billing_provider_id,
+                	  r.id as resource_id,
+                	  r.kind as resource_kind,
+                	  r.name as resource_name,
+                	  r.spec as resource_spec,
+                	  u.tier as tier, 
+                	  SUM(u.interval) as interval, 
+                	  SUM(u.units) as units, 
+                	  STRFTIME('%Y-%m', 'now') as period 
+                FROM "usage" u 
+                INNER JOIN resource r ON r.id == u.resource_id
+                INNER JOIN project p ON p.id == r.project_id 
+                WHERE STRFTIME('%Y-%m', u.created_at) = $1
+                GROUP BY resource_id, tier 
+                ORDER BY project_namespace, resource_id ASC;
+            "#,
+        )
+        .bind(period)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(report_aggregated)
     }
 }
 
@@ -303,7 +308,7 @@ mod tests {
         cache.create(usages).await.unwrap();
 
         let result = cache
-            .find_report_aggregated(&Utc::now().format("%m-%Y").to_string())
+            .find_report_aggregated(&Utc::now().format("%Y-%m").to_string())
             .await;
 
         assert!(result.is_ok());

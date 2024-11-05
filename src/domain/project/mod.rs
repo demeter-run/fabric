@@ -257,6 +257,20 @@ impl Display for ProjectUserRole {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ProjectUserProject {
+    pub user_id: String,
+    pub role: ProjectUserRole,
+    pub created_at: DateTime<Utc>,
+    pub project_id: String,
+    pub project_name: String,
+    pub project_namespace: String,
+    pub project_owner: String,
+    pub project_status: ProjectStatus,
+    pub project_billing_provider: String,
+    pub project_billing_provider_id: String,
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
