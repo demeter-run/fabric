@@ -39,6 +39,7 @@ permissions:
 # If there's a prerelease-style suffix to the version, then the release(s)
 # will be marked as a prerelease.
 on:
+  workflow_dispatch: {}
   pull_request:
   push:
     tags:
@@ -111,6 +112,10 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
     steps:
+      - name: Install dependencies
+        run: |
+          RUN apt update 
+          RUN apt install -y build-essential pkg-config libssl-dev libsasl2-dev cmake
       - name: enable windows longpaths
         run: |
           git config --global core.longpaths true
@@ -165,6 +170,10 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/global-dist-manifest.json
     steps:
+      - name: Install dependencies
+        run: |
+          RUN apt update 
+          RUN apt install -y build-essential pkg-config libssl-dev libsasl2-dev cmake
       - uses: actions/checkout@v4
         with:
           submodules: recursive
