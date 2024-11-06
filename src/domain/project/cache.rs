@@ -8,7 +8,9 @@ use crate::domain::event::{
 };
 use crate::domain::Result;
 
-use super::{Project, ProjectSecret, ProjectUpdate, ProjectUser, ProjectUserInvite};
+use super::{
+    Project, ProjectSecret, ProjectUpdate, ProjectUser, ProjectUserInvite, ProjectUserProject,
+};
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
@@ -46,6 +48,13 @@ pub trait ProjectDrivenCache: Send + Sync {
     async fn create_user_acceptance(&self, invite_id: &str, user: &ProjectUser) -> Result<()>;
     async fn delete_user_invite(&self, invite_id: &str) -> Result<()>;
     async fn delete_user(&self, project_id: &str, id: &str) -> Result<()>;
+}
+
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
+pub trait ProjectDrivenCacheBilling: Send + Sync {
+    async fn find_by_user_id(&self, id: &str) -> Result<Vec<Project>>;
+    async fn find_new_users(&self, after: &str) -> Result<Vec<ProjectUserProject>>;
 }
 
 pub async fn create(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectCreated) -> Result<()> {

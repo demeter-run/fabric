@@ -5,8 +5,9 @@ use std::sync::Arc;
 use crate::domain::{
     error::Error,
     project::{
-        cache::ProjectDrivenCache, Project, ProjectSecret, ProjectStatus, ProjectUpdate,
-        ProjectUser, ProjectUserInvite, ProjectUserInviteStatus, ProjectUserRole,
+        cache::{ProjectDrivenCache, ProjectDrivenCacheBilling},
+        Project, ProjectSecret, ProjectStatus, ProjectUpdate, ProjectUser, ProjectUserInvite,
+        ProjectUserInviteStatus, ProjectUserProject, ProjectUserRole,
     },
     resource::ResourceStatus,
     Result,
@@ -34,8 +35,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     p.namespace, 
                     p.name, 
                     p.owner, 
-                    p.status, 
-                    p.billing_provider,
+                    p.status, p.billing_provider,
                     p.billing_provider_id,
                     p.billing_subscription_id,
                     p.created_at, 
@@ -590,6 +590,74 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         Ok(())
     }
 }
+#[async_trait::async_trait]
+impl ProjectDrivenCacheBilling for SqliteProjectDrivenCache {
+    async fn find_by_user_id(&self, id: &str) -> Result<Vec<Project>> {
+        let projects = sqlx::query_as::<_, Project>(
+            r#"
+                SELECT
+                    p.id,
+                    p.namespace,
+                    p.name,
+                    p.owner,
+                    p.status,
+                    p.billing_provider,
+                    p.billing_provider_id,
+                    p.billing_subscription_id,
+                    p.created_at,
+                    p.updated_at
+                FROM 
+                	  project p
+                INNER JOIN project_user pu ON
+                	  pu.project_id = p.id
+                WHERE
+                	  pu.user_id = $1;
+            "#,
+        )
+        .bind(id)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(projects)
+    }
+
+    async fn find_new_users(&self, after: &str) -> Result<Vec<ProjectUserProject>> {
+        let users = sqlx::query_as::<_, ProjectUserProject>(
+            r#"
+                SELECT
+                    pu.user_id,
+                    pu.project_id,
+                    pu."role",
+                    pu.created_at,
+                    COUNT(spu.user_id) AS quantity,
+                    p.name as project_name, 
+                    p.namespace as project_namespace, 
+                    p.owner as project_owner, 
+                    p.status as project_status, 
+                    p.billing_provider as project_billing_provider, 
+                    p.billing_provider_id as project_billing_provider_id
+                FROM
+                    project_user pu
+                LEFT JOIN
+                    project_user spu ON 
+                    spu.user_id = pu.user_id AND DATETIME(spu.created_at) > DATETIME($1)
+                INNER JOIN 
+	                  project p ON p.id = pu.project_id AND p.owner == pu.user_id
+                WHERE 
+                    DATETIME(pu.created_at) > DATETIME($1)
+                GROUP BY
+                    pu.user_id, pu.project_id, pu."role", pu.created_at
+                HAVING 
+                    quantity = 1;
+            "#,
+        )
+        .bind(after)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(users)
+    }
+}
 
 impl FromRow<'_, SqliteRow> for Project {
     fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
@@ -659,6 +727,30 @@ impl FromRow<'_, SqliteRow> for ProjectUserInvite {
             expires_in: row.try_get("expires_in")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
+        })
+    }
+}
+
+impl FromRow<'_, SqliteRow> for ProjectUserProject {
+    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        let role: &str = row.try_get("role")?;
+        let project_status: &str = row.try_get("project_status")?;
+
+        Ok(Self {
+            user_id: row.try_get("user_id")?,
+            role: role
+                .parse()
+                .map_err(|err: Error| sqlx::Error::Decode(err.into()))?,
+            created_at: row.try_get("created_at")?,
+            project_id: row.try_get("project_id")?,
+            project_name: row.try_get("project_name")?,
+            project_namespace: row.try_get("project_namespace")?,
+            project_owner: row.try_get("project_owner")?,
+            project_status: project_status
+                .parse()
+                .map_err(|err: Error| sqlx::Error::Decode(err.into()))?,
+            project_billing_provider: row.try_get("project_billing_provider")?,
+            project_billing_provider_id: row.try_get("project_billing_provider_id")?,
         })
     }
 }

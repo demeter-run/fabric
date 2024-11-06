@@ -170,7 +170,7 @@ mod tests {
                 units: 120,
                 interval: 60,
                 tier: "0".into(),
-                period: "08-2024".into(),
+                period: "2024-08".into(),
                 units_cost: Some(0.),
                 minimum_cost: Some(0.),
             }

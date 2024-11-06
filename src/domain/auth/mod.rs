@@ -14,6 +14,7 @@ use crate::domain::Result;
 pub trait Auth0Driven: Send + Sync {
     fn verify(&self, token: &str) -> Result<String>;
     async fn find_info(&self, user_id: &str) -> Result<Auth0Profile>;
+    async fn find_info_by_email(&self, email: &str) -> Result<Option<Auth0Profile>>;
     async fn find_info_by_ids(&self, ids: &[String]) -> Result<Vec<Auth0Profile>>;
 }
 
@@ -26,7 +27,7 @@ pub enum Credential {
     ApiKey(SecretId),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Auth0Profile {
     pub user_id: String,
     pub name: String,
