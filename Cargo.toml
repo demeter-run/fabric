@@ -2,6 +2,7 @@
 name = "fabric"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/demeter-run/fabric"
 
 [dependencies]
 dmtri = { version = "0.1.0", git = "https://github.com/demeter-run/specs.git" }
@@ -64,5 +65,8 @@ path = "src/bin/cli.rs"
 [lib]
 path = "src/lib.rs"
 
-[package.metadata.dist]
-binaries = ["cli"]
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
+
