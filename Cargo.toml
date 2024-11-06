@@ -63,3 +63,6 @@ path = "src/bin/cli.rs"
 
 [lib]
 path = "src/lib.rs"
+
+[package.metadata.dist]
+binaries = ["cli"]
