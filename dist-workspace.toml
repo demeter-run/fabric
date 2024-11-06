@@ -22,4 +22,5 @@ pkg-config = '*'
 [dist.dependencies.apt]
 cmake = '*'
 pkg-config = '*'
- 
+libssl-dev = '*'
+libsasl2-dev = '*'
