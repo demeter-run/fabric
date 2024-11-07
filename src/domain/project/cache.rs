@@ -22,7 +22,7 @@ pub trait ProjectDrivenCache: Send + Sync {
     async fn update(&self, project: &ProjectUpdate) -> Result<()>;
     async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
     async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
-    async fn find_secrets(&self, project_id: &str) -> Result<Vec<ProjectSecret>>;
+    async fn find_secrets(&self, project: &str) -> Result<Vec<ProjectSecret>>;
     async fn find_secret_by_id(&self, id: &str) -> Result<Option<ProjectSecret>>;
     async fn delete_secret(&self, id: &str) -> Result<()>;
     async fn find_users(
