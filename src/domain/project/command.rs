@@ -252,7 +252,7 @@ pub async fn verify_secret(
         return Err(Error::Unauthorized("invalid project secret".into()));
     }
 
-    let secrets = cache.find_secrets(&cmd.project_id).await?;
+    let secrets = cache.find_secrets(&cmd.project).await?;
 
     let secret = secrets.into_iter().find(|project_secret| {
         let argon2 = Argon2::new_with_secret(
@@ -265,7 +265,7 @@ pub async fn verify_secret(
 
         let Ok(password_hash) = PasswordHash::new(&project_secret.phc) else {
             error!(
-                project_id = cmd.project_id,
+                project = cmd.project,
                 secret_id = project_secret.id,
                 "error to decode phc"
             );
@@ -763,7 +763,7 @@ impl CreateSecretCmd {
 }
 #[derive(Debug, Clone)]
 pub struct VerifySecretCmd {
-    pub project_id: String,
+    pub project: String,
     pub key: String,
 }
 
@@ -1016,7 +1016,7 @@ mod tests {
     impl Default for VerifySecretCmd {
         fn default() -> Self {
             Self {
-                project_id: Default::default(),
+                project: Default::default(),
                 key: KEY.into(),
             }
         }
