@@ -41,13 +41,13 @@ pub struct ProjectArgs {
     #[arg(short, long)]
     pub spec: Option<String>,
 
+    /// Resource name
+    #[arg(short, long)]
+    pub resource_name: Option<String>,
+
     /// User email
     #[arg(short, long)]
     pub email: Option<String>,
-
-    /// Auth0 user id
-    #[arg(short, long)]
-    pub user_id: Option<String>,
 }
 
 #[derive(Parser, Clone)]
@@ -119,8 +119,8 @@ async fn main() -> Result<()> {
                 config.clone().into(),
                 args.namespace,
                 args.spec,
+                args.resource_name,
                 args.email,
-                args.user_id,
             )
             .await?;
         }

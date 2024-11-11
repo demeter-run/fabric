@@ -649,8 +649,8 @@ impl ProjectDrivenCacheBackoffice for SqliteProjectDrivenCache {
         Ok(project)
     }
 
-    async fn find_by_resource_spec(&self, value: &str) -> Result<Option<Project>> {
-        let project = sqlx::query_as::<_, Project>(
+    async fn find_by_resource_spec(&self, value: &str) -> Result<Vec<Project>> {
+        let projects = sqlx::query_as::<_, Project>(
             r#"
                 SELECT
 	                  p.id,
@@ -670,10 +670,37 @@ impl ProjectDrivenCacheBackoffice for SqliteProjectDrivenCache {
             "#,
         )
         .bind(format!("%{value}%"))
-        .fetch_optional(&self.sqlite.db)
+        .fetch_all(&self.sqlite.db)
         .await?;
 
-        Ok(project)
+        Ok(projects)
+    }
+
+    async fn find_by_resource_name(&self, resource_name: &str) -> Result<Vec<Project>> {
+        let projects = sqlx::query_as::<_, Project>(
+            r#"
+                SELECT
+	                  p.id,
+	                  p.namespace,
+	                  p.name,
+	                  p.owner,
+	                  p.status,
+	                  p.billing_provider,
+	                  p.billing_provider_id,
+	                  p.billing_subscription_id,
+	                  p.created_at,
+	                  p.updated_at
+                FROM
+	                  project p
+                WHERE
+                    p.id in (SELECT project_id FROM resource r WHERE r.name = $1);
+            "#,
+        )
+        .bind(resource_name)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(projects)
     }
 
     async fn find_new_users(&self, after: &str) -> Result<Vec<ProjectUserProject>> {

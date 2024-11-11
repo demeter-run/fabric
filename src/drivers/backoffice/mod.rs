@@ -60,8 +60,8 @@ pub async fn fetch_projects(
     config: BackofficeConfig,
     namespace: Option<String>,
     spec: Option<String>,
+    resource: Option<String>,
     email: Option<String>,
-    user_id: Option<String>,
 ) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     sqlite_cache.migrate().await?;
@@ -78,47 +78,61 @@ pub async fn fetch_projects(
     let project_cache: Box<dyn ProjectDrivenCacheBackoffice> =
         Box::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
 
-    if namespace.is_some() || spec.is_some() {
-        let project = match (namespace, spec) {
-            (None, Some(spec)) => project_cache.find_by_resource_spec(&spec).await?,
-            (Some(namespace), None) => project_cache.find_by_namespace(&namespace).await?,
-            (Some(namespace), Some(_)) => project_cache.find_by_namespace(&namespace).await?,
-            (None, None) => bail!("No one project was found"),
-        };
+    if namespace.is_some() || spec.is_some() || resource.is_some() {
+        let mut projects = Vec::new();
 
-        if project.is_none() {
+        if let Some(namespace) = namespace {
+            if let Some(project) = project_cache.find_by_namespace(&namespace).await? {
+                projects.push(project)
+            }
+        }
+
+        if let Some(spec) = spec {
+            projects.append(&mut project_cache.find_by_resource_spec(&spec).await?);
+        }
+
+        if let Some(resource) = resource {
+            projects.append(&mut project_cache.find_by_resource_name(&resource).await?);
+        }
+
+        if projects.is_empty() {
             bail!("No one project was found")
         }
 
-        let project = project.unwrap();
-        let profile = auth0
-            .find_info(&format!("user_id:{}", project.owner))
-            .await?;
+        let query = projects
+            .iter()
+            .map(|p| format!("user_id:{}", p.owner))
+            .collect::<Vec<String>>()
+            .join("OR");
 
-        let project = ProjectTable {
-            name: project.name,
-            namespace: project.namespace,
-            email: profile
-                .first()
-                .map(|p| p.email.clone())
-                .unwrap_or("unknown".into()),
-            status: project.status,
-            billing_provider_id: project.billing_provider_id,
-            created_at: project.created_at,
-        };
+        let profiles = auth0.find_info(&query).await?;
 
-        output_table_project(vec![project]);
+        let projects = projects
+            .into_iter()
+            .map(|p| {
+                let email = profiles
+                    .iter()
+                    .find(|a| a.user_id == p.owner)
+                    .map(|a| a.email.clone())
+                    .unwrap_or("unknown".into());
+
+                ProjectTable {
+                    name: p.name,
+                    namespace: p.namespace,
+                    email,
+                    status: p.status,
+                    billing_provider_id: p.billing_provider_id,
+                    created_at: p.created_at,
+                }
+            })
+            .collect();
+
+        output_table_project(projects);
         return Ok(());
     }
 
-    if user_id.is_some() || email.is_some() {
-        let profile = match (user_id, email) {
-            (None, Some(email)) => auth0.find_info(&format!("email:{email}")).await?,
-            (Some(user_id), None) => auth0.find_info(&format!("user_id:{user_id}")).await?,
-            (Some(user_id), Some(_)) => auth0.find_info(&format!("user_id:{user_id}")).await?,
-            (None, None) => bail!("No one project was found"),
-        };
-
+    if let Some(email) = email {
+        let profile = auth0.find_info(&format!("email:{email}")).await?;
         if profile.is_empty() {
             bail!("No one user was found")
         };
