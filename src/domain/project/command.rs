@@ -339,7 +339,7 @@ pub async fn fetch_user(
         .iter()
         .map(|p| format!("user_id:{}", p.user_id.clone()))
         .collect();
-    let query = ids.join("OR");
+    let query = ids.join(" OR ");
     let profiles = auth0.find_info(&query).await?;
 
     let project_users_aggregated = project_users
