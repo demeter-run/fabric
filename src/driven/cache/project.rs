@@ -641,15 +641,15 @@ impl ProjectDrivenCacheBilling for SqliteProjectDrivenCache {
                     project_user pu
                 LEFT JOIN
                     project_user spu ON 
-                    spu.user_id = pu.user_id AND DATETIME(spu.created_at) > DATETIME($1)
+                    spu.user_id = pu.user_id AND DATETIME(spu.created_at) < DATETIME($1) AND spu."role" = 'owner'
                 INNER JOIN 
 	                  project p ON p.id = pu.project_id AND p.owner == pu.user_id
                 WHERE 
-                    DATETIME(pu.created_at) > DATETIME($1)
+                    DATETIME(pu.created_at) >= DATETIME($1)
                 GROUP BY
                     pu.user_id, pu.project_id, pu."role", pu.created_at
                 HAVING 
-                    quantity = 1;
+                    quantity = 0;
             "#,
         )
         .bind(after)
