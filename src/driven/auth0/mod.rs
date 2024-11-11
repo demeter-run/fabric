@@ -118,76 +118,13 @@ impl Auth0Driven for Auth0DrivenImpl {
         Ok(decoded_token.claims.sub)
     }
 
-    async fn find_info(&self, user_id: &str) -> Result<Auth0Profile> {
-        let access_token = self.auth0_api_token().await?;
-
-        let profile_response = self
-            .client
-            .get(format!("{}/api/v2/users/{user_id}", &self.url))
-            .header(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {access_token}")).unwrap(),
-            )
-            .send()
-            .await?;
-
-        let profile_status = profile_response.status();
-        if profile_status.is_client_error() || profile_status.is_server_error() {
-            error!(
-                status = profile_status.to_string(),
-                "Auth0 request error to get user info"
-            );
-            return Err(Error::Unexpected(format!(
-                "Auth0 request error to get user info. Status: {}",
-                profile_status
-            )));
-        }
-        let profile = profile_response.json::<Auth0Profile>().await?;
-
-        Ok(profile)
-    }
-
-    async fn find_info_by_email(&self, email: &str) -> Result<Option<Auth0Profile>> {
+    async fn find_info(&self, query: &str) -> Result<Vec<Auth0Profile>> {
         let access_token = self.auth0_api_token().await?;
 
         let profile_response = self
             .client
             .get(format!("{}/api/v2/users", &self.url))
-            .query(&[("q", format!("email {}", email))])
-            .header(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {access_token}")).unwrap(),
-            )
-            .send()
-            .await?;
-
-        let profile_status = profile_response.status();
-        if profile_status.is_client_error() || profile_status.is_server_error() {
-            error!(
-                status = profile_status.to_string(),
-                "Auth0 request error to get user info"
-            );
-            return Err(Error::Unexpected(format!(
-                "Auth0 request error to get user info. Status: {}",
-                profile_status
-            )));
-        }
-
-        let profiles = profile_response.json::<Vec<Auth0Profile>>().await?;
-        if profiles.is_empty() {
-            return Ok(None);
-        }
-
-        Ok(Some(profiles.first().cloned().unwrap()))
-    }
-
-    async fn find_info_by_ids(&self, ids: &[String]) -> Result<Vec<Auth0Profile>> {
-        let access_token = self.auth0_api_token().await?;
-
-        let profile_response = self
-            .client
-            .get(format!("{}/api/v2/users", &self.url))
-            .query(&[("q", format!("id {}", ids.join(" ")))])
+            .query(&[("q", query)])
             .header(
                 AUTHORIZATION,
                 HeaderValue::from_str(&format!("Bearer {access_token}")).unwrap(),

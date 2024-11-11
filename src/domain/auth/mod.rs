@@ -13,9 +13,7 @@ use crate::domain::Result;
 #[async_trait::async_trait]
 pub trait Auth0Driven: Send + Sync {
     fn verify(&self, token: &str) -> Result<String>;
-    async fn find_info(&self, user_id: &str) -> Result<Auth0Profile>;
-    async fn find_info_by_email(&self, email: &str) -> Result<Option<Auth0Profile>>;
-    async fn find_info_by_ids(&self, ids: &[String]) -> Result<Vec<Auth0Profile>>;
+    async fn find_info(&self, query: &str) -> Result<Vec<Auth0Profile>>;
 }
 
 pub type UserId = String;

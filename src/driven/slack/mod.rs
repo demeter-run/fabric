@@ -21,21 +21,32 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
     async fn notify(&self, evt: Event, auth_driven: Arc<dyn Auth0Driven>) -> Result<()> {
         let key = &evt.key();
         let data: Option<String> = match evt {
-            Event::ProjectCreated(payload) => match auth_driven.find_info(&payload.owner).await {
-                Ok(profile) => {
-                    let mut new_paload_as_value = serde_json::to_value(payload).unwrap();
-                    let new_payload = new_paload_as_value.as_object_mut().unwrap();
-                    new_payload.insert(
-                        "user".to_string(),
-                        serde_json::json!({
-                            "name": profile.name,
-                            "email": profile.email
-                        }),
-                    );
-                    Some(to_string_pretty(&new_payload).unwrap())
+            Event::ProjectCreated(payload) => {
+                match auth_driven
+                    .find_info(&format!("user_id:{}", &payload.owner))
+                    .await
+                {
+                    Ok(profile) => {
+                        if profile.is_empty() {
+                            Some(to_string_pretty(&payload).unwrap())
+                        } else {
+                            let profile = profile.first().unwrap();
+
+                            let mut new_paload_as_value = serde_json::to_value(payload).unwrap();
+                            let new_payload = new_paload_as_value.as_object_mut().unwrap();
+                            new_payload.insert(
+                                "user".to_string(),
+                                serde_json::json!({
+                                    "name": profile.name,
+                                    "email": profile.email
+                                }),
+                            );
+                            Some(to_string_pretty(&new_payload).unwrap())
+                        }
+                    }
+                    Err(_) => Some(to_string_pretty(&payload).unwrap()),
                 }
-                Err(_) => Some(to_string_pretty(&payload).unwrap()),
-            },
+            }
             Event::ProjectDeleted(payload) => Some(to_string_pretty(&payload).unwrap()),
             Event::ResourceCreated(payload) => Some(to_string_pretty(&payload).unwrap()),
             Event::ResourceUpdated(payload) => Some(to_string_pretty(&payload).unwrap()),

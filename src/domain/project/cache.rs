@@ -52,8 +52,10 @@ pub trait ProjectDrivenCache: Send + Sync {
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
-pub trait ProjectDrivenCacheBilling: Send + Sync {
+pub trait ProjectDrivenCacheBackoffice: Send + Sync {
     async fn find_by_user_id(&self, id: &str) -> Result<Vec<Project>>;
+    async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>>;
+    async fn find_by_resource_spec(&self, value: &str) -> Result<Option<Project>>;
     async fn find_new_users(&self, after: &str) -> Result<Vec<ProjectUserProject>>;
 }
 

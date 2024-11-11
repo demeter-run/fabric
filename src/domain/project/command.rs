@@ -66,7 +66,12 @@ pub async fn create(
         return Err(Error::CommandMalformed("invalid project namespace".into()));
     }
 
-    let profile = auth0.find_info(&user_id).await?;
+    let profile = auth0.find_info(&format!("user_id:{user_id}")).await?;
+    if profile.is_empty() {
+        return Err(Error::Unexpected("Invalid user_id".into()));
+    }
+    let profile = profile.first().unwrap();
+
     let billing_provider_id = stripe
         .create_customer(&profile.name, &profile.email)
         .await?;
@@ -330,8 +335,12 @@ pub async fn fetch_user(
         .find_users(&cmd.project_id, &cmd.page, &cmd.page_size)
         .await?;
 
-    let ids: Vec<String> = project_users.iter().map(|p| p.user_id.clone()).collect();
-    let profiles = auth0.find_info_by_ids(&ids).await?;
+    let ids: Vec<String> = project_users
+        .iter()
+        .map(|p| format!("user_id:{}", p.user_id.clone()))
+        .collect();
+    let query = ids.join("OR");
+    let profiles = auth0.find_info(&query).await?;
 
     let project_users_aggregated = project_users
         .into_iter()
@@ -374,13 +383,17 @@ pub async fn fetch_me_user(
         ));
     };
 
-    let profile = auth0.find_info(&project_user.user_id).await?;
+    let profile = auth0.find_info(&format!("user_id:{}", user_id)).await?;
+    if profile.is_empty() {
+        return Err(Error::Unexpected("Invalid user_id".into()));
+    }
+    let profile = profile.first().unwrap();
 
     let project_user_aggregated = ProjectUserAggregated {
         user_id: project_user.user_id.clone(),
         project_id: project_user.project_id,
-        name: profile.name,
-        email: profile.email,
+        name: profile.name.clone(),
+        email: profile.email.clone(),
         role: project_user.role,
         created_at: project_user.created_at,
     };
@@ -521,7 +534,12 @@ pub async fn accept_user_invite(
         ));
     }
 
-    let profile = auth0.find_info(&user_id).await?;
+    let profile = auth0.find_info(&format!("user_id:{}", user_id)).await?;
+    if profile.is_empty() {
+        return Err(Error::Unexpected("Invalid user_id".into()));
+    }
+    let profile = profile.first().unwrap();
+
     if user_invite.email != profile.email {
         return Err(Error::CommandMalformed(
             "user email doesnt match with invite".into(),
@@ -1196,7 +1214,7 @@ mod tests {
         let mut auth0 = MockAuth0Driven::new();
         auth0
             .expect_find_info()
-            .return_once(|_| Ok(Auth0Profile::default()));
+            .return_once(|_| Ok(vec![Auth0Profile::default()]));
 
         let mut stripe = MockStripeDriven::new();
         stripe
@@ -1679,10 +1697,10 @@ mod tests {
 
         let mut auth0 = MockAuth0Driven::new();
         auth0.expect_find_info().return_once(|_| {
-            Ok(Auth0Profile {
+            Ok(vec![Auth0Profile {
                 email: invite_email,
                 ..Default::default()
-            })
+            }])
         });
 
         let mut event = MockEventDrivenBridge::new();
@@ -1739,7 +1757,7 @@ mod tests {
         let mut auth0 = MockAuth0Driven::new();
         auth0
             .expect_find_info()
-            .return_once(|_| Ok(Auth0Profile::default()));
+            .return_once(|_| Ok(vec![Auth0Profile::default()]));
 
         let event = MockEventDrivenBridge::new();
 
@@ -1991,7 +2009,7 @@ mod tests {
 
         let mut auth0 = MockAuth0Driven::new();
         auth0
-            .expect_find_info_by_ids()
+            .expect_find_info()
             .return_once(|_| Ok(vec![Auth0Profile::default()]));
 
         let cmd = FetchUserCmd::default();
@@ -2158,7 +2176,7 @@ mod tests {
         let mut auth0 = MockAuth0Driven::new();
         auth0
             .expect_find_info()
-            .return_once(|_| Ok(Auth0Profile::default()));
+            .return_once(|_| Ok(vec![Auth0Profile::default()]));
 
         let cmd = FetchMeUserCmd::default();
 
