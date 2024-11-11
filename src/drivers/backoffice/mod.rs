@@ -103,7 +103,7 @@ pub async fn fetch_projects(
             .iter()
             .map(|p| format!("user_id:{}", p.owner))
             .collect::<Vec<String>>()
-            .join("OR");
+            .join(" OR ");
 
         let profiles = auth0.find_info(&query).await?;
 
@@ -237,7 +237,7 @@ pub async fn fetch_new_users(config: BackofficeConfig, after: &str) -> Result<()
         .iter()
         .map(|p| format!("user_id:{}", p.user_id.clone()))
         .collect();
-    let query = ids.join("OR");
+    let query = ids.join(" OR ");
     let profiles = auth0.find_info(&query).await?;
 
     let mut table = Table::new();
