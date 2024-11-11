@@ -23,7 +23,7 @@ pub trait ResourceDrivenCache: Send + Sync {
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
-pub trait ResourceDrivenCacheBilling: Send + Sync {
+pub trait ResourceDrivenCacheBackoffice: Send + Sync {
     async fn find_by_project_namespace(&self, namespace: &str) -> Result<Vec<Resource>>;
 }
 

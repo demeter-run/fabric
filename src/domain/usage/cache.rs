@@ -19,7 +19,7 @@ pub trait UsageDrivenCache: Send + Sync {
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
-pub trait UsageDrivenCacheBilling: Send + Sync {
+pub trait UsageDrivenCacheBackoffice: Send + Sync {
     async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReport>>;
 }
 

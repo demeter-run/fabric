@@ -63,6 +63,12 @@ Command to run Daemon
 cargo run --bin=daemon
 ```
 
+Command to run Backoffice CLI
+
+```sh
+cargo run --bin=cli -- help
+```
+
 ## Test
 
 To run the tests, execute the command below

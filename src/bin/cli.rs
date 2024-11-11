@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 use dotenv::dotenv;
 use fabric::drivers::{
-    billing::{BillingConfig, BillingTlsConfig, OutputFormat},
+    backoffice::{BackofficeConfig, BackofficeTlsConfig, OutputFormat},
     cache::CacheConfig,
 };
 use serde::Deserialize;
@@ -23,7 +23,7 @@ struct Cli {
 }
 
 #[derive(Parser, Clone)]
-pub struct BillingArgs {
+pub struct UsageArgs {
     /// period to collect the data (year-month) e.g 2024-09
     pub period: String,
 
@@ -33,8 +33,21 @@ pub struct BillingArgs {
 
 #[derive(Parser, Clone)]
 pub struct ProjectArgs {
-    /// Owner user email
-    pub email: String,
+    /// Project namespace
+    #[arg(short, long)]
+    pub namespace: Option<String>,
+
+    /// By any resource spec value
+    #[arg(short, long)]
+    pub spec: Option<String>,
+
+    /// Resource name
+    #[arg(short, long)]
+    pub resource_name: Option<String>,
+
+    /// User email
+    #[arg(short, long)]
+    pub email: Option<String>,
 }
 
 #[derive(Parser, Clone)]
@@ -54,8 +67,8 @@ enum Commands {
     /// Sync cache
     Sync,
 
-    /// Get the billing data
-    Billing(BillingArgs),
+    /// Get the usage data
+    Usage(UsageArgs),
 
     /// Get projects by user
     Project(ProjectArgs),
@@ -88,7 +101,7 @@ async fn main() -> Result<()> {
         Commands::Sync => {
             fabric::drivers::cache::subscribe(config.clone().into()).await?;
         }
-        Commands::Billing(args) => {
+        Commands::Usage(args) => {
             info!("sincronizing cache");
 
             let output = match args.output.as_str() {
@@ -98,18 +111,26 @@ async fn main() -> Result<()> {
                 _ => bail!("invalid output format"),
             };
 
-            fabric::drivers::billing::fetch_usage(config.clone().into(), &args.period, output)
+            fabric::drivers::backoffice::fetch_usage(config.clone().into(), &args.period, output)
                 .await?;
         }
         Commands::Project(args) => {
-            fabric::drivers::billing::fetch_projects(config.clone().into(), &args.email).await?;
+            fabric::drivers::backoffice::fetch_projects(
+                config.clone().into(),
+                args.namespace,
+                args.spec,
+                args.resource_name,
+                args.email,
+            )
+            .await?;
         }
         Commands::Resource(args) => {
-            fabric::drivers::billing::fetch_resources(config.clone().into(), &args.namespace)
+            fabric::drivers::backoffice::fetch_resources(config.clone().into(), &args.namespace)
                 .await?;
         }
         Commands::NewUsers(args) => {
-            fabric::drivers::billing::fetch_new_users(config.clone().into(), &args.after).await?;
+            fabric::drivers::backoffice::fetch_new_users(config.clone().into(), &args.after)
+                .await?;
         }
     }
 
@@ -147,13 +168,13 @@ impl Config {
     }
 }
 
-impl From<Config> for BillingConfig {
+impl From<Config> for BackofficeConfig {
     fn from(value: Config) -> Self {
         Self {
             db_path: value.db_path,
             kafka: value.kafka_consumer,
             topic: value.topic,
-            tls_config: value.tls.map(|value| BillingTlsConfig {
+            tls_config: value.tls.map(|value| BackofficeTlsConfig {
                 ssl_key_path: value.ssl_key_path,
                 ssl_crt_path: value.ssl_crt_path,
             }),

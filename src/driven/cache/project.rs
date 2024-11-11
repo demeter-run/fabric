@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::domain::{
     error::Error,
     project::{
-        cache::{ProjectDrivenCache, ProjectDrivenCacheBilling},
+        cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice},
         Project, ProjectSecret, ProjectStatus, ProjectUpdate, ProjectUser, ProjectUserInvite,
         ProjectUserInviteStatus, ProjectUserProject, ProjectUserRole,
     },
@@ -592,7 +592,7 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
     }
 }
 #[async_trait::async_trait]
-impl ProjectDrivenCacheBilling for SqliteProjectDrivenCache {
+impl ProjectDrivenCacheBackoffice for SqliteProjectDrivenCache {
     async fn find_by_user_id(&self, id: &str) -> Result<Vec<Project>> {
         let projects = sqlx::query_as::<_, Project>(
             r#"
@@ -616,6 +616,87 @@ impl ProjectDrivenCacheBilling for SqliteProjectDrivenCache {
             "#,
         )
         .bind(id)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(projects)
+    }
+
+    async fn find_by_namespace(&self, id: &str) -> Result<Option<Project>> {
+        let project = sqlx::query_as::<_, Project>(
+            r#"
+                SELECT
+                    p.id,
+                    p.namespace,
+                    p.name,
+                    p.owner,
+                    p.status,
+                    p.billing_provider,
+                    p.billing_provider_id,
+                    p.billing_subscription_id,
+                    p.created_at,
+                    p.updated_at
+                FROM 
+                	  project p
+                WHERE
+                	  p.namespace = $1;
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        Ok(project)
+    }
+
+    async fn find_by_resource_spec(&self, value: &str) -> Result<Vec<Project>> {
+        let projects = sqlx::query_as::<_, Project>(
+            r#"
+                SELECT
+	                  p.id,
+	                  p.namespace,
+	                  p.name,
+	                  p.owner,
+	                  p.status,
+	                  p.billing_provider,
+	                  p.billing_provider_id,
+	                  p.billing_subscription_id,
+	                  p.created_at,
+	                  p.updated_at
+                FROM
+	                  project p
+                WHERE
+                    p.id in (SELECT project_id FROM resource r WHERE r.spec LIKE $1);
+            "#,
+        )
+        .bind(format!("%{value}%"))
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(projects)
+    }
+
+    async fn find_by_resource_name(&self, resource_name: &str) -> Result<Vec<Project>> {
+        let projects = sqlx::query_as::<_, Project>(
+            r#"
+                SELECT
+	                  p.id,
+	                  p.namespace,
+	                  p.name,
+	                  p.owner,
+	                  p.status,
+	                  p.billing_provider,
+	                  p.billing_provider_id,
+	                  p.billing_subscription_id,
+	                  p.created_at,
+	                  p.updated_at
+                FROM
+	                  project p
+                WHERE
+                    p.id in (SELECT project_id FROM resource r WHERE r.name = $1);
+            "#,
+        )
+        .bind(resource_name)
         .fetch_all(&self.sqlite.db)
         .await?;
 
@@ -829,7 +910,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_should_find_project_by_namespace() {
-        let cache = get_cache().await;
+        let cache: Box<dyn ProjectDrivenCache> = Box::new(get_cache().await);
         let project = Project::default();
 
         cache.create(&project).await.unwrap();
@@ -840,7 +921,7 @@ mod tests {
     }
     #[tokio::test]
     async fn it_should_return_none_find_project_by_namespace() {
-        let cache = get_cache().await;
+        let cache: Box<dyn ProjectDrivenCache> = Box::new(get_cache().await);
         let project = Project::default();
 
         let result = cache.find_by_namespace(&project.namespace).await;

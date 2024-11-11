@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::domain::{
     resource::ResourceStatus,
     usage::{
-        cache::{UsageDrivenCache, UsageDrivenCacheBilling},
+        cache::{UsageDrivenCache, UsageDrivenCacheBackoffice},
         Usage, UsageReport, UsageResource,
     },
     Result,
@@ -123,7 +123,7 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
     }
 }
 #[async_trait::async_trait]
-impl UsageDrivenCacheBilling for SqliteUsageDrivenCache {
+impl UsageDrivenCacheBackoffice for SqliteUsageDrivenCache {
     async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReport>> {
         let report_aggregated = sqlx::query_as::<_, UsageReport>(
             r#"

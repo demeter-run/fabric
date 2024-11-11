@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use chrono::{DateTime, Utc};
 use comfy_table::Table;
 use include_dir::{include_dir, Dir};
 use serde_json::json;
@@ -12,9 +13,9 @@ use tracing::error;
 use crate::{
     domain::{
         auth::Auth0Driven,
-        project::cache::ProjectDrivenCacheBilling,
-        resource::cache::ResourceDrivenCacheBilling,
-        usage::{cache::UsageDrivenCacheBilling, UsageReport, UsageReportImpl},
+        project::{cache::ProjectDrivenCacheBackoffice, ProjectStatus},
+        resource::cache::ResourceDrivenCacheBackoffice,
+        usage::{cache::UsageDrivenCacheBackoffice, UsageReport, UsageReportImpl},
     },
     driven::{
         auth0::Auth0DrivenImpl,
@@ -26,19 +27,17 @@ use crate::{
     },
 };
 
-pub enum OutputFormat {
-    Table,
-    Json,
-    Csv,
-}
-
 static METADATA: Dir = include_dir!("bootstrap/rpc/crds");
 
-pub async fn fetch_usage(config: BillingConfig, period: &str, output: OutputFormat) -> Result<()> {
+pub async fn fetch_usage(
+    config: BackofficeConfig,
+    period: &str,
+    output: OutputFormat,
+) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     sqlite_cache.migrate().await?;
 
-    let usage_cache: Box<dyn UsageDrivenCacheBilling> =
+    let usage_cache: Box<dyn UsageDrivenCacheBackoffice> =
         Box::new(SqliteUsageDrivenCache::new(sqlite_cache.clone()));
 
     let metadata = Arc::new(FileMetadata::from_dir(METADATA.clone())?);
@@ -49,15 +48,21 @@ pub async fn fetch_usage(config: BillingConfig, period: &str, output: OutputForm
         .calculate_cost(metadata.clone());
 
     match output {
-        OutputFormat::Table => table(report),
-        OutputFormat::Json => json(report),
-        OutputFormat::Csv => csv(report, period),
+        OutputFormat::Table => output_table_usage(report),
+        OutputFormat::Json => output_json_usage(report),
+        OutputFormat::Csv => output_csv_usage(report, period),
     };
 
     Ok(())
 }
 
-pub async fn fetch_projects(config: BillingConfig, email: &str) -> Result<()> {
+pub async fn fetch_projects(
+    config: BackofficeConfig,
+    namespace: Option<String>,
+    spec: Option<String>,
+    resource: Option<String>,
+    email: Option<String>,
+) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     sqlite_cache.migrate().await?;
 
@@ -70,44 +75,98 @@ pub async fn fetch_projects(config: BillingConfig, email: &str) -> Result<()> {
         )
         .await?,
     );
-    let project_cache: Box<dyn ProjectDrivenCacheBilling> =
+    let project_cache: Box<dyn ProjectDrivenCacheBackoffice> =
         Box::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
 
-    let Some(user) = auth0.find_info_by_email(email).await? else {
-        bail!("Invalid email")
-    };
+    if namespace.is_some() || spec.is_some() || resource.is_some() {
+        let mut projects = Vec::new();
 
-    let projects = project_cache.find_by_user_id(&user.user_id).await?;
-    if projects.is_empty() {
-        bail!("No one project was found")
+        if let Some(namespace) = namespace {
+            if let Some(project) = project_cache.find_by_namespace(&namespace).await? {
+                projects.push(project)
+            }
+        }
+
+        if let Some(spec) = spec {
+            projects.append(&mut project_cache.find_by_resource_spec(&spec).await?);
+        }
+
+        if let Some(resource) = resource {
+            projects.append(&mut project_cache.find_by_resource_name(&resource).await?);
+        }
+
+        if projects.is_empty() {
+            bail!("No one project was found")
+        }
+
+        let query = projects
+            .iter()
+            .map(|p| format!("user_id:{}", p.owner))
+            .collect::<Vec<String>>()
+            .join(" OR ");
+
+        let profiles = auth0.find_info(&query).await?;
+
+        let projects = projects
+            .into_iter()
+            .map(|p| {
+                let email = profiles
+                    .iter()
+                    .find(|a| a.user_id == p.owner)
+                    .map(|a| a.email.clone())
+                    .unwrap_or("unknown".into());
+
+                ProjectTable {
+                    name: p.name,
+                    namespace: p.namespace,
+                    email,
+                    status: p.status,
+                    billing_provider_id: p.billing_provider_id,
+                    created_at: p.created_at,
+                }
+            })
+            .collect();
+
+        output_table_project(projects);
+        return Ok(());
     }
 
-    let mut table = Table::new();
-    table.set_header(vec!["", "name", "namespace", "status", "createdAt"]);
+    if let Some(email) = email {
+        let profile = auth0.find_info(&format!("email:{email}")).await?;
+        if profile.is_empty() {
+            bail!("No one user was found")
+        };
 
-    for (i, p) in projects.iter().enumerate() {
-        table.add_row(vec![
-            &(i + 1).to_string(),
-            &p.name,
-            &p.namespace,
-            &p.status.to_string(),
-            &p.created_at.to_rfc3339(),
-        ]);
+        let profile = profile.first().unwrap();
+
+        let projects = project_cache.find_by_user_id(&profile.user_id).await?;
+        if projects.is_empty() {
+            bail!("No one project was found")
+        }
+
+        let projects = projects.into_iter().map(|p| ProjectTable {
+            name: p.name,
+            namespace: p.namespace,
+            email: profile.email.clone(),
+            status: p.status,
+            billing_provider_id: p.billing_provider_id,
+            created_at: p.created_at,
+        });
+
+        output_table_project(projects.collect());
     }
-
-    println!("{table}");
 
     Ok(())
 }
 
-pub async fn fetch_resources(config: BillingConfig, project_namespace: &str) -> Result<()> {
+pub async fn fetch_resources(config: BackofficeConfig, project_namespace: &str) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     sqlite_cache.migrate().await?;
 
-    let billing_cache: Box<dyn ResourceDrivenCacheBilling> =
+    let backoffice_cache: Box<dyn ResourceDrivenCacheBackoffice> =
         Box::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
 
-    let resouces = billing_cache
+    let resouces = backoffice_cache
         .find_by_project_namespace(project_namespace)
         .await?;
     if resouces.is_empty() {
@@ -153,7 +212,7 @@ pub async fn fetch_resources(config: BillingConfig, project_namespace: &str) -> 
     Ok(())
 }
 
-pub async fn fetch_new_users(config: BillingConfig, after: &str) -> Result<()> {
+pub async fn fetch_new_users(config: BackofficeConfig, after: &str) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     sqlite_cache.migrate().await?;
 
@@ -166,7 +225,7 @@ pub async fn fetch_new_users(config: BillingConfig, after: &str) -> Result<()> {
         )
         .await?,
     );
-    let project_cache: Box<dyn ProjectDrivenCacheBilling> =
+    let project_cache: Box<dyn ProjectDrivenCacheBackoffice> =
         Box::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
 
     let project_users = project_cache.find_new_users(after).await?;
@@ -174,8 +233,12 @@ pub async fn fetch_new_users(config: BillingConfig, after: &str) -> Result<()> {
         bail!("No one new user was found")
     }
 
-    let ids: Vec<String> = project_users.iter().map(|p| p.user_id.clone()).collect();
-    let profiles = auth0.find_info_by_ids(&ids).await?;
+    let ids: Vec<String> = project_users
+        .iter()
+        .map(|p| format!("user_id:{}", p.user_id.clone()))
+        .collect();
+    let query = ids.join(" OR ");
+    let profiles = auth0.find_info(&query).await?;
 
     let mut table = Table::new();
     table.set_header(vec![
@@ -212,7 +275,7 @@ pub async fn fetch_new_users(config: BillingConfig, after: &str) -> Result<()> {
     Ok(())
 }
 
-fn csv(report: Vec<UsageReport>, period: &str) {
+fn output_csv_usage(report: Vec<UsageReport>, period: &str) {
     let path = format!("{period}.csv");
     let result = csv::Writer::from_path(&path);
     if let Err(error) = result {
@@ -267,7 +330,7 @@ fn csv(report: Vec<UsageReport>, period: &str) {
     println!("File {} created", path)
 }
 
-fn json(report: Vec<UsageReport>) {
+fn output_json_usage(report: Vec<UsageReport>) {
     let mut json = vec![];
 
     for r in report {
@@ -289,7 +352,7 @@ fn json(report: Vec<UsageReport>) {
     println!("{}", serde_json::to_string_pretty(&json).unwrap());
 }
 
-fn table(report: Vec<UsageReport>) {
+fn output_table_usage(report: Vec<UsageReport>) {
     let mut table = Table::new();
     table.set_header(vec![
         "",
@@ -322,18 +385,60 @@ fn table(report: Vec<UsageReport>) {
     println!("{table}");
 }
 
+fn output_table_project(projects: Vec<ProjectTable>) {
+    let mut table = Table::new();
+    table.set_header(vec![
+        "",
+        "name",
+        "namespace",
+        "stripe ID",
+        "status",
+        "email",
+        "createdAt",
+    ]);
+
+    for (i, p) in projects.iter().enumerate() {
+        table.add_row(vec![
+            &(i + 1).to_string(),
+            &p.name,
+            &p.namespace,
+            &p.billing_provider_id,
+            &p.status.to_string(),
+            &p.email,
+            &p.created_at.to_rfc3339(),
+        ]);
+    }
+
+    println!("{table}");
+}
+
+pub enum OutputFormat {
+    Table,
+    Json,
+    Csv,
+}
+
+struct ProjectTable {
+    pub name: String,
+    pub namespace: String,
+    pub email: String,
+    pub status: ProjectStatus,
+    pub billing_provider_id: String,
+    pub created_at: DateTime<Utc>,
+}
+
 #[derive(Debug)]
-pub struct BillingTlsConfig {
+pub struct BackofficeTlsConfig {
     pub ssl_crt_path: PathBuf,
     pub ssl_key_path: PathBuf,
 }
 
 #[derive(Debug)]
-pub struct BillingConfig {
+pub struct BackofficeConfig {
     pub db_path: String,
     pub topic: String,
     pub kafka: HashMap<String, String>,
-    pub tls_config: Option<BillingTlsConfig>,
+    pub tls_config: Option<BackofficeTlsConfig>,
 
     pub auth_url: String,
     pub auth_client_id: String,
