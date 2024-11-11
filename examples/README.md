@@ -17,3 +17,5 @@ Use the [daemon config](config/daemon.toml)
 ## cli 
 
 Use the [cli config](config/cli.toml)
+
+After configuring the CLI, execute the command `sync` to synchronize the local database with the current Demeter state. Then, execute the `help` command to check all available commands.

@@ -1,4 +1,4 @@
-db_path="dev.billing.db"
+db_path="dev.backoffice.db"
 topic="events"
 
 [kafka_consumer]
@@ -6,3 +6,13 @@ topic="events"
 "group.id"= "billing-stg-local-1"
 "auto.offset.reset" = "earliest"
 "enable.partition.eof" = true
+"security.protocol" = "SASL_SSL"
+"sasl.mechanisms" = "SCRAM-SHA-256"
+"sasl.username" = ""
+"sasl.password" = ""
+
+[auth]
+url = "https://txpipe.us.auth0.com"
+client_id=""
+client_secret=""
+audience="https://txpipe.us.auth0.com/api/v2/"
