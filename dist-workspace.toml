@@ -23,6 +23,7 @@ openssl = '*'
 make = '*'
 zlib = '*'
 zstd = '*'
+cyrus-sasl = '*'
 
 [dist.dependencies.apt]
 cmake = '*'
