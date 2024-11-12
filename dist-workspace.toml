@@ -21,7 +21,6 @@ cmake = '*'
 pkg-config = '*'
 openssl = '*'
 make = '*'
-pthreads = '*'
 zlib = '*'
 zstd = '*'
 
