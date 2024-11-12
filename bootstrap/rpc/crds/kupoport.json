@@ -23,7 +23,7 @@
       "spec": {
         "network": "mainnet",
         "throughputTier": "0",
-        "pruneUtxo": false
+        "pruneUtxo": true
       }
     },
     {
@@ -31,7 +31,7 @@
       "spec": {
         "network": "preprod",
         "throughputTier": "0",
-        "pruneUtxo": false
+        "pruneUtxo": true
       }
     },
     {
@@ -39,7 +39,7 @@
       "spec": {
         "network": "preview",
         "throughputTier": "0",
-        "pruneUtxo": false
+        "pruneUtxo": true
       }
     }
   ],
