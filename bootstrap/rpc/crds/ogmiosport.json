@@ -22,35 +22,32 @@
       "description": "mainnet",
       "spec": {
         "network": "mainnet",
-        "throughputTier": "0"
+        "throughputTier": "0",
+        "version": 6
       }
     },
     {
       "description": "preprod",
       "spec": {
         "network": "preprod",
-        "throughputTier": "0"
+        "throughputTier": "0",
+        "version": 6
       }
     },
     {
       "description": "preview",
       "spec": {
         "network": "preview",
-        "throughputTier": "0"
-      }
-    },
-    {
-      "description": "vector-testnet",
-      "spec": {
-        "network": "vector-testnet",
-        "throughputTier": "0"
+        "throughputTier": "0",
+        "version": 6
       }
     },
     {
       "description": "prime-testnet",
       "spec": {
         "network": "prime-testnet",
-        "throughputTier": "0"
+        "throughputTier": "0",
+        "version": 6
       }
     }
   ],
