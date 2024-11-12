@@ -53,7 +53,12 @@ pub struct ProjectArgs {
 #[derive(Parser, Clone)]
 pub struct ResourceArgs {
     /// Project namespace
-    pub namespace: String,
+    #[arg(short, long)]
+    pub namespace: Option<String>,
+
+    /// By any resource spec value
+    #[arg(short, long)]
+    pub spec: Option<String>,
 }
 
 #[derive(Parser, Clone)]
@@ -125,8 +130,12 @@ async fn main() -> Result<()> {
             .await?;
         }
         Commands::Resource(args) => {
-            fabric::drivers::backoffice::fetch_resources(config.clone().into(), &args.namespace)
-                .await?;
+            fabric::drivers::backoffice::fetch_resources(
+                config.clone().into(),
+                args.namespace,
+                args.spec,
+            )
+            .await?;
         }
         Commands::NewUsers(args) => {
             fabric::drivers::backoffice::fetch_new_users(config.clone().into(), &args.after)
