@@ -20,9 +20,12 @@ targets = [
 [dist.dependencies.homebrew]
 cmake = '*'
 pkg-config = '*'
+openssl = '*'
 
 [dist.dependencies.apt]
 cmake = '*'
 pkg-config = '*'
 libssl-dev = '*'
 libsasl2-dev = '*'
+aarch64-linux-gnu-gcc = '*'
+
