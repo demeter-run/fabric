@@ -1226,6 +1226,7 @@ dependencies = [
  "rdkafka",
  "regex",
  "reqwest 0.12.8",
+ "sasl2-sys",
  "serde",
  "serde_json",
  "slack-hook",
