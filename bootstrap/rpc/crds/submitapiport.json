@@ -46,14 +46,16 @@
       "description": "vector-testnet",
       "spec": {
         "network": "vector-testnet",
-        "throughputTier": "0"
+        "throughputTier": "0",
+        "operatorVersion": "1"
       }
     },
     {
       "description": "prime-testnet",
       "spec": {
         "network": "prime-testnet",
-        "throughputTier": "0"
+        "throughputTier": "0",
+        "operatorVersion": "1"
       }
     }
   ],
