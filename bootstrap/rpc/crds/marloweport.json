@@ -6,7 +6,8 @@
       "spec": {
         "network": "mainnet",
         "throughputTier": "0",
-        "marloweVersion": "patch6"
+        "marloweVersion": "patch6",
+        "operatorVersion": "1"
       }
     },
     {
@@ -14,7 +15,8 @@
       "spec": {
         "network": "preprod",
         "throughputTier": "0",
-        "marloweVersion": "patch6"
+        "marloweVersion": "patch6",
+        "operatorVersion": "1"
       }
     },
     {
@@ -22,7 +24,8 @@
       "spec": {
         "network": "preview",
         "throughputTier": "0",
-        "marloweVersion": "patch6"
+        "marloweVersion": "patch6",
+        "operatorVersion": "1"
       }
     }
   ],
