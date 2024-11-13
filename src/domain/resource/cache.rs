@@ -25,6 +25,7 @@ pub trait ResourceDrivenCache: Send + Sync {
 #[async_trait::async_trait]
 pub trait ResourceDrivenCacheBackoffice: Send + Sync {
     async fn find_by_project_namespace(&self, namespace: &str) -> Result<Vec<Resource>>;
+    async fn find_by_spec(&self, value: &str) -> Result<Vec<Resource>>;
 }
 
 pub async fn create(cache: Arc<dyn ResourceDrivenCache>, evt: ResourceCreated) -> Result<()> {

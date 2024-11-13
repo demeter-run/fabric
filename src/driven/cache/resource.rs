@@ -226,6 +226,31 @@ impl ResourceDrivenCacheBackoffice for SqliteResourceDrivenCache {
 
         Ok(resources)
     }
+
+    async fn find_by_spec(&self, value: &str) -> Result<Vec<Resource>> {
+        let resources = sqlx::query_as::<_, Resource>(
+            r#"
+                SELECT
+                    r.id,
+                    r.project_id,
+                    r.name,
+                    r.kind,
+                    r.spec,
+                    r.status,
+                    r.created_at,
+                    r.updated_at
+                FROM
+                    resource r
+                WHERE
+                    r.spec LIKE $1;
+            "#,
+        )
+        .bind(format!("%{value}%"))
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(resources)
+    }
 }
 
 impl FromRow<'_, SqliteRow> for Resource {

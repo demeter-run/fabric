@@ -159,17 +159,32 @@ pub async fn fetch_projects(
     Ok(())
 }
 
-pub async fn fetch_resources(config: BackofficeConfig, project_namespace: &str) -> Result<()> {
+pub async fn fetch_resources(
+    config: BackofficeConfig,
+    project_namespace: Option<String>,
+    spec: Option<String>,
+) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     sqlite_cache.migrate().await?;
 
     let backoffice_cache: Box<dyn ResourceDrivenCacheBackoffice> =
         Box::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
 
-    let resouces = backoffice_cache
-        .find_by_project_namespace(project_namespace)
-        .await?;
-    if resouces.is_empty() {
+    let resources = match (project_namespace, spec) {
+        (None, Some(spec)) => backoffice_cache.find_by_spec(&spec).await?,
+        (Some(namespace), None) => {
+            backoffice_cache
+                .find_by_project_namespace(&namespace)
+                .await?
+        }
+        (Some(namespace), Some(_)) => {
+            backoffice_cache
+                .find_by_project_namespace(&namespace)
+                .await?
+        }
+        (None, None) => bail!("No one resouce was found"),
+    };
+    if resources.is_empty() {
         bail!("No one resouce was found")
     }
 
@@ -184,7 +199,7 @@ pub async fn fetch_resources(config: BackofficeConfig, project_namespace: &str) 
         "createdAt",
     ]);
 
-    for (i, r) in resouces.iter().enumerate() {
+    for (i, r) in resources.iter().enumerate() {
         let spec: serde_json::Value = serde_json::from_str(&r.spec).unwrap();
 
         let tier = match spec.get("throughputTier") {
