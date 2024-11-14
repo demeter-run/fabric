@@ -46,7 +46,6 @@ handlebars = "6.1.0"
 slack-hook = "0.8.0"
 include_dir = "0.7.4"
 regex = "1.11.0"
-openssl = { version = "0.10.68", features = ["vendored"] }
 
 [dev-dependencies]
 mockall = "0.12.1"
