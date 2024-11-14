@@ -2,6 +2,7 @@ use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use comfy_table::Table;
 use include_dir::{include_dir, Dir};
+use kube::ResourceExt;
 use serde_json::json;
 use std::{
     collections::HashMap,
@@ -13,8 +14,11 @@ use tracing::error;
 use crate::{
     domain::{
         auth::Auth0Driven,
+        metadata::MetadataDriven,
         project::{cache::ProjectDrivenCacheBackoffice, ProjectStatus},
-        resource::cache::ResourceDrivenCacheBackoffice,
+        resource::{
+            cache::ResourceDrivenCacheBackoffice, cluster::ResourceDrivenClusterBackoffice,
+        },
         usage::{cache::UsageDrivenCacheBackoffice, UsageReport, UsageReportImpl},
     },
     driven::{
@@ -23,6 +27,7 @@ use crate::{
             project::SqliteProjectDrivenCache, resource::SqliteResourceDrivenCache,
             usage::SqliteUsageDrivenCache, SqliteCache,
         },
+        k8s::K8sCluster,
         metadata::FileMetadata,
     },
 };
@@ -282,6 +287,86 @@ pub async fn fetch_new_users(config: BackofficeConfig, after: &str) -> Result<()
             &u.project_namespace,
             &u.project_billing_provider_id,
             &u.created_at.to_rfc3339(),
+        ]);
+    }
+
+    println!("{table}");
+
+    Ok(())
+}
+
+pub async fn fetch_diff(config: BackofficeConfig) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let backoffice_cache: Box<dyn ResourceDrivenCacheBackoffice> =
+        Box::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
+
+    //backoffice_cache.find_by_spec(value)
+    let backoffice_cluster: Box<dyn ResourceDrivenClusterBackoffice> =
+        Box::new(K8sCluster::new().await?);
+
+    let metadata = Arc::new(FileMetadata::from_dir(METADATA.clone())?);
+    let resources_state = backoffice_cache.find_actives().await?;
+    let mut resources_cluster = Vec::new();
+
+    for metadata_resource in metadata.find()? {
+        let kind = metadata_resource.crd.spec.names.kind;
+        let mut items = backoffice_cluster.find_all(&kind).await?;
+        resources_cluster.append(&mut items);
+    }
+
+    let mut missing: HashMap<String, (bool, bool)> = HashMap::new();
+
+    for resource in resources_state.iter() {
+        let exist = resources_cluster
+            .iter()
+            .find(|d| {
+                let namespace = d.metadata.namespace.as_ref().unwrap().replace("prj-", "");
+                let name = d.name_any();
+
+                namespace.eq(&resource.project_namespace) && name.eq(&resource.name)
+            })
+            .is_some();
+
+        missing.insert(
+            format!("{}/{}", resource.project_namespace, resource.name),
+            (true, exist),
+        );
+    }
+
+    for resource in resources_cluster {
+        let namespace = resource
+            .metadata
+            .namespace
+            .as_ref()
+            .unwrap()
+            .replace("prj-", "");
+        let name = resource.name_any();
+
+        let exist = resources_state
+            .iter()
+            .find(|r| r.project_namespace.eq(&namespace) && r.name.eq(&name))
+            .is_some();
+
+        missing
+            .entry(format!("{}/{}", namespace, name))
+            .and_modify(|r| r.1 = exist)
+            .or_insert((exist, true));
+    }
+
+    let mut table = Table::new();
+    table.set_header(vec!["", "port", "state", "cluster"]);
+    for (i, r) in missing
+        .into_iter()
+        .filter(|(_, v)| !v.eq(&(true, true)))
+        .enumerate()
+    {
+        table.add_row(vec![
+            &(i + 1).to_string(),
+            &r.0,
+            &(r.1).0.to_string(),
+            &(r.1).1.to_string(),
         ]);
     }
 

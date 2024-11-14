@@ -83,6 +83,9 @@ enum Commands {
 
     /// Get new users since a date
     NewUsers(NewUsersArgs),
+
+    /// Check the diff of the state with the cluster
+    Diff,
 }
 
 #[tokio::main]
@@ -105,6 +108,9 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Sync => {
             fabric::drivers::cache::subscribe(config.clone().into()).await?;
+        }
+        Commands::Diff => {
+            fabric::drivers::backoffice::fetch_diff(config.clone().into()).await?;
         }
         Commands::Usage(args) => {
             info!("sincronizing cache");
