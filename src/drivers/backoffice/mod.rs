@@ -316,20 +316,17 @@ pub async fn fetch_diff(config: BackofficeConfig) -> Result<()> {
         resources_cluster.append(&mut items);
     }
 
-    let mut missing: HashMap<String, (bool, bool)> = HashMap::new();
+    let mut missing_resources: HashMap<String, (bool, bool)> = HashMap::new();
 
     for resource in resources_state.iter() {
-        let exist = resources_cluster
-            .iter()
-            .find(|d| {
-                let namespace = d.metadata.namespace.as_ref().unwrap().replace("prj-", "");
-                let name = d.name_any();
+        let exist = resources_cluster.iter().any(|d| {
+            let namespace = d.metadata.namespace.as_ref().unwrap().replace("prj-", "");
+            let name = d.name_any();
 
-                namespace.eq(&resource.project_namespace) && name.eq(&resource.name)
-            })
-            .is_some();
+            namespace.eq(&resource.project_namespace) && name.eq(&resource.name)
+        });
 
-        missing.insert(
+        missing_resources.insert(
             format!("{}/{}", resource.project_namespace, resource.name),
             (true, exist),
         );
@@ -346,10 +343,9 @@ pub async fn fetch_diff(config: BackofficeConfig) -> Result<()> {
 
         let exist = resources_state
             .iter()
-            .find(|r| r.project_namespace.eq(&namespace) && r.name.eq(&name))
-            .is_some();
+            .any(|r| r.project_namespace.eq(&namespace) && r.name.eq(&name));
 
-        missing
+        missing_resources
             .entry(format!("{}/{}", namespace, name))
             .and_modify(|r| r.1 = exist)
             .or_insert((exist, true));
@@ -357,16 +353,17 @@ pub async fn fetch_diff(config: BackofficeConfig) -> Result<()> {
 
     let mut table = Table::new();
     table.set_header(vec!["", "port", "state", "cluster"]);
-    for (i, r) in missing
+
+    for (index, (resource_key, (state_exists, cluster_exists))) in missing_resources
         .into_iter()
-        .filter(|(_, v)| !v.eq(&(true, true)))
+        .filter(|(_, (in_state, in_cluster))| !(*in_state && *in_cluster))
         .enumerate()
     {
         table.add_row(vec![
-            &(i + 1).to_string(),
-            &r.0,
-            &(r.1).0.to_string(),
-            &(r.1).1.to_string(),
+            &(index + 1).to_string(),
+            &resource_key,
+            &state_exists.to_string(),
+            &cluster_exists.to_string(),
         ]);
     }
 
