@@ -83,6 +83,7 @@ impl Display for ResourceStatus {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ResourceProject {
     pub id: String,
     pub project_id: String,

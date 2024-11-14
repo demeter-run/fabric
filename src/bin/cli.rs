@@ -28,7 +28,8 @@ pub struct UsageArgs {
     pub period: String,
 
     /// format that will be returned table(log in terminal), json(log in terminal), csv(save a file e.g 2024-09.csv)
-    pub output: String,
+    #[arg(short, long)]
+    pub output: Option<String>,
 }
 
 #[derive(Parser, Clone)]
@@ -67,6 +68,13 @@ pub struct NewUsersArgs {
     pub after: String,
 }
 
+#[derive(Parser, Clone)]
+pub struct DiffArgs {
+    /// csv or table
+    #[arg(short, long)]
+    pub output: Option<String>,
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Sync cache
@@ -85,7 +93,7 @@ enum Commands {
     NewUsers(NewUsersArgs),
 
     /// Check the diff of the state with the cluster
-    Diff,
+    Diff(DiffArgs),
 }
 
 #[tokio::main]
@@ -109,17 +117,29 @@ async fn main() -> Result<()> {
         Commands::Sync => {
             fabric::drivers::cache::subscribe(config.clone().into()).await?;
         }
-        Commands::Diff => {
-            fabric::drivers::backoffice::fetch_diff(config.clone().into()).await?;
+        Commands::Diff(args) => {
+            let output = match args.output {
+                Some(output) => match output.as_str() {
+                    "table" => OutputFormat::Table,
+                    "csv" => OutputFormat::Csv,
+                    _ => bail!("invalid output format"),
+                },
+                None => OutputFormat::Table,
+            };
+
+            fabric::drivers::backoffice::fetch_diff(config.clone().into(), output).await?;
         }
         Commands::Usage(args) => {
             info!("sincronizing cache");
 
-            let output = match args.output.as_str() {
-                "table" => OutputFormat::Table,
-                "json" => OutputFormat::Json,
-                "csv" => OutputFormat::Csv,
-                _ => bail!("invalid output format"),
+            let output = match args.output {
+                Some(output) => match output.as_str() {
+                    "table" => OutputFormat::Table,
+                    "json" => OutputFormat::Json,
+                    "csv" => OutputFormat::Csv,
+                    _ => bail!("invalid output format"),
+                },
+                None => OutputFormat::Table,
             };
 
             fabric::drivers::backoffice::fetch_usage(config.clone().into(), &args.period, output)
