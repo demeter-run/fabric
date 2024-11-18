@@ -316,7 +316,6 @@ pub async fn fetch_diff(config: BackofficeConfig, output: OutputFormat) -> Resul
     }
 
     let mut report: HashMap<String, (bool, bool)> = HashMap::new();
-
     for resource in resources_state.iter() {
         let exist = resources_cluster.iter().any(|d| {
             let namespace = d.metadata.namespace.as_ref().unwrap().replace("prj-", "");
@@ -354,18 +353,6 @@ pub async fn fetch_diff(config: BackofficeConfig, output: OutputFormat) -> Resul
         .into_iter()
         .filter(|(_, (in_state, in_cluster))| !(*in_state && *in_cluster))
         .collect();
-
-    let mut table = Table::new();
-    table.set_header(vec!["", "port", "state", "cluster"]);
-
-    for (index, (resource_key, (state_exists, cluster_exists))) in report.iter().enumerate() {
-        table.add_row(vec![
-            &(index + 1).to_string(),
-            &resource_key,
-            &state_exists.to_string(),
-            &cluster_exists.to_string(),
-        ]);
-    }
 
     match output {
         OutputFormat::Table => output_table_diff(report),
