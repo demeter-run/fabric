@@ -3,6 +3,7 @@ use serde::{Deserialize, Deserializer};
 
 use crate::domain::Result;
 
+pub mod metrics;
 pub mod usage;
 
 pub struct PrometheusUsageDriven {

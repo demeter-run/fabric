@@ -46,6 +46,8 @@ handlebars = "6.1.0"
 slack-hook = "0.8.0"
 include_dir = "0.7.4"
 regex = "1.11.0"
+prometheus = "0.13.4"
+axum = "0.7.9"
 
 [dev-dependencies]
 mockall = "0.12.1"

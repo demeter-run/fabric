@@ -52,7 +52,7 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
     let consumer: StreamConsumer = client_config.create()?;
     consumer.subscribe(&[&config.topic])?;
 
-    info!("Subscriber running");
+    info!("Cache subscribe running");
     loop {
         let result = consumer.recv().await;
         if let Err(error) = result {

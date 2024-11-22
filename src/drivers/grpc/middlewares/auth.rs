@@ -1,18 +1,30 @@
 use std::sync::Arc;
 
-use crate::domain::{
-    auth::{Auth0Driven, Credential},
-    project::{self, cache::ProjectDrivenCache},
+use crate::{
+    domain::{
+        auth::{Auth0Driven, Credential},
+        project::{self, cache::ProjectDrivenCache},
+    },
+    driven::prometheus::metrics::MetricsDriven,
 };
 
 #[derive(Clone)]
 pub struct AuthenticatorImpl {
     auth0: Arc<dyn Auth0Driven>,
     cache: Arc<dyn ProjectDrivenCache>,
+    metrics: Arc<MetricsDriven>,
 }
 impl AuthenticatorImpl {
-    pub fn new(auth0: Arc<dyn Auth0Driven>, cache: Arc<dyn ProjectDrivenCache>) -> Self {
-        Self { auth0, cache }
+    pub fn new(
+        auth0: Arc<dyn Auth0Driven>,
+        cache: Arc<dyn ProjectDrivenCache>,
+        metrics: Arc<MetricsDriven>,
+    ) -> Self {
+        Self {
+            auth0,
+            cache,
+            metrics,
+        }
     }
 }
 
@@ -38,9 +50,12 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
                     request.extensions_mut().insert(credential);
                     Ok(request)
                 }
-                Err(_) => Err(tonic::Status::permission_denied(
-                    "invalid authorization token",
-                )),
+                Err(err) => {
+                    self.metrics.domain_error("grpc", "auth", &err.to_string());
+                    Err(tonic::Status::permission_denied(
+                        "invalid authorization token",
+                    ))
+                }
             };
         }
 
@@ -58,7 +73,13 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
                         project,
                     };
 
-                    let secret = project::command::verify_secret(self.cache.clone(), cmd).await?;
+                    let secret = project::command::verify_secret(self.cache.clone(), cmd)
+                        .await
+                        .map_err(|err| {
+                            self.metrics
+                                .domain_error("grpc", "metadata", &err.to_string());
+                            err
+                        })?;
                     let credential = Credential::ApiKey(secret.project_id);
                     request.extensions_mut().insert(credential);
 

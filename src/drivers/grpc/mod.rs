@@ -25,6 +25,7 @@ use crate::driven::cache::usage::SqliteUsageDrivenCache;
 use crate::driven::cache::SqliteCache;
 use crate::driven::kafka::KafkaProducer;
 use crate::driven::metadata::FileMetadata;
+use crate::driven::prometheus::metrics::MetricsDriven;
 use crate::driven::ses::SESDrivenImpl;
 use crate::driven::stripe::StripeDrivenImpl;
 
@@ -34,7 +35,7 @@ mod project;
 mod resource;
 mod usage;
 
-pub async fn server(config: GrpcConfig) -> Result<()> {
+pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     let project_cache = Arc::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
     let resource_cache = Arc::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
@@ -70,7 +71,8 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         .build()
         .unwrap();
 
-    let auth_interceptor = AuthenticatorImpl::new(auth0.clone(), project_cache.clone());
+    let auth_interceptor =
+        AuthenticatorImpl::new(auth0.clone(), project_cache.clone(), metrics.clone());
 
     let project_inner = project::ProjectServiceImpl::new(
         project_cache.clone(),
@@ -78,6 +80,7 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         auth0.clone(),
         stripe.clone(),
         email.clone(),
+        metrics.clone(),
         config.secret.clone(),
         config.invite_ttl,
     );
@@ -89,15 +92,20 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         resource_cache.clone(),
         event_bridge.clone(),
         metadata.clone(),
+        metrics.clone(),
     );
     let resource_service =
         ResourceServiceServer::with_interceptor(resource_inner, auth_interceptor.clone());
 
-    let metadata_inner = metadata::MetadataServiceImpl::new(metadata.clone());
+    let metadata_inner = metadata::MetadataServiceImpl::new(metadata.clone(), metrics.clone());
     let metadata_service = MetadataServiceServer::new(metadata_inner);
 
-    let usage_inner =
-        usage::UsageServiceImpl::new(project_cache.clone(), usage_cache.clone(), metadata.clone());
+    let usage_inner = usage::UsageServiceImpl::new(
+        project_cache.clone(),
+        usage_cache.clone(),
+        metadata.clone(),
+        metrics.clone(),
+    );
     let usage_service = UsageServiceServer::with_interceptor(usage_inner, auth_interceptor.clone());
 
     let address = SocketAddr::from_str(&config.addr)?;
@@ -112,7 +120,7 @@ pub async fn server(config: GrpcConfig) -> Result<()> {
         Server::builder()
     };
 
-    info!(address = config.addr, "Server running");
+    info!(address = config.addr, "GRPC server running");
     server
         .add_service(reflection)
         .add_service(project_service)

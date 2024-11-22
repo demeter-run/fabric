@@ -2,18 +2,23 @@ use std::sync::Arc;
 
 use dmtri::demeter::ops::v1alpha as proto;
 use tonic::async_trait;
+use tracing::error;
 
-use crate::domain::{
-    error::Error,
-    metadata::{self, MetadataDriven},
+use crate::{
+    domain::{
+        error::Error,
+        metadata::{self, MetadataDriven},
+    },
+    driven::prometheus::metrics::MetricsDriven,
 };
 
 pub struct MetadataServiceImpl {
-    pub metadata: Arc<dyn MetadataDriven>,
+    metadata: Arc<dyn MetadataDriven>,
+    metrics: Arc<MetricsDriven>,
 }
 impl MetadataServiceImpl {
-    pub fn new(metadata: Arc<dyn MetadataDriven>) -> Self {
-        Self { metadata }
+    pub fn new(metadata: Arc<dyn MetadataDriven>, metrics: Arc<MetricsDriven>) -> Self {
+        Self { metadata, metrics }
     }
 }
 
@@ -23,7 +28,13 @@ impl proto::metadata_service_server::MetadataService for MetadataServiceImpl {
         &self,
         _request: tonic::Request<proto::FetchMetadataRequest>,
     ) -> Result<tonic::Response<proto::FetchMetadataResponse>, tonic::Status> {
-        let metadata = metadata::command::fetch(self.metadata.clone()).await?;
+        let metadata = metadata::command::fetch(self.metadata.clone())
+            .await
+            .map_err(|err| {
+                self.metrics
+                    .domain_error("grpc", "metadata", &err.to_string());
+                err
+            })?;
 
         let records: Vec<proto::Metadata> = metadata
             .iter()
@@ -34,7 +45,10 @@ impl proto::metadata_service_server::MetadataService for MetadataServiceImpl {
                 })
             })
             .collect::<Result<_, _>>()
-            .map_err(|err: Error| tonic::Status::internal(err.to_string()))?;
+            .map_err(|err: Error| {
+                error!(?err, "error to map metadata");
+                tonic::Status::internal(err.to_string())
+            })?;
 
         let message = proto::FetchMetadataResponse { records };
 

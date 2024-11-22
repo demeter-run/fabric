@@ -1,3 +1,3 @@
 mod domain;
-mod driven;
+pub mod driven;
 pub mod drivers;

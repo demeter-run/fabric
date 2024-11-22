@@ -3,25 +3,30 @@ use std::{sync::Arc, time::Duration};
 use tonic::{async_trait, Status};
 use tracing::error;
 
-use crate::domain::{
-    auth::{Auth0Driven, Credential},
-    event::EventDrivenBridge,
-    project::{
-        self, cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret,
-        ProjectUserAggregated, ProjectUserInvite, StripeDriven,
+use crate::{
+    domain::{
+        auth::{Auth0Driven, Credential},
+        event::EventDrivenBridge,
+        project::{
+            self, cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret,
+            ProjectUserAggregated, ProjectUserInvite, StripeDriven,
+        },
     },
+    driven::prometheus::metrics::MetricsDriven,
 };
 
 pub struct ProjectServiceImpl {
-    pub cache: Arc<dyn ProjectDrivenCache>,
-    pub event: Arc<dyn EventDrivenBridge>,
-    pub auth0: Arc<dyn Auth0Driven>,
-    pub stripe: Arc<dyn StripeDriven>,
-    pub email: Arc<dyn ProjectEmailDriven>,
-    pub secret: String,
-    pub invite_ttl: Duration,
+    cache: Arc<dyn ProjectDrivenCache>,
+    event: Arc<dyn EventDrivenBridge>,
+    auth0: Arc<dyn Auth0Driven>,
+    stripe: Arc<dyn StripeDriven>,
+    email: Arc<dyn ProjectEmailDriven>,
+    metrics: Arc<MetricsDriven>,
+    secret: String,
+    invite_ttl: Duration,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl ProjectServiceImpl {
     pub fn new(
         cache: Arc<dyn ProjectDrivenCache>,
@@ -29,6 +34,7 @@ impl ProjectServiceImpl {
         auth0: Arc<dyn Auth0Driven>,
         stripe: Arc<dyn StripeDriven>,
         email: Arc<dyn ProjectEmailDriven>,
+        metrics: Arc<MetricsDriven>,
         secret: String,
         invite_ttl: Duration,
     ) -> Self {
@@ -38,6 +44,7 @@ impl ProjectServiceImpl {
             auth0,
             stripe,
             email,
+            metrics,
             secret,
             invite_ttl,
         }
@@ -57,9 +64,21 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = project::command::FetchCmd::new(credential, req.page, req.page_size)?;
+        let cmd = project::command::FetchCmd::new(credential, req.page, req.page_size).map_err(
+            |err| {
+                self.metrics
+                    .domain_error("grpc", "projects", &err.to_string());
+                err
+            },
+        )?;
 
-        let projects = project::command::fetch(self.cache.clone(), cmd.clone()).await?;
+        let projects = project::command::fetch(self.cache.clone(), cmd.clone())
+            .await
+            .map_err(|err| {
+                self.metrics
+                    .domain_error("grpc", "projects", &err.to_string());
+                err
+            })?;
 
         let records = projects.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchProjectsResponse { records };
@@ -79,7 +98,13 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let cmd = project::command::FetchByNamespaceCmd::new(credential, req.namespace);
 
-        let project = project::command::fetch_by_namespace(self.cache.clone(), cmd.clone()).await?;
+        let project = project::command::fetch_by_namespace(self.cache.clone(), cmd.clone())
+            .await
+            .map_err(|err| {
+                self.metrics
+                    .domain_error("grpc", "projects", &err.to_string());
+                err
+            })?;
 
         let message = proto::FetchProjectByNamespaceResponse {
             records: vec![project.into()],
@@ -100,7 +125,13 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let cmd = project::command::FetchByIdCmd::new(credential, req.id);
 
-        let project = project::command::fetch_by_id(self.cache.clone(), cmd.clone()).await?;
+        let project = project::command::fetch_by_id(self.cache.clone(), cmd.clone())
+            .await
+            .map_err(|err| {
+                self.metrics
+                    .domain_error("grpc", "projects", &err.to_string());
+                err
+            })?;
 
         let message = proto::FetchProjectByIdResponse {
             records: vec![project.into()],
@@ -129,7 +160,12 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             self.stripe.clone(),
             cmd.clone(),
         )
-        .await?;
+        .await
+        .map_err(|err| {
+            self.metrics
+                .domain_error("grpc", "projects", &err.to_string());
+            err
+        })?;
 
         let message = proto::CreateProjectResponse {
             id: cmd.id,
@@ -161,6 +197,8 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
                         error = err.to_string(),
                         "Unexpected error while performing project update."
                     );
+                    self.metrics
+                        .domain_error("grpc", "projects", &err.to_string());
                     return Err(Status::internal("Error running update."));
                 }
             };
@@ -182,7 +220,13 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let req = request.into_inner();
         let cmd = project::command::DeleteCmd::new(credential, req.id);
-        project::command::delete(self.cache.clone(), self.event.clone(), cmd.clone()).await?;
+        project::command::delete(self.cache.clone(), self.event.clone(), cmd.clone())
+            .await
+            .map_err(|err| {
+                self.metrics
+                    .domain_error("grpc", "projects", &err.to_string());
+                err
+            })?;
         let message = proto::DeleteProjectResponse {};
 
         Ok(tonic::Response::new(message))
@@ -200,7 +244,13 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let cmd = project::command::FetchSecretCmd::new(credential, req.project_id);
 
-        let secrets = project::command::fetch_secret(self.cache.clone(), cmd.clone()).await?;
+        let secrets = project::command::fetch_secret(self.cache.clone(), cmd.clone())
+            .await
+            .map_err(|err| {
+                self.metrics
+                    .domain_error("grpc", "projects", &err.to_string());
+                err
+            })?;
 
         let records = secrets.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchProjectSecretsResponse { records };
@@ -227,7 +277,12 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let key =
             project::command::create_secret(self.cache.clone(), self.event.clone(), cmd.clone())
-                .await?;
+                .await
+                .map_err(|err| {
+                    self.metrics
+                        .domain_error("grpc", "projects", &err.to_string());
+                    err
+                })?;
 
         let message = proto::CreateProjectSecretResponse {
             id: cmd.id,
@@ -249,7 +304,12 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         let req = request.into_inner();
         let cmd = project::command::DeleteSecretCmd::new(credential, req.id);
         project::command::delete_secret(self.cache.clone(), self.event.clone(), cmd.clone())
-            .await?;
+            .await
+            .map_err(|err| {
+                self.metrics
+                    .domain_error("grpc", "projects", &err.to_string());
+                err
+            })?;
         let message = proto::DeleteProjectSecretResponse {};
 
         Ok(tonic::Response::new(message))
@@ -270,11 +330,21 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             req.page,
             req.page_size,
             req.project_id,
-        )?;
+        )
+        .map_err(|err| {
+            self.metrics
+                .domain_error("grpc", "projects", &err.to_string());
+            err
+        })?;
 
         let users =
             project::command::fetch_user(self.cache.clone(), self.auth0.clone(), cmd.clone())
-                .await?;
+                .await
+                .map_err(|err| {
+                    self.metrics
+                        .domain_error("grpc", "projects", &err.to_string());
+                    err
+                })?;
 
         let records = users.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchProjectUsersResponse { records };
@@ -292,11 +362,21 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = project::command::FetchMeUserCmd::new(credential, req.project_id)?;
+        let cmd =
+            project::command::FetchMeUserCmd::new(credential, req.project_id).map_err(|err| {
+                self.metrics
+                    .domain_error("grpc", "projects", &err.to_string());
+                err
+            })?;
 
         let user =
             project::command::fetch_me_user(self.cache.clone(), self.auth0.clone(), cmd.clone())
-                .await?;
+                .await
+                .map_err(|err| {
+                    self.metrics
+                        .domain_error("grpc", "projects", &err.to_string());
+                    err
+                })?;
 
         let message = proto::FetchMeProjectUserResponse {
             records: vec![user.into()],
@@ -320,9 +400,20 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             req.page,
             req.page_size,
             req.project_id,
-        )?;
+        )
+        .map_err(|err| {
+            self.metrics
+                .domain_error("grpc", "projects", &err.to_string());
+            err
+        })?;
 
-        let invites = project::command::fetch_user_invite(self.cache.clone(), cmd.clone()).await?;
+        let invites = project::command::fetch_user_invite(self.cache.clone(), cmd.clone())
+            .await
+            .map_err(|err| {
+                self.metrics
+                    .domain_error("grpc", "projects", &err.to_string());
+                err
+            })?;
 
         let records = invites.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchProjectUserInvitesResponse { records };
@@ -347,7 +438,12 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             req.project_id,
             req.email,
             req.role.parse()?,
-        )?;
+        )
+        .map_err(|err| {
+            self.metrics
+                .domain_error("grpc", "projects", &err.to_string());
+            err
+        })?;
 
         project::command::create_user_invite(
             self.cache.clone(),
@@ -355,7 +451,12 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             self.event.clone(),
             cmd.clone(),
         )
-        .await?;
+        .await
+        .map_err(|err| {
+            self.metrics
+                .domain_error("grpc", "projects", &err.to_string());
+            err
+        })?;
 
         let message = proto::CreateProjectUserInviteResponse {};
 
@@ -381,7 +482,12 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             self.event.clone(),
             cmd.clone(),
         )
-        .await?;
+        .await
+        .map_err(|err| {
+            self.metrics
+                .domain_error("grpc", "projects", &err.to_string());
+            err
+        })?;
 
         let message = proto::AcceptProjectUserInviteResponse {};
 
@@ -401,7 +507,12 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         let cmd = project::command::ResendUserInviteCmd::new(credential, req.id);
 
         project::command::resend_user_invite(self.cache.clone(), self.email.clone(), cmd.clone())
-            .await?;
+            .await
+            .map_err(|err| {
+                self.metrics
+                    .domain_error("grpc", "projects", &err.to_string());
+                err
+            })?;
 
         let message = proto::ResendProjectUserInviteResponse {};
 
@@ -421,7 +532,12 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         let cmd = project::command::DeleteUserInviteCmd::new(credential, req.id);
 
         project::command::delete_user_invite(self.cache.clone(), self.event.clone(), cmd.clone())
-            .await?;
+            .await
+            .map_err(|err| {
+                self.metrics
+                    .domain_error("grpc", "projects", &err.to_string());
+                err
+            })?;
 
         let message = proto::DeleteProjectUserInviteResponse {};
 
@@ -439,7 +555,13 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let req = request.into_inner();
         let cmd = project::command::DeleteUserCmd::new(credential, req.project_id, req.id);
-        project::command::delete_user(self.cache.clone(), self.event.clone(), cmd.clone()).await?;
+        project::command::delete_user(self.cache.clone(), self.event.clone(), cmd.clone())
+            .await
+            .map_err(|err| {
+                self.metrics
+                    .domain_error("grpc", "projects", &err.to_string());
+                err
+            })?;
         let message = proto::DeleteProjectUserResponse {};
 
         Ok(tonic::Response::new(message))
