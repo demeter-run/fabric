@@ -26,7 +26,7 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
         let response = self
             .client
             .get(format!(
-                "{}/query_range?query=sum by (project, resource_name, tier) (usage{{project=\"{project_name}\",resource_name=\"{resource_name}\"}})",
+                "{}/query_range?query=usage{{project=\"{project_name}\",resource_name=\"{resource_name}\"}}",
                 &self.url
             ))
             .query(&[
