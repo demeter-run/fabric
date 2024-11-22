@@ -6,6 +6,7 @@ topic="events"
 
 [kafka_producer]
 "bootstrap.servers" = "localhost:19092"
+"message.timeout.ms" = "30000"
 
 [kafka_consumer]
 "bootstrap.servers" = "localhost:19092"
@@ -28,3 +29,5 @@ ses_secret_access_key = "xxx"
 ses_region = "us-west-2"
 ses_verified_email = "no-reply@demeter.run"
 
+[prometheus]
+addr="0.0.0.0:9946"

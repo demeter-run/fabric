@@ -27,6 +27,7 @@ resource "kubernetes_config_map_v1" "fabric_rpc_config" {
         email_ses_secret_access_key = var.email_ses_secret_access_key
         email_ses_region            = var.email_ses_region
         email_ses_verified_email    = var.email_ses_verified_email
+        prometheus_addr             = var.prometheus_addr
       }
     )}"
   }

@@ -139,6 +139,9 @@ data:
     ses_secret_access_key = "xxx"
     ses_region = "us-west-2"
     ses_verified_email = "no-reply@demeter.run"
+
+    [prometheus]
+    addr="0.0.0.0:9946"
 ---
 apiVersion: v1
 kind: ConfigMap

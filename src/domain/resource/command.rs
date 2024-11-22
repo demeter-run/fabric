@@ -299,7 +299,12 @@ pub struct CreateCmd {
     pub spec: Spec,
 }
 impl CreateCmd {
-    pub fn new(credential: Credential, project_id: String, kind: String, spec: Spec) -> Self {
+    pub fn new(
+        credential: Credential,
+        project_id: String,
+        kind: String,
+        spec: String,
+    ) -> Result<Self> {
         let id = Uuid::new_v4().to_string();
         let name = format!(
             "{}-{}",
@@ -307,14 +312,21 @@ impl CreateCmd {
             utils::get_random_salt()
         );
 
-        Self {
+        let value = serde_json::from_str(&spec)
+            .map_err(|_| Error::CommandMalformed("spec must be a json".into()))?;
+        let spec = match value {
+            serde_json::Value::Object(v) => Ok(v),
+            _ => Err(Error::CommandMalformed("invalid spec json".into())),
+        }?;
+
+        Ok(Self {
             credential,
             id,
             name,
             project_id,
             kind,
             spec,
-        }
+        })
     }
 }
 
@@ -325,12 +337,19 @@ pub struct UpdateCmd {
     pub spec: Spec,
 }
 impl UpdateCmd {
-    pub fn new(credential: Credential, id: String, spec: Spec) -> Self {
-        Self {
+    pub fn new(credential: Credential, id: String, spec: String) -> Result<Self> {
+        let value = serde_json::from_str(&spec)
+            .map_err(|_| Error::CommandMalformed("spec must be a json".into()))?;
+        let spec = match value {
+            serde_json::Value::Object(v) => Ok(v),
+            _ => Err(Error::CommandMalformed("invalid spec json".into())),
+        }?;
+
+        Ok(Self {
             credential,
             id,
             spec,
-        }
+        })
     }
 }
 

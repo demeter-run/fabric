@@ -2,28 +2,36 @@ use dmtri::demeter::ops::v1alpha::{self as proto};
 use std::sync::Arc;
 use tonic::{async_trait, Status};
 
-use crate::domain::{
-    auth::Credential,
-    metadata::MetadataDriven,
-    project::cache::ProjectDrivenCache,
-    usage::{cache::UsageDrivenCache, command, UsageReport},
+use crate::{
+    domain::{
+        auth::Credential,
+        metadata::MetadataDriven,
+        project::cache::ProjectDrivenCache,
+        usage::{cache::UsageDrivenCache, command, UsageReport},
+    },
+    driven::prometheus::metrics::MetricsDriven,
 };
 
+use super::handle_error_metric;
+
 pub struct UsageServiceImpl {
-    pub project_cache: Arc<dyn ProjectDrivenCache>,
-    pub usage_cache: Arc<dyn UsageDrivenCache>,
-    pub metadata: Arc<dyn MetadataDriven>,
+    project_cache: Arc<dyn ProjectDrivenCache>,
+    usage_cache: Arc<dyn UsageDrivenCache>,
+    metadata: Arc<dyn MetadataDriven>,
+    metrics: Arc<MetricsDriven>,
 }
 impl UsageServiceImpl {
     pub fn new(
         project_cache: Arc<dyn ProjectDrivenCache>,
         usage_cache: Arc<dyn UsageDrivenCache>,
         metadata: Arc<dyn MetadataDriven>,
+        metrics: Arc<MetricsDriven>,
     ) -> Self {
         Self {
             project_cache,
             usage_cache,
             metadata,
+            metrics,
         }
     }
 }
@@ -41,7 +49,8 @@ impl proto::usage_service_server::UsageService for UsageServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)?;
+        let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)
+            .inspect_err(|err| handle_error_metric(self.metrics.clone(), "usage", err))?;
 
         let usage_report = command::fetch_report(
             self.project_cache.clone(),
@@ -49,7 +58,8 @@ impl proto::usage_service_server::UsageService for UsageServiceImpl {
             self.metadata.clone(),
             cmd,
         )
-        .await?;
+        .await
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "usage", err))?;
 
         let records = usage_report.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchUsageReportResponse { records };

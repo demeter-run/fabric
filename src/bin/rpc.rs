@@ -1,7 +1,9 @@
+use std::sync::Arc;
 use std::{collections::HashMap, env, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use dotenv::dotenv;
+use fabric::driven::prometheus::metrics::MetricsDriven;
 use fabric::drivers::{
     cache::{CacheConfig, CacheNotifyConfig},
     grpc::{GrpcConfig, GrpcTlsConfig},
@@ -27,10 +29,13 @@ async fn main() -> Result<()> {
 
     let config = Config::new()?;
 
-    let grpc = fabric::drivers::grpc::server(config.clone().into());
-    let subscribe = fabric::drivers::cache::subscribe(config.clone().into());
+    let metrics_driven = Arc::new(MetricsDriven::new()?);
 
-    try_join!(grpc, subscribe)?;
+    let grpc = fabric::drivers::grpc::server(config.clone().into(), metrics_driven.clone());
+    let subscribe = fabric::drivers::cache::subscribe(config.clone().into());
+    let metrics = fabric::drivers::metrics::server(&config.prometheus.addr, metrics_driven.clone());
+
+    try_join!(grpc, subscribe, metrics)?;
 
     Ok(())
 }
@@ -63,6 +68,10 @@ struct TlsConfig {
     ssl_key_path: PathBuf,
 }
 #[derive(Debug, Clone, Deserialize)]
+struct PrometheusConfig {
+    addr: String,
+}
+#[derive(Debug, Clone, Deserialize)]
 struct Config {
     addr: String,
     db_path: String,
@@ -76,6 +85,7 @@ struct Config {
     slack_webhook_url: Option<String>,
     kafka_producer: HashMap<String, String>,
     kafka_consumer: HashMap<String, String>,
+    prometheus: PrometheusConfig,
 }
 impl Config {
     pub fn new() -> Result<Self> {

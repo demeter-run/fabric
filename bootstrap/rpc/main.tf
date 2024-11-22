@@ -92,6 +92,12 @@ variable "dns_zone" {
   default = "demeter.run"
 }
 
+variable "prometheus_addr" {
+  type    = string
+  default = "0.0.0.0:9946"
+}
+
+
 variable "replicas" {
   type    = number
   default = 1
