@@ -12,6 +12,8 @@ use crate::{
     driven::prometheus::metrics::MetricsDriven,
 };
 
+use super::handle_error_metric;
+
 pub struct MetadataServiceImpl {
     metadata: Arc<dyn MetadataDriven>,
     metrics: Arc<MetricsDriven>,
@@ -31,8 +33,7 @@ impl proto::metadata_service_server::MetadataService for MetadataServiceImpl {
         let metadata = metadata::command::fetch(self.metadata.clone())
             .await
             .map_err(|err| {
-                self.metrics
-                    .domain_error("grpc", "metadata", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "metadata", &err);
                 err
             })?;
 

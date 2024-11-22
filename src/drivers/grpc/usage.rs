@@ -12,6 +12,8 @@ use crate::{
     driven::prometheus::metrics::MetricsDriven,
 };
 
+use super::handle_error_metric;
+
 pub struct UsageServiceImpl {
     project_cache: Arc<dyn ProjectDrivenCache>,
     usage_cache: Arc<dyn UsageDrivenCache>,
@@ -49,7 +51,7 @@ impl proto::usage_service_server::UsageService for UsageServiceImpl {
 
         let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)
             .map_err(|err| {
-                self.metrics.domain_error("grpc", "usage", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "usage", &err);
                 err
             })?;
 
@@ -61,7 +63,7 @@ impl proto::usage_service_server::UsageService for UsageServiceImpl {
         )
         .await
         .map_err(|err| {
-            self.metrics.domain_error("grpc", "usage", &err.to_string());
+            handle_error_metric(self.metrics.clone(), "usage", &err);
             err
         })?;
 

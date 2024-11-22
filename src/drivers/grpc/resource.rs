@@ -13,6 +13,8 @@ use crate::{
     driven::prometheus::metrics::MetricsDriven,
 };
 
+use super::handle_error_metric;
+
 pub struct ResourceServiceImpl {
     project_cache: Arc<dyn ProjectDrivenCache>,
     resource_cache: Arc<dyn ResourceDrivenCache>,
@@ -53,8 +55,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)
             .map_err(|err| {
-                self.metrics
-                    .domain_error("grpc", "resources", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "resource", &err);
                 err
             })?;
 
@@ -66,8 +67,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
         )
         .await
         .map_err(|err| {
-            self.metrics
-                .domain_error("grpc", "resources", &err.to_string());
+            handle_error_metric(self.metrics.clone(), "resource", &err);
             err
         })?;
 
@@ -100,8 +100,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
         )
         .await
         .map_err(|err| {
-            self.metrics
-                .domain_error("grpc", "resources", &err.to_string());
+            handle_error_metric(self.metrics.clone(), "resource", &err);
             err
         })?;
 
@@ -124,8 +123,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         let cmd = command::CreateCmd::new(credential, req.project_id, req.kind, req.spec).map_err(
             |err| {
-                self.metrics
-                    .domain_error("grpc", "resources", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "resource", &err);
                 err
             },
         )?;
@@ -139,8 +137,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
         )
         .await
         .map_err(|err| {
-            self.metrics
-                .domain_error("grpc", "resources", &err.to_string());
+            handle_error_metric(self.metrics.clone(), "resource", &err);
             err
         })?;
 
@@ -165,8 +162,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
         let req = request.into_inner();
 
         let cmd = command::UpdateCmd::new(credential, req.id, req.spec_patch).map_err(|err| {
-            self.metrics
-                .domain_error("grpc", "resources", &err.to_string());
+            handle_error_metric(self.metrics.clone(), "resource", &err);
             err
         })?;
 
@@ -178,8 +174,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
         )
         .await
         .map_err(|err| {
-            self.metrics
-                .domain_error("grpc", "resources", &err.to_string());
+            handle_error_metric(self.metrics.clone(), "resource", &err);
             err
         })?;
 
@@ -214,8 +209,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
         )
         .await
         .map_err(|err| {
-            self.metrics
-                .domain_error("grpc", "resources", &err.to_string());
+            handle_error_metric(self.metrics.clone(), "resource", &err);
             err
         })?;
 

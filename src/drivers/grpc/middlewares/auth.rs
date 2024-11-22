@@ -6,6 +6,7 @@ use crate::{
         project::{self, cache::ProjectDrivenCache},
     },
     driven::prometheus::metrics::MetricsDriven,
+    drivers::grpc::handle_error_metric,
 };
 
 #[derive(Clone)]
@@ -51,7 +52,7 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
                     Ok(request)
                 }
                 Err(err) => {
-                    self.metrics.domain_error("grpc", "auth", &err.to_string());
+                    handle_error_metric(self.metrics.clone(), "auth", &err);
                     Err(tonic::Status::permission_denied(
                         "invalid authorization token",
                     ))
@@ -76,8 +77,7 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
                     let secret = project::command::verify_secret(self.cache.clone(), cmd)
                         .await
                         .map_err(|err| {
-                            self.metrics
-                                .domain_error("grpc", "metadata", &err.to_string());
+                            handle_error_metric(self.metrics.clone(), "auth", &err);
                             err
                         })?;
                     let credential = Credential::ApiKey(secret.project_id);

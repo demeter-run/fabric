@@ -15,6 +15,8 @@ use crate::{
     driven::prometheus::metrics::MetricsDriven,
 };
 
+use super::handle_error_metric;
+
 pub struct ProjectServiceImpl {
     cache: Arc<dyn ProjectDrivenCache>,
     event: Arc<dyn EventDrivenBridge>,
@@ -66,8 +68,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let cmd = project::command::FetchCmd::new(credential, req.page, req.page_size).map_err(
             |err| {
-                self.metrics
-                    .domain_error("grpc", "projects", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "project", &err);
                 err
             },
         )?;
@@ -75,8 +76,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         let projects = project::command::fetch(self.cache.clone(), cmd.clone())
             .await
             .map_err(|err| {
-                self.metrics
-                    .domain_error("grpc", "projects", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "project", &err);
                 err
             })?;
 
@@ -101,8 +101,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         let project = project::command::fetch_by_namespace(self.cache.clone(), cmd.clone())
             .await
             .map_err(|err| {
-                self.metrics
-                    .domain_error("grpc", "projects", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "project", &err);
                 err
             })?;
 
@@ -128,8 +127,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         let project = project::command::fetch_by_id(self.cache.clone(), cmd.clone())
             .await
             .map_err(|err| {
-                self.metrics
-                    .domain_error("grpc", "projects", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "project", &err);
                 err
             })?;
 
@@ -162,8 +160,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         )
         .await
         .map_err(|err| {
-            self.metrics
-                .domain_error("grpc", "projects", &err.to_string());
+            handle_error_metric(self.metrics.clone(), "project", &err);
             err
         })?;
 
@@ -197,8 +194,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
                         error = err.to_string(),
                         "Unexpected error while performing project update."
                     );
-                    self.metrics
-                        .domain_error("grpc", "projects", &err.to_string());
+                    handle_error_metric(self.metrics.clone(), "project", &err);
                     return Err(Status::internal("Error running update."));
                 }
             };
@@ -223,8 +219,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         project::command::delete(self.cache.clone(), self.event.clone(), cmd.clone())
             .await
             .map_err(|err| {
-                self.metrics
-                    .domain_error("grpc", "projects", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "project", &err);
                 err
             })?;
         let message = proto::DeleteProjectResponse {};
@@ -247,8 +242,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         let secrets = project::command::fetch_secret(self.cache.clone(), cmd.clone())
             .await
             .map_err(|err| {
-                self.metrics
-                    .domain_error("grpc", "projects", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "project", &err);
                 err
             })?;
 
@@ -279,8 +273,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             project::command::create_secret(self.cache.clone(), self.event.clone(), cmd.clone())
                 .await
                 .map_err(|err| {
-                    self.metrics
-                        .domain_error("grpc", "projects", &err.to_string());
+                    handle_error_metric(self.metrics.clone(), "project", &err);
                     err
                 })?;
 
@@ -306,8 +299,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         project::command::delete_secret(self.cache.clone(), self.event.clone(), cmd.clone())
             .await
             .map_err(|err| {
-                self.metrics
-                    .domain_error("grpc", "projects", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "project", &err);
                 err
             })?;
         let message = proto::DeleteProjectSecretResponse {};
@@ -332,8 +324,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             req.project_id,
         )
         .map_err(|err| {
-            self.metrics
-                .domain_error("grpc", "projects", &err.to_string());
+            handle_error_metric(self.metrics.clone(), "project", &err);
             err
         })?;
 
@@ -341,8 +332,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             project::command::fetch_user(self.cache.clone(), self.auth0.clone(), cmd.clone())
                 .await
                 .map_err(|err| {
-                    self.metrics
-                        .domain_error("grpc", "projects", &err.to_string());
+                    handle_error_metric(self.metrics.clone(), "project", &err);
                     err
                 })?;
 
@@ -364,8 +354,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         let cmd =
             project::command::FetchMeUserCmd::new(credential, req.project_id).map_err(|err| {
-                self.metrics
-                    .domain_error("grpc", "projects", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "project", &err);
                 err
             })?;
 
@@ -373,8 +362,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             project::command::fetch_me_user(self.cache.clone(), self.auth0.clone(), cmd.clone())
                 .await
                 .map_err(|err| {
-                    self.metrics
-                        .domain_error("grpc", "projects", &err.to_string());
+                    handle_error_metric(self.metrics.clone(), "project", &err);
                     err
                 })?;
 
@@ -402,16 +390,14 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             req.project_id,
         )
         .map_err(|err| {
-            self.metrics
-                .domain_error("grpc", "projects", &err.to_string());
+            handle_error_metric(self.metrics.clone(), "project", &err);
             err
         })?;
 
         let invites = project::command::fetch_user_invite(self.cache.clone(), cmd.clone())
             .await
             .map_err(|err| {
-                self.metrics
-                    .domain_error("grpc", "projects", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "project", &err);
                 err
             })?;
 
@@ -440,8 +426,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
             req.role.parse()?,
         )
         .map_err(|err| {
-            self.metrics
-                .domain_error("grpc", "projects", &err.to_string());
+            handle_error_metric(self.metrics.clone(), "project", &err);
             err
         })?;
 
@@ -453,8 +438,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         )
         .await
         .map_err(|err| {
-            self.metrics
-                .domain_error("grpc", "projects", &err.to_string());
+            handle_error_metric(self.metrics.clone(), "project", &err);
             err
         })?;
 
@@ -484,8 +468,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         )
         .await
         .map_err(|err| {
-            self.metrics
-                .domain_error("grpc", "projects", &err.to_string());
+            handle_error_metric(self.metrics.clone(), "project", &err);
             err
         })?;
 
@@ -509,8 +492,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         project::command::resend_user_invite(self.cache.clone(), self.email.clone(), cmd.clone())
             .await
             .map_err(|err| {
-                self.metrics
-                    .domain_error("grpc", "projects", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "project", &err);
                 err
             })?;
 
@@ -534,8 +516,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         project::command::delete_user_invite(self.cache.clone(), self.event.clone(), cmd.clone())
             .await
             .map_err(|err| {
-                self.metrics
-                    .domain_error("grpc", "projects", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "project", &err);
                 err
             })?;
 
@@ -558,8 +539,7 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         project::command::delete_user(self.cache.clone(), self.event.clone(), cmd.clone())
             .await
             .map_err(|err| {
-                self.metrics
-                    .domain_error("grpc", "projects", &err.to_string());
+                handle_error_metric(self.metrics.clone(), "project", &err);
                 err
             })?;
         let message = proto::DeleteProjectUserResponse {};

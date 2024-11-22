@@ -172,3 +172,9 @@ impl From<Error> for Status {
         }
     }
 }
+
+fn handle_error_metric(metrics: Arc<MetricsDriven>, domain: &str, error: &Error) {
+    if let Error::Unexpected(err) = error {
+        metrics.domain_error("grpc", domain, &err.to_string());
+    }
+}
