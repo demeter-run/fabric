@@ -1,14 +1,23 @@
 db_path="dev.daemon.db"
 topic="events"
 cluster_id = "625e6681-8a74-4454-b5ad-861b45c6a42e"
-prometheus_url = "http://prometheus:9090/api/v1"
 delay_sec = 60
 mode = "full"
-
-[kafka]
-"bootstrap.servers" = "localhost:19092"
-"group.id"= "demeter-daemon"
 
 [prometheus]
 url = "http://localhost:9090/api/v1"
 query_step = "1m"
+
+[kafka_producer]
+"bootstrap.servers" = "localhost:19092"
+"message.timeout.ms" = "30000"
+
+[kafka_monitor]
+"bootstrap.servers" = "localhost:19092"
+"group.id"= "daemon-monitor-6"
+"auto.offset.reset" = "earliest"
+
+[kafka_cache]
+"bootstrap.servers" = "localhost:19092"
+"group.id"= "daemon-cache-3"
+"auto.offset.reset" = "earliest"

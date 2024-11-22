@@ -6,6 +6,7 @@ topic="events"
 
 [kafka_producer]
 "bootstrap.servers" = "localhost:19092"
+"message.timeout.ms" = "30000"
 
 [kafka_consumer]
 "bootstrap.servers" = "localhost:19092"
