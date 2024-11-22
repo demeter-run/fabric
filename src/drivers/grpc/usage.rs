@@ -50,10 +50,7 @@ impl proto::usage_service_server::UsageService for UsageServiceImpl {
         let req = request.into_inner();
 
         let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)
-            .map_err(|err| {
-                handle_error_metric(self.metrics.clone(), "usage", &err);
-                err
-            })?;
+            .inspect_err(|err| handle_error_metric(self.metrics.clone(), "usage", err))?;
 
         let usage_report = command::fetch_report(
             self.project_cache.clone(),
@@ -62,10 +59,7 @@ impl proto::usage_service_server::UsageService for UsageServiceImpl {
             cmd,
         )
         .await
-        .map_err(|err| {
-            handle_error_metric(self.metrics.clone(), "usage", &err);
-            err
-        })?;
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "usage", err))?;
 
         let records = usage_report.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchUsageReportResponse { records };

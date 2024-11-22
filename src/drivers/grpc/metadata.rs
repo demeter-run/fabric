@@ -32,10 +32,7 @@ impl proto::metadata_service_server::MetadataService for MetadataServiceImpl {
     ) -> Result<tonic::Response<proto::FetchMetadataResponse>, tonic::Status> {
         let metadata = metadata::command::fetch(self.metadata.clone())
             .await
-            .map_err(|err| {
-                handle_error_metric(self.metrics.clone(), "metadata", &err);
-                err
-            })?;
+            .inspect_err(|err| handle_error_metric(self.metrics.clone(), "metadata", err))?;
 
         let records: Vec<proto::Metadata> = metadata
             .iter()

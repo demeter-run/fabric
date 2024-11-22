@@ -54,10 +54,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
         let req = request.into_inner();
 
         let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)
-            .map_err(|err| {
-                handle_error_metric(self.metrics.clone(), "resource", &err);
-                err
-            })?;
+            .inspect_err(|err| handle_error_metric(self.metrics.clone(), "resource", err))?;
 
         let resources = command::fetch(
             self.project_cache.clone(),
@@ -66,10 +63,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
             cmd,
         )
         .await
-        .map_err(|err| {
-            handle_error_metric(self.metrics.clone(), "resource", &err);
-            err
-        })?;
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "resource", err))?;
 
         let records = resources.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchResourcesResponse { records };
@@ -99,10 +93,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
             cmd,
         )
         .await
-        .map_err(|err| {
-            handle_error_metric(self.metrics.clone(), "resource", &err);
-            err
-        })?;
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "resource", err))?;
 
         let records = vec![resource.into()];
         let message = proto::FetchResourcesByIdResponse { records };
@@ -121,12 +112,8 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = command::CreateCmd::new(credential, req.project_id, req.kind, req.spec).map_err(
-            |err| {
-                handle_error_metric(self.metrics.clone(), "resource", &err);
-                err
-            },
-        )?;
+        let cmd = command::CreateCmd::new(credential, req.project_id, req.kind, req.spec)
+            .inspect_err(|err| handle_error_metric(self.metrics.clone(), "resource", err))?;
 
         command::create(
             self.resource_cache.clone(),
@@ -136,10 +123,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
             cmd.clone(),
         )
         .await
-        .map_err(|err| {
-            handle_error_metric(self.metrics.clone(), "resource", &err);
-            err
-        })?;
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "resource", err))?;
 
         let message = proto::CreateResourceResponse {
             id: cmd.id,
@@ -161,10 +145,8 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = command::UpdateCmd::new(credential, req.id, req.spec_patch).map_err(|err| {
-            handle_error_metric(self.metrics.clone(), "resource", &err);
-            err
-        })?;
+        let cmd = command::UpdateCmd::new(credential, req.id, req.spec_patch)
+            .inspect_err(|err| handle_error_metric(self.metrics.clone(), "resource", err))?;
 
         let updated = command::update(
             self.project_cache.clone(),
@@ -173,10 +155,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
             cmd.clone(),
         )
         .await
-        .map_err(|err| {
-            handle_error_metric(self.metrics.clone(), "resource", &err);
-            err
-        })?;
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "resource", err))?;
 
         let message = proto::UpdateResourceResponse {
             updated: Some(updated.into()),
@@ -208,10 +187,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
             cmd,
         )
         .await
-        .map_err(|err| {
-            handle_error_metric(self.metrics.clone(), "resource", &err);
-            err
-        })?;
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "resource", err))?;
 
         Ok(tonic::Response::new(DeleteResourceResponse {}))
     }

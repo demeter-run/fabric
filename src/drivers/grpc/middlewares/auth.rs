@@ -76,10 +76,10 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
 
                     let secret = project::command::verify_secret(self.cache.clone(), cmd)
                         .await
-                        .map_err(|err| {
-                            handle_error_metric(self.metrics.clone(), "auth", &err);
-                            err
+                        .inspect_err(|err| {
+                            handle_error_metric(self.metrics.clone(), "auth", err)
                         })?;
+
                     let credential = Credential::ApiKey(secret.project_id);
                     request.extensions_mut().insert(credential);
 
