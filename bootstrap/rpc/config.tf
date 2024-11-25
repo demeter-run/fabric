@@ -8,7 +8,9 @@ resource "kubernetes_config_map_v1" "fabric_rpc_config" {
     "rpc.toml" = "${templatefile(
       "${path.module}/rpc.toml.tftpl",
       {
-        port = local.port,
+        port            = local.port,
+        prometheus_port = local.prometheus_port,
+
         // If we change the consumer, we must rebuild the cache.
         db_path                     = "/var/cache/${var.consumer_name}.db",
         broker_urls                 = var.broker_urls
@@ -27,7 +29,6 @@ resource "kubernetes_config_map_v1" "fabric_rpc_config" {
         email_ses_secret_access_key = var.email_ses_secret_access_key
         email_ses_region            = var.email_ses_region
         email_ses_verified_email    = var.email_ses_verified_email
-        prometheus_addr             = var.prometheus_addr
       }
     )}"
   }

@@ -2,6 +2,7 @@ locals {
   configmap_name      = "fabric-rpc-config"
   crds_configmap_name = "fabric-rpc-crds"
   port                = 5050
+  prometheus_port     = 9946
 }
 
 variable "namespace" {
@@ -91,12 +92,6 @@ variable "dns_zone" {
   type    = string
   default = "demeter.run"
 }
-
-variable "prometheus_addr" {
-  type    = string
-  default = "0.0.0.0:9946"
-}
-
 
 variable "replicas" {
   type    = number

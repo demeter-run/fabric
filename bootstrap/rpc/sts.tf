@@ -60,6 +60,11 @@ resource "kubernetes_stateful_set_v1" "rpc" {
             container_port = local.port
           }
 
+          port {
+            name           = "metrics"
+            container_port = local.prometheus_port
+          }
+
           volume_mount {
             name       = "cache"
             mount_path = "/var/cache"
