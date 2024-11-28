@@ -62,6 +62,9 @@ data:
     [prometheus]
     url = "http://prometheus:9090/api/v1"
     query_step = "1m"
+
+    [metrics]
+    addr="0.0.0.0:9946"
 kind: ConfigMap
 metadata:
   name: daemon-config
