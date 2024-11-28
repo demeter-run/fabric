@@ -1,8 +1,11 @@
-use std::{collections::HashMap, env, time::Duration};
+use std::{collections::HashMap, env, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use dotenv::dotenv;
-use fabric::drivers::{cache::CacheConfig, monitor::MonitorConfig, usage::UsageConfig};
+use fabric::{
+    driven::prometheus::metrics::MetricsDriven,
+    drivers::{cache::CacheConfig, monitor::MonitorConfig, usage::UsageConfig},
+};
 use serde::{de::Visitor, Deserialize, Deserializer};
 use tokio::try_join;
 use tracing::Level;
@@ -23,23 +26,30 @@ async fn main() -> Result<()> {
         .init();
 
     let config = Config::new()?;
+    let metrics_driven = Arc::new(MetricsDriven::new()?);
+
+    let metrics = fabric::drivers::metrics::server(&config.metrics.addr, metrics_driven.clone());
 
     match config.mode {
         Mode::Usage => {
             let cache = fabric::drivers::cache::subscribe(config.clone().into());
-            let schedule = fabric::drivers::usage::schedule(config.clone().into());
+            let usage = fabric::drivers::usage::schedule(config.clone().into());
 
-            try_join!(cache, schedule)?;
+            try_join!(cache, usage, metrics)?;
         }
         Mode::Monitor => {
-            fabric::drivers::monitor::subscribe(config.clone().into()).await?;
+            let monitor =
+                fabric::drivers::monitor::subscribe(config.clone().into(), metrics_driven.clone());
+
+            try_join!(monitor, metrics)?;
         }
         Mode::Full => {
             let cache = fabric::drivers::cache::subscribe(config.clone().into());
-            let schedule = fabric::drivers::usage::schedule(config.clone().into());
-            let subscribe = fabric::drivers::monitor::subscribe(config.clone().into());
+            let usage = fabric::drivers::usage::schedule(config.clone().into());
+            let monitor =
+                fabric::drivers::monitor::subscribe(config.clone().into(), metrics_driven.clone());
 
-            try_join!(cache, schedule, subscribe)?;
+            try_join!(cache, usage, monitor, metrics)?;
         }
     };
 
@@ -60,10 +70,16 @@ struct Prometheus {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+struct Metrics {
+    addr: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 struct Config {
     db_path: String,
     cluster_id: String,
     prometheus: Prometheus,
+    metrics: Metrics,
     #[serde(deserialize_with = "deserialize_duration")]
     #[serde(rename(deserialize = "delay_sec"))]
     delay: Duration,
