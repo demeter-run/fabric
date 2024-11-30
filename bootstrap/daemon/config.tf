@@ -19,8 +19,8 @@ resource "kubernetes_config_map_v1" "fabric_daemon_config" {
         prometheus_url        = var.prometheus_url
         prometheus_delay_sec  = var.prometheus_delay_sec
         prometheus_query_step = var.prometheus_query_step
-        mode                  = var.mode,
-        metrics_port          = local.metrics_port,
+        mode                  = var.mode
+        metrics_port          = local.metrics_port
       }
     )}"
   }
