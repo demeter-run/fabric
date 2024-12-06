@@ -1,6 +1,7 @@
 locals {
   configmap_name = "fabric-daemon-config"
   port           = 5000
+  metrics_port   = 9946
 }
 
 variable "namespace" {
