@@ -2,6 +2,7 @@ use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use comfy_table::Table;
 use include_dir::{include_dir, Dir};
+use kube::ResourceExt;
 use serde_json::json;
 use std::{
     collections::HashMap,
@@ -13,8 +14,11 @@ use tracing::error;
 use crate::{
     domain::{
         auth::Auth0Driven,
+        metadata::MetadataDriven,
         project::{cache::ProjectDrivenCacheBackoffice, ProjectStatus},
-        resource::cache::ResourceDrivenCacheBackoffice,
+        resource::{
+            cache::ResourceDrivenCacheBackoffice, cluster::ResourceDrivenClusterBackoffice,
+        },
         usage::{cache::UsageDrivenCacheBackoffice, UsageReport, UsageReportImpl},
     },
     driven::{
@@ -23,6 +27,7 @@ use crate::{
             project::SqliteProjectDrivenCache, resource::SqliteResourceDrivenCache,
             usage::SqliteUsageDrivenCache, SqliteCache,
         },
+        k8s::K8sCluster,
         metadata::FileMetadata,
     },
 };
@@ -290,6 +295,74 @@ pub async fn fetch_new_users(config: BackofficeConfig, after: &str) -> Result<()
     Ok(())
 }
 
+pub async fn fetch_diff(config: BackofficeConfig, output: OutputFormat) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let backoffice_cache: Box<dyn ResourceDrivenCacheBackoffice> =
+        Box::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
+
+    let backoffice_cluster: Box<dyn ResourceDrivenClusterBackoffice> =
+        Box::new(K8sCluster::new().await?);
+
+    let metadata = Arc::new(FileMetadata::from_dir(METADATA.clone())?);
+    let resources_state = backoffice_cache.find_actives().await?;
+    let mut resources_cluster = Vec::new();
+
+    for metadata_resource in metadata.find()? {
+        let kind = metadata_resource.crd.spec.names.kind;
+        let mut items = backoffice_cluster.find_all(&kind).await?;
+        resources_cluster.append(&mut items);
+    }
+
+    let mut report: HashMap<String, (bool, bool)> = HashMap::new();
+    for resource in resources_state.iter() {
+        let exist = resources_cluster.iter().any(|d| {
+            let namespace = d.metadata.namespace.as_ref().unwrap().replace("prj-", "");
+            let name = d.name_any();
+
+            namespace.eq(&resource.project_namespace) && name.eq(&resource.name)
+        });
+
+        report.insert(
+            format!("{}/{}", resource.project_namespace, resource.name),
+            (true, exist),
+        );
+    }
+
+    for resource in resources_cluster {
+        let namespace = resource
+            .metadata
+            .namespace
+            .as_ref()
+            .unwrap()
+            .replace("prj-", "");
+        let name = resource.name_any();
+
+        let exist = resources_state
+            .iter()
+            .any(|r| r.project_namespace.eq(&namespace) && r.name.eq(&name));
+
+        report
+            .entry(format!("{}/{}", namespace, name))
+            .and_modify(|r| r.1 = exist)
+            .or_insert((exist, true));
+    }
+
+    let report: Vec<(String, (bool, bool))> = report
+        .into_iter()
+        .filter(|(_, (in_state, in_cluster))| !(*in_state && *in_cluster))
+        .collect();
+
+    match output {
+        OutputFormat::Table => output_table_diff(report),
+        OutputFormat::Json => todo!("not implemented"),
+        OutputFormat::Csv => output_csv_diff(report),
+    };
+
+    Ok(())
+}
+
 fn output_csv_usage(report: Vec<UsageReport>, period: &str) {
     let path = format!("{period}.csv");
     let result = csv::Writer::from_path(&path);
@@ -425,6 +498,60 @@ fn output_table_project(projects: Vec<ProjectTable>) {
     }
 
     println!("{table}");
+}
+
+fn output_table_diff(report: Vec<(String, (bool, bool))>) {
+    let mut table = Table::new();
+    table.set_header(vec!["", "port", "state", "cluster"]);
+
+    for (index, (resource_key, (state_exists, cluster_exists))) in report.iter().enumerate() {
+        table.add_row(vec![
+            &(index + 1).to_string(),
+            &resource_key,
+            &state_exists.to_string(),
+            &cluster_exists.to_string(),
+        ]);
+    }
+
+    println!("{table}");
+}
+
+fn output_csv_diff(report: Vec<(String, (bool, bool))>) {
+    let path = "diff.csv";
+    let result = csv::Writer::from_path(path);
+    if let Err(error) = result {
+        error!(?error);
+        return;
+    }
+
+    let mut wtr = result.unwrap();
+
+    let result = wtr.write_record(["", "project", "in_state", "in_cluster"]);
+    if let Err(error) = result {
+        error!(?error);
+        return;
+    }
+
+    for (index, (resource_key, (state_exists, cluster_exists))) in report.iter().enumerate() {
+        let result = wtr.write_record([
+            &(index + 1).to_string(),
+            resource_key,
+            &state_exists.to_string(),
+            &cluster_exists.to_string(),
+        ]);
+        if let Err(error) = result {
+            error!(?error);
+            return;
+        }
+    }
+
+    let result = wtr.flush();
+    if let Err(error) = result {
+        error!(?error);
+        return;
+    }
+
+    println!("File {} created", path)
 }
 
 pub enum OutputFormat {

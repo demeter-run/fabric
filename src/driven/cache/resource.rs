@@ -6,7 +6,7 @@ use crate::domain::{
     error::Error,
     resource::{
         cache::{ResourceDrivenCache, ResourceDrivenCacheBackoffice},
-        Resource, ResourceStatus, ResourceUpdate,
+        Resource, ResourceProject, ResourceStatus, ResourceUpdate,
     },
     Result,
 };
@@ -200,6 +200,35 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
 
 #[async_trait::async_trait]
 impl ResourceDrivenCacheBackoffice for SqliteResourceDrivenCache {
+    async fn find_actives(&self) -> Result<Vec<ResourceProject>> {
+        let status = ResourceStatus::Active.to_string();
+
+        let resources = sqlx::query_as::<_, ResourceProject>(
+            r#"
+                SELECT
+                    r.id,
+                    r.project_id,
+                    p.namespace as project_namespace,
+                    r.name,
+                    r.kind,
+                    r.spec,
+                    r.status,
+                    r.created_at,
+                    r.updated_at
+                FROM
+                    resource r
+                INNER JOIN project p ON
+                    p.id = r.project_id
+                WHERE r.status = $1;
+            "#,
+        )
+        .bind(status)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(resources)
+    }
+
     async fn find_by_project_namespace(&self, namespace: &str) -> Result<Vec<Resource>> {
         let resources = sqlx::query_as::<_, Resource>(
             r#"
@@ -260,6 +289,27 @@ impl FromRow<'_, SqliteRow> for Resource {
         Ok(Self {
             id: row.try_get("id")?,
             project_id: row.try_get("project_id")?,
+            name: row.try_get("name")?,
+            kind: row.try_get("kind")?,
+            spec: row.try_get("spec")?,
+            annotations: None,
+            status: status
+                .parse()
+                .map_err(|err: Error| sqlx::Error::Decode(err.into()))?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+        })
+    }
+}
+
+impl FromRow<'_, SqliteRow> for ResourceProject {
+    fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
+        let status: &str = row.try_get("status")?;
+
+        Ok(Self {
+            id: row.try_get("id")?,
+            project_id: row.try_get("project_id")?,
+            project_namespace: row.try_get("project_namespace")?,
             name: row.try_get("name")?,
             kind: row.try_get("kind")?,
             spec: row.try_get("spec")?,

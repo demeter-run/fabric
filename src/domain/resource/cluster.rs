@@ -19,6 +19,13 @@ pub trait ResourceDrivenCluster: Send + Sync {
     async fn update(&self, obj: &DynamicObject) -> Result<()>;
     async fn delete(&self, obj: &DynamicObject) -> Result<()>;
 }
+
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
+pub trait ResourceDrivenClusterBackoffice: Send + Sync {
+    async fn find_all(&self, kind: &str) -> Result<Vec<DynamicObject>>;
+}
+
 pub async fn apply_manifest(
     cluster: Arc<dyn ResourceDrivenCluster>,
     evt: ResourceCreated,

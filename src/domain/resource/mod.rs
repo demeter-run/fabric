@@ -82,6 +82,21 @@ impl Display for ResourceStatus {
     }
 }
 
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct ResourceProject {
+    pub id: String,
+    pub project_id: String,
+    pub project_namespace: String,
+    pub name: String,
+    pub kind: String,
+    pub spec: String,
+    pub annotations: Option<String>,
+    pub status: ResourceStatus,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod tests {
     use uuid::Uuid;
