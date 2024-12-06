@@ -66,6 +66,9 @@ pub struct ResourceArgs {
 pub struct NewUsersArgs {
     /// collect new users after this date (year-month-day) e.g 2024-09-01
     pub after: String,
+
+    #[arg(short, long)]
+    pub output: Option<String>,
 }
 
 #[derive(Parser, Clone)]
@@ -164,8 +167,22 @@ async fn main() -> Result<()> {
             .await?;
         }
         Commands::NewUsers(args) => {
-            fabric::drivers::backoffice::fetch_new_users(config.clone().into(), &args.after)
-                .await?;
+            let output = match args.output {
+                Some(output) => match output.as_str() {
+                    "table" => OutputFormat::Table,
+                    "json" => OutputFormat::Json,
+                    "csv" => OutputFormat::Csv,
+                    _ => bail!("invalid output format"),
+                },
+                None => OutputFormat::Table,
+            };
+
+            fabric::drivers::backoffice::fetch_new_users(
+                config.clone().into(),
+                &args.after,
+                output,
+            )
+            .await?;
         }
     }
 
