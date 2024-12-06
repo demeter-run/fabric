@@ -1,6 +1,7 @@
 use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use comfy_table::Table;
+use futures::future::try_join_all;
 use include_dir::{include_dir, Dir};
 use kube::ResourceExt;
 use serde_json::json;
@@ -13,9 +14,9 @@ use tracing::error;
 
 use crate::{
     domain::{
-        auth::Auth0Driven,
+        auth::{Auth0Driven, Auth0Profile},
         metadata::MetadataDriven,
-        project::{cache::ProjectDrivenCacheBackoffice, ProjectStatus},
+        project::{cache::ProjectDrivenCacheBackoffice, ProjectStatus, ProjectUserProject},
         resource::{
             cache::ResourceDrivenCacheBackoffice, cluster::ResourceDrivenClusterBackoffice,
         },
@@ -232,7 +233,11 @@ pub async fn fetch_resources(
     Ok(())
 }
 
-pub async fn fetch_new_users(config: BackofficeConfig, after: &str) -> Result<()> {
+pub async fn fetch_new_users(
+    config: BackofficeConfig,
+    after: &str,
+    output: OutputFormat,
+) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     sqlite_cache.migrate().await?;
 
@@ -253,44 +258,27 @@ pub async fn fetch_new_users(config: BackofficeConfig, after: &str) -> Result<()
         bail!("No one new user was found")
     }
 
-    let ids: Vec<String> = project_users
-        .iter()
-        .map(|p| format!("user_id:{}", p.user_id.clone()))
-        .collect();
-    let query = ids.join(" OR ");
-    let profiles = auth0.find_info(&query).await?;
+    let tasks = project_users
+        .chunks(60)
+        .map(|chunk| async {
+            let ids = chunk
+                .to_vec()
+                .iter()
+                .map(|p| format!("user_id:{}", p.user_id.clone()))
+                .collect::<Vec<String>>()
+                .join(" OR ");
+            auth0.find_info(ids.as_ref()).await
+        })
+        .collect::<Vec<_>>();
 
-    let mut table = Table::new();
-    table.set_header(vec![
-        "",
-        "id",
-        "name",
-        "email",
-        "role",
-        "project",
-        "stripe ID",
-        "createdAt",
-    ]);
+    let profiles = try_join_all(tasks).await?;
+    let profiles = profiles.into_iter().flatten().collect::<Vec<_>>();
 
-    for (i, u) in project_users.iter().enumerate() {
-        let (name, email) = match profiles.iter().find(|a| a.user_id == u.user_id) {
-            Some(a) => (a.name.clone(), a.email.clone()),
-            None => ("unknown".into(), "unknown".into()),
-        };
-
-        table.add_row(vec![
-            &(i + 1).to_string(),
-            &u.user_id,
-            &name,
-            &email,
-            &u.role.to_string(),
-            &u.project_namespace,
-            &u.project_billing_provider_id,
-            &u.created_at.to_rfc3339(),
-        ]);
-    }
-
-    println!("{table}");
+    match output {
+        OutputFormat::Table => output_table_new_users(project_users, profiles),
+        OutputFormat::Json => todo!("not implemented"),
+        OutputFormat::Csv => output_csv_new_users(project_users, profiles),
+    };
 
     Ok(())
 }
@@ -539,6 +527,98 @@ fn output_csv_diff(report: Vec<(String, (bool, bool))>) {
             &state_exists.to_string(),
             &cluster_exists.to_string(),
         ]);
+        if let Err(error) = result {
+            error!(?error);
+            return;
+        }
+    }
+
+    let result = wtr.flush();
+    if let Err(error) = result {
+        error!(?error);
+        return;
+    }
+
+    println!("File {} created", path)
+}
+
+fn output_table_new_users(project_users: Vec<ProjectUserProject>, profiles: Vec<Auth0Profile>) {
+    let mut table = Table::new();
+    table.set_header(vec![
+        "",
+        "id",
+        "name",
+        "email",
+        "role",
+        "project",
+        "stripe ID",
+        "createdAt",
+    ]);
+
+    for (i, u) in project_users.iter().enumerate() {
+        let (name, email) = match profiles.iter().find(|a| a.user_id == u.user_id) {
+            Some(a) => (a.name.clone(), a.email.clone()),
+            None => ("unknown".into(), "unknown".into()),
+        };
+
+        table.add_row(vec![
+            &(i + 1).to_string(),
+            &u.user_id,
+            &name,
+            &email,
+            &u.role.to_string(),
+            &u.project_namespace,
+            &u.project_billing_provider_id,
+            &u.created_at.to_rfc3339(),
+        ]);
+    }
+
+    println!("{table}");
+}
+
+fn output_csv_new_users(project_users: Vec<ProjectUserProject>, profiles: Vec<Auth0Profile>) {
+    let path = "new-users.csv";
+    let result = csv::Writer::from_path(path);
+    if let Err(error) = result {
+        error!(?error);
+        return;
+    }
+
+    let mut wtr = result.unwrap();
+
+    let result = wtr.write_record([
+        "",
+        "id",
+        "name",
+        "email",
+        "role",
+        "project",
+        "stripe ID",
+        "createdAt",
+    ]);
+
+    if let Err(error) = result {
+        error!(?error);
+        return;
+    }
+
+    for (i, u) in project_users.iter().enumerate() {
+        let (name, email) = match profiles.iter().find(|a| a.user_id == u.user_id) {
+            Some(a) => (a.name.clone(), a.email.clone()),
+            None => ("unknown".into(), "unknown".into()),
+        };
+
+        let result = wtr.write_record(vec![
+            &(i + 1).to_string(),
+            &u.user_id,
+            &name,
+            &email,
+            &u.role.to_string(),
+            &u.project_namespace,
+            &u.project_billing_provider_id,
+            &u.created_at.to_rfc3339(),
+        ]);
+
         if let Err(error) = result {
             error!(?error);
             return;

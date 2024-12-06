@@ -11,7 +11,6 @@ resource "kubernetes_config_map_v1" "fabric_rpc_crds" {
     "cardanonodeport.json" = "${file("${path.module}/crds/cardanonodeport.json")}"
     "dbsyncport.hbs"       = "${file("${path.module}/crds/dbsyncport.hbs")}"
     "dbsyncport.json"      = "${file("${path.module}/crds/dbsyncport.json")}"
-    "frontends.json"       = "${file("${path.module}/crds/frontends.json")}"
     "kupoport.hbs"         = "${file("${path.module}/crds/kupoport.hbs")}"
     "kupoport.json"        = "${file("${path.module}/crds/kupoport.json")}"
     "marloweport.hbs"      = "${file("${path.module}/crds/marloweport.hbs")}"
