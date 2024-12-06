@@ -5,6 +5,12 @@ on:
   push:
     branches:
       - "main"
+    paths:
+      - "src/**"
+      - "bootstrap/**"
+      - "docker/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
 
 jobs:
   rpc:
