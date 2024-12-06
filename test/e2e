@@ -2,8 +2,8 @@
 
 GRPCURL_VERSION="1.9.1"
 AUTH0_URL="https://txpipe.us.auth0.com/oauth/token"
-# FABRIC_URL="rpc.demeter.run:443"
-FABRIC_URL="0.0.0.0:5000"
+FABRIC_URL="rpc.demeter.run:443"
+# FABRIC_URL="0.0.0.0:5000"
 MAX_ATTEMPT=3
 SLEEP_DURATION=3
 
@@ -48,30 +48,6 @@ finish() {
     echo "Project deleted"
 }
 
-http_port_expect() {
-    local kind=$1
-    local endpoint=$2
-    local path=$3
-
-    echo "Waiting for $kind to be ready"
-    for attempt in $(seq 1 $MAX_ATTEMPT); do
-        status_code=$(curl -o /dev/null -s -w "%{http_code}" "$endpoint/$path")
-        echo "Status Code: $status_code"
-
-        if [[ -n "$status_code" && "$status_code" -eq 200 ]]; then
-            echo "$kind is ready."
-            return 0
-        else
-            echo "$kind is not ready yet, waiting... (attempt $attempt)"
-            sleep $SLEEP_DURATION
-        fi
-    done
-
-    echo "Error: $kind is not ready after $MAX_ATTEMPT attempts."
-    finish 
-    exit 1
-}
-
 create_port() {
     local kind=$1
     local spec=$2
@@ -108,6 +84,37 @@ create_port() {
     exit 1
 }
 
+http_port_expect() {
+    local kind=$1
+    local endpoint=$2
+    local path=$3
+
+    echo "Waiting for $kind to be ready"
+    for attempt in $(seq 1 $MAX_ATTEMPT); do
+        status_code=$(curl -o /dev/null -s -w "%{http_code}" "$endpoint/$path")
+        echo "Status Code: $status_code"
+
+        if [[ -n "$status_code" && "$status_code" -eq 200 ]]; then
+            echo "$kind is ready."
+            return 0
+        else
+            echo "$kind is not ready yet, waiting... (attempt $attempt)"
+            sleep $SLEEP_DURATION
+        fi
+    done
+
+    echo "Error: $kind is not ready after $MAX_ATTEMPT attempts."
+    finish 
+    exit 1
+}
+
+RESOURCE=$(create_port 'BlockfrostPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
+http_port_expect 'BlockfrostPort' "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').blockfrost-m1.demeter.run" health
+
 RESOURCE=$(create_port 'KupoPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"pruneUtxo\":true,\"operatorVersion\":\"1\"}"')
 http_port_expect 'KupoPort' "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v2.kupo-m1.demeter.run" health
+
+RESOURCE=$(create_port 'OgmiosPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"version\":6}"')
+http_port_expect 'OgmiosPort' "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v6.ogmios-m1.demeter.run" health
+
 finish
