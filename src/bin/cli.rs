@@ -28,7 +28,8 @@ pub struct UsageArgs {
     pub period: String,
 
     /// format that will be returned table(log in terminal), json(log in terminal), csv(save a file e.g 2024-09.csv)
-    pub output: String,
+    #[arg(short, long)]
+    pub output: Option<String>,
 }
 
 #[derive(Parser, Clone)]
@@ -65,6 +66,16 @@ pub struct ResourceArgs {
 pub struct NewUsersArgs {
     /// collect new users after this date (year-month-day) e.g 2024-09-01
     pub after: String,
+
+    #[arg(short, long)]
+    pub output: Option<String>,
+}
+
+#[derive(Parser, Clone)]
+pub struct DiffArgs {
+    /// csv or table
+    #[arg(short, long)]
+    pub output: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -83,6 +94,9 @@ enum Commands {
 
     /// Get new users since a date
     NewUsers(NewUsersArgs),
+
+    /// Check the diff of the state with the cluster
+    Diff(DiffArgs),
 }
 
 #[tokio::main]
@@ -106,14 +120,29 @@ async fn main() -> Result<()> {
         Commands::Sync => {
             fabric::drivers::cache::subscribe(config.clone().into()).await?;
         }
+        Commands::Diff(args) => {
+            let output = match args.output {
+                Some(output) => match output.as_str() {
+                    "table" => OutputFormat::Table,
+                    "csv" => OutputFormat::Csv,
+                    _ => bail!("invalid output format"),
+                },
+                None => OutputFormat::Table,
+            };
+
+            fabric::drivers::backoffice::fetch_diff(config.clone().into(), output).await?;
+        }
         Commands::Usage(args) => {
             info!("sincronizing cache");
 
-            let output = match args.output.as_str() {
-                "table" => OutputFormat::Table,
-                "json" => OutputFormat::Json,
-                "csv" => OutputFormat::Csv,
-                _ => bail!("invalid output format"),
+            let output = match args.output {
+                Some(output) => match output.as_str() {
+                    "table" => OutputFormat::Table,
+                    "json" => OutputFormat::Json,
+                    "csv" => OutputFormat::Csv,
+                    _ => bail!("invalid output format"),
+                },
+                None => OutputFormat::Table,
             };
 
             fabric::drivers::backoffice::fetch_usage(config.clone().into(), &args.period, output)
@@ -138,8 +167,22 @@ async fn main() -> Result<()> {
             .await?;
         }
         Commands::NewUsers(args) => {
-            fabric::drivers::backoffice::fetch_new_users(config.clone().into(), &args.after)
-                .await?;
+            let output = match args.output {
+                Some(output) => match output.as_str() {
+                    "table" => OutputFormat::Table,
+                    "json" => OutputFormat::Json,
+                    "csv" => OutputFormat::Csv,
+                    _ => bail!("invalid output format"),
+                },
+                None => OutputFormat::Table,
+            };
+
+            fabric::drivers::backoffice::fetch_new_users(
+                config.clone().into(),
+                &args.after,
+                output,
+            )
+            .await?;
         }
     }
 

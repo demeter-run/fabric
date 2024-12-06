@@ -5,7 +5,7 @@ use crate::domain::{
     Result,
 };
 
-use super::{Resource, ResourceUpdate};
+use super::{Resource, ResourceProject, ResourceUpdate};
 
 use chrono::{DateTime, Utc};
 
@@ -24,6 +24,7 @@ pub trait ResourceDrivenCache: Send + Sync {
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait ResourceDrivenCacheBackoffice: Send + Sync {
+    async fn find_actives(&self) -> Result<Vec<ResourceProject>>;
     async fn find_by_project_namespace(&self, namespace: &str) -> Result<Vec<Resource>>;
     async fn find_by_spec(&self, value: &str) -> Result<Vec<Resource>>;
 }

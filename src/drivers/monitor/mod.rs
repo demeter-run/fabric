@@ -8,11 +8,11 @@ use std::{borrow::Borrow, collections::HashMap, sync::Arc};
 use tracing::{error, info, warn};
 
 use crate::{
-    domain::{event::Event, project, resource},
-    driven::k8s::K8sCluster,
+    domain::{error::Error, event::Event, project, resource},
+    driven::{k8s::K8sCluster, prometheus::metrics::MetricsDriven},
 };
 
-pub async fn subscribe(config: MonitorConfig) -> Result<()> {
+pub async fn subscribe(config: MonitorConfig, metrics: Arc<MetricsDriven>) -> Result<()> {
     let cluster = Arc::new(K8sCluster::new().await?);
 
     let mut client_config = ClientConfig::new();
@@ -60,22 +60,37 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
                                 Event::ProjectCreated(evt) => {
                                     project::cluster::apply_manifest(cluster.clone(), evt.clone())
                                         .await
+                                        .inspect_err(|err| {
+                                            handle_error_metric(metrics.clone(), "project", err)
+                                        })
                                 }
                                 Event::ProjectDeleted(evt) => {
                                     project::cluster::delete_manifest(cluster.clone(), evt.clone())
                                         .await
+                                        .inspect_err(|err| {
+                                            handle_error_metric(metrics.clone(), "project", err)
+                                        })
                                 }
                                 Event::ResourceCreated(evt) => {
                                     resource::cluster::apply_manifest(cluster.clone(), evt.clone())
                                         .await
+                                        .inspect_err(|err| {
+                                            handle_error_metric(metrics.clone(), "resource", err)
+                                        })
                                 }
                                 Event::ResourceUpdated(evt) => {
                                     resource::cluster::patch_manifest(cluster.clone(), evt.clone())
                                         .await
+                                        .inspect_err(|err| {
+                                            handle_error_metric(metrics.clone(), "resource", err)
+                                        })
                                 }
                                 Event::ResourceDeleted(evt) => {
                                     resource::cluster::delete_manifest(cluster.clone(), evt.clone())
                                         .await
+                                        .inspect_err(|err| {
+                                            handle_error_metric(metrics.clone(), "resource", err)
+                                        })
                                 }
                                 _ => {
                                     info!(event = event.key(), "bypass event");
@@ -111,4 +126,10 @@ pub async fn subscribe(config: MonitorConfig) -> Result<()> {
 pub struct MonitorConfig {
     pub topic: String,
     pub kafka: HashMap<String, String>,
+}
+
+fn handle_error_metric(metrics: Arc<MetricsDriven>, domain: &str, error: &Error) {
+    if let Error::Unexpected(err) = error {
+        metrics.domain_error("monitor", domain, &err.to_string());
+    }
 }

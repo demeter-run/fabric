@@ -1,13 +1,15 @@
 use anyhow::Result as AnyhowResult;
 use k8s_openapi::api::core::v1::Namespace;
 use kube::{
-    api::{DeleteParams, DynamicObject, Patch, PatchParams, PostParams},
+    api::{ApiResource, DeleteParams, DynamicObject, Patch, PatchParams, PostParams},
     discovery, Api, Client, Error, ResourceExt,
 };
 use tracing::{info, warn};
 
 use crate::domain::{
-    project::cluster::ProjectDrivenCluster, resource::cluster::ResourceDrivenCluster, Result,
+    project::cluster::ProjectDrivenCluster,
+    resource::cluster::{ResourceDrivenCluster, ResourceDrivenClusterBackoffice},
+    Result,
 };
 
 pub struct K8sCluster {
@@ -146,5 +148,23 @@ impl ResourceDrivenCluster for K8sCluster {
         };
 
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl ResourceDrivenClusterBackoffice for K8sCluster {
+    async fn find_all(&self, kind: &str) -> Result<Vec<DynamicObject>> {
+        let api_resource = ApiResource {
+            kind: kind.to_string(),
+            group: "demeter.run".into(),
+            version: "v1alpha1".into(),
+            plural: format!("{}s", kind.to_lowercase()),
+            api_version: "demeter.run/v1alpha1".into(),
+        };
+
+        let api: Api<DynamicObject> = Api::all_with(self.client.clone(), &api_resource);
+        let list = api.list(&Default::default()).await?;
+
+        Ok(list.items)
     }
 }

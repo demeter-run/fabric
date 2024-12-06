@@ -14,7 +14,7 @@ pub struct FileMetadata<'a> {
     hbs: handlebars::Handlebars<'a>,
 }
 
-impl<'a> FileMetadata<'a> {
+impl FileMetadata<'_> {
     pub fn new(path: &Path) -> AnyhowResult<Self> {
         let dir = fs::read_dir(path)?;
 
@@ -83,7 +83,7 @@ impl<'a> FileMetadata<'a> {
     }
 }
 
-impl<'a> MetadataDriven for FileMetadata<'a> {
+impl MetadataDriven for FileMetadata<'_> {
     fn find(&self) -> Result<Vec<ResourceMetadata>> {
         Ok(self.metadata.clone())
     }
