@@ -1,6 +1,7 @@
 use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use comfy_table::Table;
+use futures::future::try_join_all;
 use include_dir::{include_dir, Dir};
 use serde_json::json;
 use std::{
@@ -248,12 +249,21 @@ pub async fn fetch_new_users(config: BackofficeConfig, after: &str) -> Result<()
         bail!("No one new user was found")
     }
 
-    let ids: Vec<String> = project_users
-        .iter()
-        .map(|p| format!("user_id:{}", p.user_id.clone()))
-        .collect();
-    let query = ids.join(" OR ");
-    let profiles = auth0.find_info(&query).await?;
+    let tasks = project_users
+        .chunks(60)
+        .map(|chunk| async {
+            let ids = chunk
+                .to_vec()
+                .iter()
+                .map(|p| format!("user_id:{}", p.user_id.clone()))
+                .collect::<Vec<String>>()
+                .join(" OR ");
+            auth0.find_info(ids.as_ref()).await
+        })
+        .collect::<Vec<_>>();
+
+    let profiles = try_join_all(tasks).await?;
+    let profiles = profiles.iter().flatten().collect::<Vec<_>>();
 
     let mut table = Table::new();
     table.set_header(vec![
