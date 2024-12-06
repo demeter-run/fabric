@@ -68,7 +68,7 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
                 })?;
 
             return tokio::task::block_in_place(|| {
-                return tokio::runtime::Runtime::new().unwrap().block_on(async {
+                tokio::runtime::Runtime::new().unwrap().block_on(async {
                     let cmd = project::command::VerifySecretCmd {
                         key: token,
                         project,
@@ -84,7 +84,7 @@ impl tonic::service::Interceptor for AuthenticatorImpl {
                     request.extensions_mut().insert(credential);
 
                     Ok(request)
-                });
+                })
             });
         }
 
