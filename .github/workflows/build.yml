@@ -6,11 +6,7 @@ on:
     branches:
       - "main"
     paths:
-      - "src/**"
-      - "bootstrap/**"
-      - "docker/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
+      - "!test/**"
 
 jobs:
   rpc:
