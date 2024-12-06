@@ -19,7 +19,7 @@
   },
   "options": [
     {
-      "description": "mainnet - stable (9.1.1)",
+      "description": "mainnet - stable (10.1.3)",
       "spec": {
         "network": "mainnet",
         "version": "stable",
@@ -27,7 +27,7 @@
       }
     },
     {
-      "description": "preprod - stable (9.1.1)",
+      "description": "preprod - stable (10.1.3)",
       "spec": {
         "network": "preprod",
         "version": "stable",
@@ -35,7 +35,7 @@
       }
     },
     {
-      "description": "preview - stable (9.1.1)",
+      "description": "preview - stable (10.1.3)",
       "spec": {
         "network": "preview",
         "version": "stable",
