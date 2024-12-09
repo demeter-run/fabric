@@ -11,7 +11,7 @@ SLEEP_DURATION=3
 # Dependencies
 echo "Downloading Dependencies ..."
 
-apt update -y
+# apt update -y
 # apt install postgresql-client socat -y
 
 # Download and extract grpcurl
@@ -41,8 +41,8 @@ if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
 fi
 
 # Creating project
-echo "Creating project ..."
-PROJECT_ID=$(./grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{"name": "e2e project"}' $FABRIC_URL demeter.ops.v1alpha.ProjectService.CreateProject | jq -r '.id')
+echo "Creating project..."
+PROJECT_ID=$(./grpcurl -H "Authorization: Bearer $TOKEN" -d '{"name": "e2e project"}' $FABRIC_URL demeter.ops.v1alpha.ProjectService.CreateProject | jq -r '.id')
 if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "null" ]; then
     echo "Error: Failed to create project"
     exit 1
@@ -53,7 +53,7 @@ sleep $SLEEP_DURATION
 
 finish() {
     echo "Deleting project..."
-    ./grpcurl -plaintext  \
+    ./grpcurl \
       -H "Authorization: Bearer $TOKEN" \
       -d '{"id": "'"$PROJECT_ID"'"}' \
       $FABRIC_URL demeter.ops.v1alpha.ProjectService.DeleteProject
@@ -64,7 +64,7 @@ create_port() {
     local kind=$1
     local spec=$2
 
-    RESOURCE_ID=$(./grpcurl -plaintext  \
+    RESOURCE_ID=$(./grpcurl \
       -H "Authorization: Bearer $TOKEN" \
       -d "{\"project_id\": \"$PROJECT_ID\", \"kind\": \"$kind\", \"spec\": $spec}" \
       $FABRIC_URL demeter.ops.v1alpha.ResourceService.CreateResource | jq -r '.id')
@@ -78,7 +78,7 @@ create_port() {
     sleep $SLEEP_DURATION
 
     for attempt in $(seq 1 $MAX_ATTEMPT); do
-        RESOURCE=$(./grpcurl -plaintext  \
+        RESOURCE=$(./grpcurl \
           -H "Authorization: Bearer $TOKEN" \
           -d "{\"id\": \"$RESOURCE_ID\"}" \
           $FABRIC_URL demeter.ops.v1alpha.ResourceService.FetchResourcesById)
