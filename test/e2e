@@ -1,15 +1,27 @@
 #!/bin/bash
 
 GRPCURL_VERSION="1.9.1"
+CARDANO_NODE_VERSION="10.1.3"
 AUTH0_URL="https://txpipe.us.auth0.com/oauth/token"
 FABRIC_URL="rpc.demeter.run:443"
 # FABRIC_URL="0.0.0.0:5000"
 MAX_ATTEMPT=3
 SLEEP_DURATION=3
 
+# Dependencies
+echo "Downloading Dependencies ..."
+
+# apt update -y
+# apt install postgresql-client socat -y
+
 # Download and extract grpcurl
 wget "https://github.com/fullstorydev/grpcurl/releases/download/v${GRPCURL_VERSION}/grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz"
 tar -zxvf "./grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz" grpcurl
+
+# Download and extract cardano 
+wget "https://github.com/IntersectMBO/cardano-node/releases/download/${CARDANO_NODE_VERSION}/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz"
+mkdir ./cardano-node && tar -zxvf "./cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz" -C ./cardano-node
+mv ./cardano-node/bin/cardano-cli .
 
 # Get Auth0 access token
 echo "Getting Auth0 access token"
@@ -85,31 +97,71 @@ create_port() {
 }
 
 http_port_expect() {
-    local kind=$1
     local endpoint=$2
     local path=$3
 
-    echo "Waiting for $kind to be ready"
     for attempt in $(seq 1 $MAX_ATTEMPT); do
-        status_code=$(curl -o /dev/null -s -w "%{http_code}" "$endpoint/$path")
-        echo "Status Code: $status_code"
+        JSON_DATA=$(curl --location "$endpoint/$path")
 
-        if [[ -n "$status_code" && "$status_code" -eq 200 ]]; then
-            echo "$kind is ready."
+        if [[ -n "$JSON_DATA" ]]; then
+            echo "$JSON_DATA"
             return 0
-        else
-            echo "$kind is not ready yet, waiting... (attempt $attempt)"
-            sleep $SLEEP_DURATION
         fi
+
+        sleep $SLEEP_DURATION
     done
 
-    echo "Error: $kind is not ready after $MAX_ATTEMPT attempts."
+    echo "Error: $endpoint is not ready after $MAX_ATTEMPT attempts."
     finish 
     exit 1
 }
 
+node_port_expect() {
+    local token=$1
+    
+    socat -d -d UNIX-LISTEN:node.socket,reuseaddr,fork OPENSSL:"$token.cnode-m1.demeter.run:9443",verify=1 &
+
+    for attempt in $(seq 1 $MAX_ATTEMPT); do
+        sleep $SLEEP_DURATION
+
+        if [[ -e "node.socket" ]]; then
+            JSON_DATA=$(./cardano-cli query tip --socket-path node.socket --mainnet)
+            SYNC_PROGRESS=$(echo "$JSON_DATA" | jq -r '.syncProgress')
+            MIN_EXPECTED_SYNC_PROGRESS="99.00"
+            MAX_EXPECTED_SYNC_PROGRESS="100.00"
+            
+            if (( $(echo "$SYNC_PROGRESS >= $MIN_EXPECTED_SYNC_PROGRESS" | bc -l) )) && (( $(echo "$SYNC_PROGRESS <= $MAX_EXPECTED_SYNC_PROGRESS" | bc -l) )); then
+                echo "$(echo "$JSON_DATA" | jq -r '.slot')"
+                return 0  
+            else
+                echo "Error: syncProgress is not within the acceptable range of 99 to 100"
+                exit 1
+            fi
+        fi
+    done
+
+    echo "Error: cardano node is not ready after $MAX_ATTEMPT attempts."
+    finish 
+    exit 1
+}
+
+echo "Start validations ..."
+
+RESOURCE=$(create_port 'CardanoNodePort' '"{\"network\":\"mainnet\",\"version\":\"stable\",\"throughputTier\":\"0\"}"')
+TOKEN=$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken')
+NODE_SLOT=$(node_port_expect $TOKEN)
+NODE_SLOT=$(( NODE_SLOT - 120 ))
+echo "Node slot: $NODE_SLOT"
+
 RESOURCE=$(create_port 'BlockfrostPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
-http_port_expect 'BlockfrostPort' "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').blockfrost-m1.demeter.run" health
+RESPONSE=http_port_expect 'BlockfrostPort' "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').blockfrost-m1.demeter.run" "/blocks/latest"
+SLOT="$(echo "$RESPONSE" | jq -r '.slot')"
+echo "Blockfrost slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    echo "Error: BlockfrostPort is not in the chain tip"
+    finish 
+    exit 1
+fi
 
 RESOURCE=$(create_port 'KupoPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"pruneUtxo\":true,\"operatorVersion\":\"1\"}"')
 http_port_expect 'KupoPort' "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v2.kupo-m1.demeter.run" health
