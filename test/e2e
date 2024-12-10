@@ -7,6 +7,7 @@ FABRIC_URL="rpc.demeter.run:443"
 # FABRIC_URL="0.0.0.0:5000"
 MAX_ATTEMPT=3
 SLEEP_DURATION=3
+NODE_SLOT=0
 
 # Dependencies
 echo "Downloading Dependencies ..."
@@ -78,7 +79,7 @@ create_port() {
     sleep $SLEEP_DURATION
 
     for attempt in $(seq 1 $MAX_ATTEMPT); do
-        RESOURCE=$(./grpcurl \
+        RESOURCE=$(./grpcurl  \
           -H "Authorization: Bearer $TOKEN" \
           -d "{\"id\": \"$RESOURCE_ID\"}" \
           $FABRIC_URL demeter.ops.v1alpha.ResourceService.FetchResourcesById)
@@ -97,8 +98,8 @@ create_port() {
 }
 
 http_port_expect() {
-    local endpoint=$2
-    local path=$3
+    local endpoint=$1
+    local path=$2
 
     for attempt in $(seq 1 $MAX_ATTEMPT); do
         JSON_DATA=$(curl --location "$endpoint/$path")
@@ -117,9 +118,9 @@ http_port_expect() {
 }
 
 node_port_expect() {
-    local token=$1
+    local node_key=$1
     
-    socat -d -d UNIX-LISTEN:node.socket,reuseaddr,fork OPENSSL:"$token.cnode-m1.demeter.run:9443",verify=1 &
+    socat -d -d UNIX-LISTEN:node.socket,reuseaddr,fork OPENSSL:"$node_key.cnode-m1.demeter.run:9443",verify=1 &
 
     for attempt in $(seq 1 $MAX_ATTEMPT); do
         sleep $SLEEP_DURATION
@@ -131,10 +132,11 @@ node_port_expect() {
             MAX_EXPECTED_SYNC_PROGRESS="100.00"
             
             if (( $(echo "$SYNC_PROGRESS >= $MIN_EXPECTED_SYNC_PROGRESS" | bc -l) )) && (( $(echo "$SYNC_PROGRESS <= $MAX_EXPECTED_SYNC_PROGRESS" | bc -l) )); then
-                echo "$(echo "$JSON_DATA" | jq -r '.slot')"
+                NODE_SLOT=$(echo "$(echo "$JSON_DATA" | jq -r '.slot')")
                 return 0  
             else
                 echo "Error: syncProgress is not within the acceptable range of 99 to 100"
+                finish 
                 exit 1
             fi
         fi
@@ -148,13 +150,12 @@ node_port_expect() {
 echo "Start validations ..."
 
 RESOURCE=$(create_port 'CardanoNodePort' '"{\"network\":\"mainnet\",\"version\":\"stable\",\"throughputTier\":\"0\"}"')
-TOKEN=$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken')
-NODE_SLOT=$(node_port_expect $TOKEN)
+node_port_expect $(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken')
 NODE_SLOT=$(( NODE_SLOT - 120 ))
 echo "Node slot: $NODE_SLOT"
 
 RESOURCE=$(create_port 'BlockfrostPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
-RESPONSE=http_port_expect 'BlockfrostPort' "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').blockfrost-m1.demeter.run" "/blocks/latest"
+RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').blockfrost-m1.demeter.run" "blocks/latest")
 SLOT="$(echo "$RESPONSE" | jq -r '.slot')"
 echo "Blockfrost slot: $SLOT"
 if (( SLOT < NODE_SLOT )); then
@@ -164,9 +165,9 @@ if (( SLOT < NODE_SLOT )); then
 fi
 
 RESOURCE=$(create_port 'KupoPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"pruneUtxo\":true,\"operatorVersion\":\"1\"}"')
-http_port_expect 'KupoPort' "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v2.kupo-m1.demeter.run" health
+http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v2.kupo-m1.demeter.run" health
 
 RESOURCE=$(create_port 'OgmiosPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"version\":6}"')
-http_port_expect 'OgmiosPort' "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v6.ogmios-m1.demeter.run" health
+http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v6.ogmios-m1.demeter.run" health
 
 finish
