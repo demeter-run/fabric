@@ -9,55 +9,64 @@ MAX_ATTEMPT=3
 SLEEP_DURATION=3
 NODE_SLOT=0
 
-# Dependencies
-echo "Downloading Dependencies ..."
 
-sudo apt update -y && sudo apt install -y socat
-# postgresql-client
+install_dependencies() {
+    echo "Downloading Dependencies ..."
 
-# Download and extract grpcurl
-wget "https://github.com/fullstorydev/grpcurl/releases/download/v${GRPCURL_VERSION}/grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz"
-tar -zxvf "./grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz" grpcurl
+    sudo apt update -y && sudo apt install -y socat
+    # postgresql-client
+    
+    # Download and extract grpcurl
+    wget "https://github.com/fullstorydev/grpcurl/releases/download/v${GRPCURL_VERSION}/grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz"
+    tar -zxvf "./grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz" grpcurl
+    
+    # Download and extract cardano 
+    wget "https://github.com/IntersectMBO/cardano-node/releases/download/${CARDANO_NODE_VERSION}/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz"
+    mkdir ./cardano-node && tar -zxvf "./cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz" -C ./cardano-node
+    mv ./cardano-node/bin/cardano-cli .
+}
 
-# Download and extract cardano 
-wget "https://github.com/IntersectMBO/cardano-node/releases/download/${CARDANO_NODE_VERSION}/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz"
-mkdir ./cardano-node && tar -zxvf "./cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz" -C ./cardano-node
-mv ./cardano-node/bin/cardano-cli .
+set_auth_token(){
+    echo "Requesting Auth0 access token ..."
 
-# Get Auth0 access token
-echo "Getting Auth0 access token"
-TOKEN=$(curl --location $AUTH0_URL \
---header 'content-type: application/x-www-form-urlencoded' \
---data-urlencode "grant_type=password" \
---data-urlencode "username=e2e@txpipe.io" \
---data-urlencode "audience=demeter-api" \
---data-urlencode "scope=profile openid email" \
---data-urlencode "client_id=$CLIENT_ID" \
---data-urlencode "password=$PASSWORD" \
---data-urlencode "client_secret=$CLIENT_SECRET" | jq -r '.access_token')
+    TOKEN=$(curl --location $AUTH0_URL \
+    --header 'content-type: application/x-www-form-urlencoded' \
+    --data-urlencode "grant_type=password" \
+    --data-urlencode "username=e2e@txpipe.io" \
+    --data-urlencode "audience=demeter-api" \
+    --data-urlencode "scope=profile openid email" \
+    --data-urlencode "client_id=$CLIENT_ID" \
+    --data-urlencode "password=$PASSWORD" \
+    --data-urlencode "client_secret=$CLIENT_SECRET" | jq -r '.access_token')
+    
+    if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+        echo "Error: Failed to get Auth0 access token"
+        exit 1
+    fi
 
-if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-    echo "Error: Failed to get Auth0 access token"
-    exit 1
-fi
+    echo "Auth token requested"
+}
 
-# Creating project
-echo "Creating project..."
-PROJECT_ID=$(./grpcurl -H "Authorization: Bearer $TOKEN" -d '{"name": "e2e project"}' $FABRIC_URL demeter.ops.v1alpha.ProjectService.CreateProject | jq -r '.id')
-if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "null" ]; then
-    echo "Error: Failed to create project"
-    exit 1
-fi
-echo "Project created: $PROJECT_ID"
+create_project() {
+    echo "Creating project ..."
 
-sleep $SLEEP_DURATION
+    PROJECT_ID=$(./grpcurl -H "Authorization: Bearer $TOKEN" -d '{"name": "e2e project"}' $FABRIC_URL demeter.ops.v1alpha.ProjectService.CreateProject | jq -r '.id')
+    if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "null" ]; then
+        echo "Error: Failed to create project"
+        exit 1
+    fi
+
+    echo "Project created: $PROJECT_ID"
+}
 
 finish() {
-    echo "Deleting project..."
+    echo "Deleting project ..."
+
     ./grpcurl \
       -H "Authorization: Bearer $TOKEN" \
       -d '{"id": "'"$PROJECT_ID"'"}' \
       $FABRIC_URL demeter.ops.v1alpha.ProjectService.DeleteProject
+
     echo "Project deleted"
 }
 
@@ -132,6 +141,7 @@ node_port_expect() {
             MAX_EXPECTED_SYNC_PROGRESS="100.00"
             
             if (( $(echo "$SYNC_PROGRESS >= $MIN_EXPECTED_SYNC_PROGRESS" | bc -l) )) && (( $(echo "$SYNC_PROGRESS <= $MAX_EXPECTED_SYNC_PROGRESS" | bc -l) )); then
+                echo "Cardano Node Sync Progress $SYNC_PROGRESS"
                 NODE_SLOT=$(echo "$(echo "$JSON_DATA" | jq -r '.slot')")
                 return 0  
             else
@@ -147,12 +157,40 @@ node_port_expect() {
     exit 1
 }
 
+
+utxorpc_port_expect() {
+    local key=$1
+
+    for attempt in $(seq 1 $MAX_ATTEMPT); do
+        UTXO_SLOT=$(./grpcurl -H "dmtr-api-key: $key" -H 'content-type: application/grpc' mainnet.utxorpc-v0.demeter.run:443 utxorpc.v1alpha.query.QueryService.ReadParams | jq -r '.ledgerTip.slot')
+
+        if [[ -n "$UTXO_SLOT" ]]; then
+            echo "$UTXO_SLOT"
+            return 0
+        fi
+
+        sleep $SLEEP_DURATION
+    done
+
+    echo "Error: UtxoRpc is not ready after $MAX_ATTEMPT attempts."
+    finish 
+    exit 1
+}
+
+
+echo "Configuring environment ..."
+
+install_dependencies
+set_auth_token
+create_project
+sleep $SLEEP_DURATION
+
 echo "Start validations ..."
 
 RESOURCE=$(create_port 'CardanoNodePort' '"{\"network\":\"mainnet\",\"version\":\"stable\",\"throughputTier\":\"0\"}"')
 node_port_expect $(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken')
-NODE_SLOT=$(( NODE_SLOT - 120 ))
 echo "Node slot: $NODE_SLOT"
+NODE_SLOT=$(( NODE_SLOT - 120 ))
 
 RESOURCE=$(create_port 'BlockfrostPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
 RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').blockfrost-m1.demeter.run" "blocks/latest")
@@ -165,9 +203,32 @@ if (( SLOT < NODE_SLOT )); then
 fi
 
 RESOURCE=$(create_port 'KupoPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"pruneUtxo\":true,\"operatorVersion\":\"1\"}"')
-http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v2.kupo-m1.demeter.run" health
+RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v2.kupo-m1.demeter.run" "health")
+SLOT=$(echo "$RESPONSE" | grep "^kupo_most_recent_checkpoint " | awk '{print $2}')
+echo "Kupo slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    echo "Error: KupoPort is not in the chain tip"
+    finish 
+    exit 1
+fi
 
 RESOURCE=$(create_port 'OgmiosPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"version\":6}"')
-http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v6.ogmios-m1.demeter.run" health
+RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v6.ogmios-m1.demeter.run" "health")
+SLOT="$(echo "$RESPONSE" | jq -r '.lastKnownTip.slot')"
+echo "Ogmios slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    echo "Error: OgmiosPort is not in the chain tip"
+    finish 
+    exit 1
+fi
+
+RESOURCE=$(create_port 'UtxoRpcPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
+SLOT=$(utxorpc_port_expect $(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.authToken'))
+echo "UtxoRpc slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    echo "Error: UtxoRpcPort is not in the chain tip"
+    finish 
+    exit 1
+fi
 
 finish
