@@ -162,7 +162,6 @@ echo "Configuring environment ..."
 install_dependencies
 set_auth_token
 create_project
-
 sleep $SLEEP_DURATION
 
 echo "Start validations ..."
@@ -193,6 +192,13 @@ if (( SLOT < NODE_SLOT )); then
 fi
 
 RESOURCE=$(create_port 'OgmiosPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"version\":6}"')
-http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v6.ogmios-m1.demeter.run" health
+RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v6.ogmios-m1.demeter.run" "health")
+SLOT="$(echo "$RESPONSE" | jq -r '.lastKnownTip.slot')"
+echo "Ogmios slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    echo "Error: OgmiosPort is not in the chain tip"
+    finish 
+    exit 1
+fi
 
 finish
