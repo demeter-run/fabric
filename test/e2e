@@ -183,7 +183,14 @@ if (( SLOT < NODE_SLOT )); then
 fi
 
 RESOURCE=$(create_port 'KupoPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"pruneUtxo\":true,\"operatorVersion\":\"1\"}"')
-http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v2.kupo-m1.demeter.run" health
+RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v2.kupo-m1.demeter.run" "health")
+SLOT=$(echo "$RESPONSE" | grep "^kupo_most_recent_checkpoint " | awk '{print $2}')
+echo "Kupo slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    echo "Error: KupoPort is not in the chain tip"
+    finish 
+    exit 1
+fi
 
 RESOURCE=$(create_port 'OgmiosPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"version\":6}"')
 http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v6.ogmios-m1.demeter.run" health
