@@ -9,12 +9,10 @@ MAX_ATTEMPT=3
 SLEEP_DURATION=3
 NODE_SLOT=0
 
-
 install_dependencies() {
     echo "Downloading Dependencies ..."
 
-    sudo apt update -y && sudo apt install -y socat
-    # postgresql-client
+    sudo apt update -y && sudo apt install -y socat postgresql-client
     
     # Download and extract grpcurl
     wget "https://github.com/fullstorydev/grpcurl/releases/download/v${GRPCURL_VERSION}/grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz"
@@ -227,6 +225,18 @@ SLOT=$(utxorpc_port_expect $(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r
 echo "UtxoRpc slot: $SLOT"
 if (( SLOT < NODE_SLOT )); then
     echo "Error: UtxoRpcPort is not in the chain tip"
+    finish 
+    exit 1
+fi
+
+
+RESOURCE=$(create_port 'MumakPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\"}"')
+export PGUSER=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.username') 
+export PGPASSWORD=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.password') 
+SLOT=$(psql --dbname=cardano-mainnet --host=mumak-m0.demeter.run -c "select slot from blocks order by slot desc limit 1" -t)
+echo "Mumak slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    echo "Error: MumakPort is not in the chain tip"
     finish 
     exit 1
 fi
