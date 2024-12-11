@@ -87,7 +87,7 @@ handle_error() {
   local error_message=$2
 
   echo "Error: $error_message"
-  # send_opsgenie_alert "$resource_name Failure" "$error_message"
+  send_opsgenie_alert "$resource_name Failure" "$error_message"
   finish
   exit 1
 }
