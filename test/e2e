@@ -175,6 +175,31 @@ utxorpc_port_expect() {
     exit 1
 }
 
+submit_api_port_expect() {
+    local key=$1
+
+    for attempt in $(seq 1 $MAX_ATTEMPT); do
+        status_code=$(curl -o /dev/null -s -w "%{http_code}" \
+          --location \
+          --request POST \
+          "https://$key.submitapi-m1.demeter.run/api/submit/tx" \
+          --header 'Content-Type: application/cbor' \
+          --data '')
+
+
+        if [[ -n "$status_code" && "$status_code" -eq 400 ]]; then
+            return 0
+        else
+            echo "SubmitApiPort is not ready yet, waiting... (attempt $attempt)"
+            sleep $SLEEP_DURATION
+        fi
+    done
+
+    echo "Error: SubmitApiPort is not ready after $MAX_ATTEMPT attempts."
+    finish 
+    exit 1
+}
+
 
 echo "Configuring environment ..."
 
@@ -257,5 +282,9 @@ if (( SLOT < NODE_SLOT )); then
     finish 
     exit 1
 fi
+
+RESOURCE=$(create_port 'SubmitApiPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
+echo "Testing SubmitApiPort ..."
+submit_api_port_expect $(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken')
 
 finish
