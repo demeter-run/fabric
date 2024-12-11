@@ -3,6 +3,7 @@
 GRPCURL_VERSION="1.9.1"
 CARDANO_NODE_VERSION="10.1.3"
 AUTH0_URL="https://txpipe.us.auth0.com/oauth/token"
+OPSGENIE_API_URL="https://api.opsgenie.com/v2/alerts"
 FABRIC_URL="rpc.demeter.run:443"
 # FABRIC_URL="0.0.0.0:5000"
 MAX_ATTEMPT=3
@@ -38,8 +39,7 @@ set_auth_token(){
     --data-urlencode "client_secret=$CLIENT_SECRET" | jq -r '.access_token')
     
     if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-        echo "Error: Failed to get Auth0 access token"
-        exit 1
+        return 1
     fi
 
     echo "Auth token requested"
@@ -50,8 +50,7 @@ create_project() {
 
     PROJECT_ID=$(./grpcurl -H "Authorization: Bearer $TOKEN" -d '{"name": "e2e project"}' $FABRIC_URL demeter.ops.v1alpha.ProjectService.CreateProject | jq -r '.id')
     if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "null" ]; then
-        echo "Error: Failed to create project"
-        exit 1
+        return 1
     fi
 
     echo "Project created: $PROJECT_ID"
@@ -68,6 +67,31 @@ finish() {
     echo "Project deleted"
 }
 
+send_opsgenie_alert() {
+  local message=$1
+  local description=$2
+
+  curl -X POST "$OPSGENIE_API_URL" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: GenieKey $OPSGENIE_API_KEY" \
+    -d '{
+      "message": "'"${message}"'",
+      "description": "'"${description}"'",
+      "priority": "P1",
+      "tags": ["alertname:Fabric Port Errors", "github:ci"]
+    }'
+}
+
+handle_error() {
+  local resource_name=$1
+  local error_message=$2
+
+  echo "Error: $error_message"
+  # send_opsgenie_alert "$resource_name Failure" "$error_message"
+  finish
+  exit 1
+}
+
 create_port() {
     local kind=$1
     local spec=$2
@@ -78,14 +102,13 @@ create_port() {
       $FABRIC_URL demeter.ops.v1alpha.ResourceService.CreateResource | jq -r '.id')
 
     if [ -z "$RESOURCE_ID" ] || [ "$RESOURCE_ID" = "null" ]; then
-        echo "Error: Failed to create resource $kind"
-        finish 
-        exit 1
+        return 1
     fi
 
-    sleep $SLEEP_DURATION
 
     for attempt in $(seq 1 $MAX_ATTEMPT); do
+        sleep $SLEEP_DURATION
+      
         RESOURCE=$(./grpcurl  \
           -H "Authorization: Bearer $TOKEN" \
           -d "{\"id\": \"$RESOURCE_ID\"}" \
@@ -94,14 +117,10 @@ create_port() {
         if [[ -n "$RESOURCE" && "$RESOURCE" != "null" ]]; then
             echo "$RESOURCE"
             return 0
-        else
-            sleep $SLEEP_DURATION
         fi
     done
 
-    echo "Error: $kind is not ready after $MAX_ATTEMPT attempts."
-    finish 
-    exit 1
+    return 1
 }
 
 http_port_expect() {
@@ -109,19 +128,17 @@ http_port_expect() {
     local path=$2
 
     for attempt in $(seq 1 $MAX_ATTEMPT); do
+        sleep $SLEEP_DURATION
+
         JSON_DATA=$(curl --location "$endpoint/$path")
 
         if [[ -n "$JSON_DATA" ]]; then
             echo "$JSON_DATA"
             return 0
         fi
-
-        sleep $SLEEP_DURATION
     done
 
-    echo "Error: $endpoint is not ready after $MAX_ATTEMPT attempts."
-    finish 
-    exit 1
+    return 1
 }
 
 node_port_expect() {
@@ -144,35 +161,29 @@ node_port_expect() {
                 return 0  
             else
                 echo "Error: syncProgress is not within the acceptable range of 99 to 100"
-                finish 
-                exit 1
+                return 1
             fi
         fi
     done
 
-    echo "Error: cardano node is not ready after $MAX_ATTEMPT attempts."
-    finish 
-    exit 1
+    return 1
 }
-
 
 utxorpc_port_expect() {
     local key=$1
 
     for attempt in $(seq 1 $MAX_ATTEMPT); do
+        sleep $SLEEP_DURATION
+
         UTXO_SLOT=$(./grpcurl -H "dmtr-api-key: $key" -H 'content-type: application/grpc' mainnet.utxorpc-v0.demeter.run:443 utxorpc.v1alpha.query.QueryService.ReadParams | jq -r '.ledgerTip.slot')
 
         if [[ -n "$UTXO_SLOT" ]]; then
             echo "$UTXO_SLOT"
             return 0
         fi
-
-        sleep $SLEEP_DURATION
     done
 
-    echo "Error: UtxoRpc is not ready after $MAX_ATTEMPT attempts."
-    finish 
-    exit 1
+    return 1
 }
 
 submit_api_port_expect() {
@@ -186,105 +197,142 @@ submit_api_port_expect() {
           --header 'Content-Type: application/cbor' \
           --data '')
 
-
         if [[ -n "$status_code" && "$status_code" -eq 400 ]]; then
             return 0
-        else
-            echo "SubmitApiPort is not ready yet, waiting... (attempt $attempt)"
-            sleep $SLEEP_DURATION
         fi
+
+        sleep $SLEEP_DURATION
     done
 
-    echo "Error: SubmitApiPort is not ready after $MAX_ATTEMPT attempts."
-    finish 
-    exit 1
+    return 1
 }
-
 
 echo "Configuring environment ..."
 
 install_dependencies
 set_auth_token
+if [ $? -ne 0 ]; then
+  handle_error "Auth0" "Failed to authenticate to Auth0"
+fi
 create_project
+if [ $? -ne 0 ]; then
+  handle_error "Project" "Failed to create project"
+fi
 sleep $SLEEP_DURATION
 
-echo "Start validations ..."
+echo "Starting tests ..."
 
-RESOURCE=$(create_port 'CardanoNodePort' '"{\"network\":\"mainnet\",\"version\":\"stable\",\"throughputTier\":\"0\"}"')
 echo "Testing CardanoNodePort ..."
+RESOURCE=$(create_port 'CardanoNodePort' '"{\"network\":\"mainnet\",\"version\":\"stable\",\"throughputTier\":\"0\"}"')
+if [ $? -ne 0 ]; then
+  handle_error "CardanoNodePort" "Failed to create CardanoNodePort"
+fi
 node_port_expect $(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken')
+if [ $? -ne 0 ]; then
+  handle_error "CardanoNodePort" "CardanoNodePort validation failed"
+fi
 echo "Node slot: $NODE_SLOT"
 NODE_SLOT=$(( NODE_SLOT - 120 ))
 
-RESOURCE=$(create_port 'BlockfrostPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
 echo "Testing Blockfrost ..."
+RESOURCE=$(create_port 'BlockfrostPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
+if [ $? -ne 0 ]; then
+  handle_error "BlockfrostPort" "Failed to create BlockfrostPort"
+fi
 RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').blockfrost-m1.demeter.run" "blocks/latest")
+if [ $? -ne 0 ]; then
+  handle_error "BlockfrostPort" "BlockfrostPort validation failed"
+fi
 SLOT="$(echo "$RESPONSE" | jq -r '.slot')"
 echo "Blockfrost slot: $SLOT"
 if (( SLOT < NODE_SLOT )); then
-    echo "Error: BlockfrostPort is not in the chain tip"
-    finish 
-    exit 1
+    handle_error "BlockfrostPort" "BlockfrostPort is not in the chain tip"
 fi
 
-RESOURCE=$(create_port 'KupoPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"pruneUtxo\":true,\"operatorVersion\":\"1\"}"')
 echo "Testing KupoPort ..."
+RESOURCE=$(create_port 'KupoPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"pruneUtxo\":true,\"operatorVersion\":\"1\"}"')
+if [ $? -ne 0 ]; then
+  handle_error "KupoPort" "Failed to create KupoPort"
+fi
 RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v2.kupo-m1.demeter.run" "health")
 SLOT=$(echo "$RESPONSE" | grep "^kupo_most_recent_checkpoint " | awk '{print $2}')
+if [ $? -ne 0 ]; then
+  handle_error "KupoPort" "KupoPort validation failed"
+fi
 echo "Kupo slot: $SLOT"
 if (( SLOT < NODE_SLOT )); then
-    echo "Error: KupoPort is not in the chain tip"
-    finish 
-    exit 1
+    handle_error "KupoPort" "KupoPort is not in the chain tip"
 fi
 
-RESOURCE=$(create_port 'OgmiosPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"version\":6}"')
 echo "Testing OgmiosPort ..."
+RESOURCE=$(create_port 'OgmiosPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"version\":6}"')
+if [ $? -ne 0 ]; then
+  handle_error "OgmiosPort" "Failed to create OgmiosPort"
+fi
 RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v6.ogmios-m1.demeter.run" "health")
 SLOT="$(echo "$RESPONSE" | jq -r '.lastKnownTip.slot')"
+if [ $? -ne 0 ]; then
+  handle_error "OgmiosPort" "OgmiosPort validation failed"
+fi
 echo "Ogmios slot: $SLOT"
 if (( SLOT < NODE_SLOT )); then
-    echo "Error: OgmiosPort is not in the chain tip"
-    finish 
-    exit 1
+    handle_error "OgmiosPort" "OgmiosPort is not in the chain tip"
 fi
 
-RESOURCE=$(create_port 'UtxoRpcPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
 echo "Testing UtxoRpcPort ..."
+RESOURCE=$(create_port 'UtxoRpcPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
+if [ $? -ne 0 ]; then
+  handle_error "UtxoRpcPort" "Failed to create UtxoRpcPort"
+fi
 SLOT=$(utxorpc_port_expect $(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.authToken'))
+if [ $? -ne 0 ]; then
+  handle_error "UtxoRpcPort" "UtxoRpcPort validation failed"
+fi
 echo "UtxoRpc slot: $SLOT"
 if (( SLOT < NODE_SLOT )); then
-    echo "Error: UtxoRpcPort is not in the chain tip"
-    finish 
-    exit 1
+    handle_error "UtxoRpcPort" "UtxoRpcPort is not in the chain tip"
 fi
 
-RESOURCE=$(create_port 'MumakPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\"}"')
 echo "Testing MumakPort ..."
+RESOURCE=$(create_port 'MumakPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\"}"')
+if [ $? -ne 0 ]; then
+  handle_error "MumakPort" "Failed to create MumakPort"
+fi
 export PGUSER=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.username') 
 export PGPASSWORD=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.password') 
 SLOT=$(psql --dbname=cardano-mainnet --host=mumak-m0.demeter.run -c "select slot from blocks order by slot desc limit 1" -t)
+if [ $? -ne 0 ]; then
+  handle_error "MumakPort" "MumakPort validation failed"
+fi
 echo "Mumak slot: $SLOT"
 if (( SLOT < NODE_SLOT )); then
-    echo "Error: MumakPort is not in the chain tip"
-    finish 
-    exit 1
+    handle_error "MumakPort" "MumakPort is not in the chain tip"
 fi
 
-RESOURCE=$(create_port 'DbSyncPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\"}"')
 echo "Testing DbSyncPort ..."
+RESOURCE=$(create_port 'DbSyncPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\"}"')
+if [ $? -ne 0 ]; then
+  handle_error "DbSyncPort" "Failed to create DbSyncPort"
+fi
 export PGUSER=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.username') 
 export PGPASSWORD=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.password') 
 SLOT=$(psql --dbname=dbsync-mainnet --host=dbsync-v3.demeter.run -c "select slot_no from block where block_no is not null order by block_no desc limit 1" -t)
+if [ $? -ne 0 ]; then
+  handle_error "DbSyncPort" "DbSyncPort validation failed"
+fi
 echo "DbSync slot: $SLOT"
 if (( SLOT < NODE_SLOT )); then
-    echo "Error: DbSyncPort is not in the chain tip"
-    finish 
-    exit 1
+    handle_error "DbSyncPort" "DbSyncPort is not in the chain tip"
 fi
 
-RESOURCE=$(create_port 'SubmitApiPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
 echo "Testing SubmitApiPort ..."
+RESOURCE=$(create_port 'SubmitApiPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
+if [ $? -ne 0 ]; then
+  handle_error "SubmitApiPort" "Failed to create SubmitApiPort"
+fi
 submit_api_port_expect $(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken')
+if [ $? -ne 0 ]; then
+  handle_error "SubmitApiPort" "SubmitApiPort validation failed"
+fi
 
 finish
