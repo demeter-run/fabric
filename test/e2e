@@ -3,7 +3,7 @@
 GRPCURL_VERSION="1.9.1"
 CARDANO_NODE_VERSION="10.1.3"
 AUTH0_URL="https://txpipe.us.auth0.com/oauth/token"
-OPSGENIE_API_URL="https://api.opsgenie.com/v2/alerts"
+OPSGENIE_URL="https://api.opsgenie.com/v2/alerts"
 FABRIC_URL="rpc.demeter.run:443"
 # FABRIC_URL="0.0.0.0:5000"
 MAX_ATTEMPT=3
@@ -71,9 +71,9 @@ send_opsgenie_alert() {
   local message=$1
   local description=$2
 
-  curl -X POST "$OPSGENIE_API_URL" \
+  curl -X POST "$OPSGENIE_URL" \
     -H "Content-Type: application/json" \
-    -H "Authorization: GenieKey $OPSGENIE_API_KEY" \
+    -H "Authorization: GenieKey $OPSGENIE_KEY" \
     -d '{
       "message": "'"${message}"'",
       "description": "'"${description}"'",
