@@ -186,11 +186,13 @@ sleep $SLEEP_DURATION
 echo "Start validations ..."
 
 RESOURCE=$(create_port 'CardanoNodePort' '"{\"network\":\"mainnet\",\"version\":\"stable\",\"throughputTier\":\"0\"}"')
+echo "Testing CardanoNodePort ..."
 node_port_expect $(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken')
 echo "Node slot: $NODE_SLOT"
 NODE_SLOT=$(( NODE_SLOT - 120 ))
 
 RESOURCE=$(create_port 'BlockfrostPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
+echo "Testing Blockfrost ..."
 RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').blockfrost-m1.demeter.run" "blocks/latest")
 SLOT="$(echo "$RESPONSE" | jq -r '.slot')"
 echo "Blockfrost slot: $SLOT"
@@ -201,6 +203,7 @@ if (( SLOT < NODE_SLOT )); then
 fi
 
 RESOURCE=$(create_port 'KupoPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"pruneUtxo\":true,\"operatorVersion\":\"1\"}"')
+echo "Testing KupoPort ..."
 RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v2.kupo-m1.demeter.run" "health")
 SLOT=$(echo "$RESPONSE" | grep "^kupo_most_recent_checkpoint " | awk '{print $2}')
 echo "Kupo slot: $SLOT"
@@ -211,6 +214,7 @@ if (( SLOT < NODE_SLOT )); then
 fi
 
 RESOURCE=$(create_port 'OgmiosPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"version\":6}"')
+echo "Testing OgmiosPort ..."
 RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v6.ogmios-m1.demeter.run" "health")
 SLOT="$(echo "$RESPONSE" | jq -r '.lastKnownTip.slot')"
 echo "Ogmios slot: $SLOT"
@@ -221,6 +225,7 @@ if (( SLOT < NODE_SLOT )); then
 fi
 
 RESOURCE=$(create_port 'UtxoRpcPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')
+echo "Testing UtxoRpcPort ..."
 SLOT=$(utxorpc_port_expect $(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.authToken'))
 echo "UtxoRpc slot: $SLOT"
 if (( SLOT < NODE_SLOT )); then
@@ -229,14 +234,26 @@ if (( SLOT < NODE_SLOT )); then
     exit 1
 fi
 
-
 RESOURCE=$(create_port 'MumakPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\"}"')
+echo "Testing MumakPort ..."
 export PGUSER=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.username') 
 export PGPASSWORD=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.password') 
 SLOT=$(psql --dbname=cardano-mainnet --host=mumak-m0.demeter.run -c "select slot from blocks order by slot desc limit 1" -t)
 echo "Mumak slot: $SLOT"
 if (( SLOT < NODE_SLOT )); then
     echo "Error: MumakPort is not in the chain tip"
+    finish 
+    exit 1
+fi
+
+RESOURCE=$(create_port 'DbSyncPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\"}"')
+echo "Testing DbSyncPort ..."
+export PGUSER=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.username') 
+export PGPASSWORD=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.password') 
+SLOT=$(psql --dbname=dbsync-mainnet --host=dbsync-v3.demeter.run -c "select slot_no from block where block_no is not null order by block_no desc limit 1" -t)
+echo "DbSync slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    echo "Error: DbSyncPort is not in the chain tip"
     finish 
     exit 1
 fi
