@@ -17,5 +17,6 @@ jobs:
           PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
           CLIENT_ID: ${{ secrets.AUTH0_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.AUTH0_CLIENT_SECRET }}
+          OPSGENIE_KEY: ${{ secrets.OPSGENIE_KEY }}
         run: ./test/e2e
       
