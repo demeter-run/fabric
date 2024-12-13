@@ -13,8 +13,6 @@ installers = []
 targets = [
    "x86_64-unknown-linux-gnu",
    "x86_64-apple-darwin",
-   "aarch64-apple-darwin", 
-   "aarch64-unknown-linux-gnu"
 ]
 
 [dist.dependencies.homebrew]
@@ -27,5 +25,4 @@ cmake = '*'
 pkg-config = '*'
 libssl-dev = '*'
 libsasl2-dev = '*'
-aarch64-linux-gnu-gcc = '*'
 

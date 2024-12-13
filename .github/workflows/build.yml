@@ -7,6 +7,7 @@ on:
       - "main"
     paths:
       - "!test/**"
+      - "!dist-workspace.toml"
 
 jobs:
   rpc:
