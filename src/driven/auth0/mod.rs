@@ -86,7 +86,10 @@ impl Auth0DrivenImpl {
 #[async_trait::async_trait]
 impl Auth0Driven for Auth0DrivenImpl {
     fn verify(&self, token: &str) -> Result<String> {
-        let header = decode_header(token).map_err(|err| Error::Unexpected(err.to_string()))?;
+        let header = decode_header(token).map_err(|error| {
+            error!(?error);
+            Error::Unauthorized("invalid authorization token".into())
+        })?;
 
         let Some(kid) = header.kid else {
             return Err(Error::Unexpected(
