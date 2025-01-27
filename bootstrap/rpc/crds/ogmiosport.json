@@ -43,6 +43,14 @@
       }
     },
     {
+      "description": "vector-testnet",
+      "spec": {
+        "network": "vector-testnet",
+        "throughputTier": "0",
+        "version": 6
+      }
+    },
+    {
       "description": "prime-testnet",
       "spec": {
         "network": "prime-testnet",
