@@ -35,26 +35,6 @@ pub async fn subscribe(config: MonitorConfig, metrics: Arc<MetricsDriven>) -> Re
                         let payload: serde_json::Value =
                             serde_json::from_slice(message.payload().unwrap())?;
 
-                        match payload.get("annotation") {
-                            Some(annotation) => match annotation.get("source") {
-                                Some(v) => {
-                                    let source = v.to_string();
-                                    if !source_regex.is_match(&source) {
-                                        info!(?source, "bypass event. Event source not allowed");
-                                        continue;
-                                    }
-                                }
-                                None => {
-                                    info!("bypass event. Event doesnt have a source");
-                                    continue;
-                                }
-                            },
-                            None => {
-                                info!("bypass event. Event doesnt have a source");
-                                continue;
-                            }
-                        };
-
                         let result = {
                             match &event {
                                 Event::ProjectCreated(evt) => {
