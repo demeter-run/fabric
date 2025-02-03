@@ -115,7 +115,12 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
 
                 if let Some(notify) = &slack_notify_driven {
                     if let Err(err) = notify
-                        .notify(event.clone(), auth0_driven.clone().unwrap().clone())
+                        .notify(
+                            event.clone(),
+                            auth0_driven.clone().unwrap().clone(),
+                            resource_cache.clone(),
+                            project_cache.clone(),
+                        )
                         .await
                     {
                         warn!(err = err.to_string(), "Failed to send Slack notification.")
