@@ -1,9 +1,8 @@
 use anyhow::Result;
 use rdkafka::{
     consumer::{CommitMode, Consumer, StreamConsumer},
-    ClientConfig, Message,
+    ClientConfig,
 };
-use regex::Regex;
 use std::{borrow::Borrow, collections::HashMap, sync::Arc};
 use tracing::{error, info, warn};
 
@@ -22,8 +21,6 @@ pub async fn subscribe(config: MonitorConfig, metrics: Arc<MetricsDriven>) -> Re
     let consumer: StreamConsumer = client_config.create()?;
     consumer.subscribe(&[&config.topic])?;
 
-    let source_regex = Regex::new(r"fabric-.+")?;
-
     info!("Monitor subscribe running");
     loop {
         match consumer.recv().await {
@@ -32,9 +29,6 @@ pub async fn subscribe(config: MonitorConfig, metrics: Arc<MetricsDriven>) -> Re
                 let message = message.borrow();
                 match message.try_into() {
                     Ok(event) => {
-                        let payload: serde_json::Value =
-                            serde_json::from_slice(message.payload().unwrap())?;
-
                         let result = {
                             match &event {
                                 Event::ProjectCreated(evt) => {
