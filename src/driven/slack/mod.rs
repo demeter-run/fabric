@@ -43,16 +43,21 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
                         } else {
                             let profile = profile.first().unwrap();
 
-                            let mut new_paload_as_value = serde_json::to_value(payload).unwrap();
-                            let new_payload = new_paload_as_value.as_object_mut().unwrap();
-                            new_payload.insert(
-                                "user".to_string(),
-                                serde_json::json!({
-                                    "name": profile.name,
-                                    "email": profile.email
-                                }),
-                            );
-                            Some(to_string_pretty(&new_payload).unwrap())
+                            if profile.email == E2E_EMAIL {
+                                None
+                            } else {
+                                let mut new_paload_as_value =
+                                    serde_json::to_value(payload).unwrap();
+                                let new_payload = new_paload_as_value.as_object_mut().unwrap();
+                                new_payload.insert(
+                                    "user".to_string(),
+                                    serde_json::json!({
+                                        "name": profile.name,
+                                        "email": profile.email
+                                    }),
+                                );
+                                Some(to_string_pretty(&new_payload).unwrap())
+                            }
                         }
                     }
                     Err(_) => Some(to_string_pretty(&payload).unwrap()),
