@@ -1,0 +1,20 @@
+FROM rust:1.79-slim-buster AS build
+
+WORKDIR /app
+
+RUN apt update 
+RUN apt install -y build-essential pkg-config libssl-dev libsasl2-dev cmake
+
+COPY ./Cargo.toml ./Cargo.toml
+COPY . .
+
+RUN cargo build --release --bin=cli
+
+FROM rust:1.79-slim-buster 
+
+RUN apt update 
+RUN apt install -y libssl-dev libsasl2-dev
+
+COPY --from=build /app/target/release/cli .
+
+ENTRYPOINT ["./cli"]
