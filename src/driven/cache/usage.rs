@@ -98,16 +98,18 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                     id,
                     resource_id,
                     event_id,
+                    cluster_id,
                     units,
                     tier,
                     interval,
                     created_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
                 usage.id,
                 usage.resource_id,
                 usage.event_id,
+                usage.cluster_id,
                 usage.units,
                 usage.tier,
                 interval,
@@ -122,8 +124,7 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
         Ok(())
     }
 }
-#[async_trait::async_trait]
-impl UsageDrivenCacheBackoffice for SqliteUsageDrivenCache {
+#[async_trait::async_trait] impl UsageDrivenCacheBackoffice for SqliteUsageDrivenCache {
     async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReport>> {
         let report_aggregated = sqlx::query_as::<_, UsageReport>(
             r#"
@@ -163,6 +164,7 @@ impl FromRow<'_, SqliteRow> for Usage {
             id: row.try_get("id")?,
             event_id: row.try_get("event_id")?,
             resource_id: row.try_get("resource_id")?,
+            cluster_id: row.try_get("cluster_id")?,
             units: row.try_get("units")?,
             tier: row.try_get("tier")?,
             interval: interval as u64,
