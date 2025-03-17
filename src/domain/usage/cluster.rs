@@ -36,7 +36,6 @@ pub async fn sync_usage(
     let end = Utc::now();
 
     let resources = cache.find_resouces().await?;
-    dbg!(&resources);
 
     let mut metrics: HashMap<String, UsageMetric> = HashMap::new();
     for r in resources {
@@ -61,7 +60,6 @@ pub async fn sync_usage(
         }
 
         let usages = usages.unwrap();
-        dbg!(&usages);
 
         if !usages.iter().any(|u| u.tier == tier) {
             let unit = UsageUnitMetric {
