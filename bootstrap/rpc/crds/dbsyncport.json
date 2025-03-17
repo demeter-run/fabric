@@ -1,20 +1,32 @@
 {
-  "cost": {
+  "plan": {
     "0": {
-      "minimum": 0,
-      "delta": 0
+      "dns": "demeter.run",
+      "cost": {
+        "minimum": 0,
+        "delta": 0
+      }
     },
     "1": {
-      "minimum": 0,
-      "delta": 0.000007407
+      "dns": "dmtr.host",
+      "cost": {
+        "minimum": 0,
+        "delta": 0.000007407
+      }
     },
     "2": {
-      "minimum": 100,
-      "delta": 0.000006713
+      "dns": "dmtr.host",
+      "cost": {
+        "minimum": 100,
+        "delta": 0.000006713
+      }
     },
     "3": {
-      "minimum": 300,
-      "delta": 0.000005556
+      "dns": "dmtr.host",
+      "cost": {
+        "minimum": 300,
+        "delta": 0.000005556
+      }
     }
   },
   "options": [

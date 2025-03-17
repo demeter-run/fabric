@@ -85,28 +85,30 @@ impl UsageReportImpl for Vec<UsageReport> {
         let month_interval = (days * 24 * 60 * 60) as f64;
 
         self.iter_mut().for_each(|usage| {
+            let kind = &usage.resource_kind;
             match metadata.find_by_kind(&usage.resource_kind) {
                 Ok(metadata) => match metadata {
-                    Some(metadata) => match metadata.cost.get(&usage.tier) {
-                        Some(cost) => {
-                            let value = (usage.units as f64) * cost.delta;
-                            let rounded = (value * 100.0).round() / 100.0;
-
-                            usage.units_cost = Some(rounded);
-
-                            if cost.minimum > 0. {
-                                let value =
-                                    (cost.minimum / month_interval) * (usage.interval as f64);
+                    Some(metadata) => match metadata.plan.get(&usage.tier) {
+                        Some(plan) => match &plan.cost {
+                            Some(cost) => {
+                                let value = (usage.units as f64) * cost.delta;
                                 let rounded = (value * 100.0).round() / 100.0;
 
-                                usage.minimum_cost = Some(rounded);
+                                usage.units_cost = Some(rounded);
+
+                                if cost.minimum > 0. {
+                                    let value =
+                                        (cost.minimum / month_interval) * (usage.interval as f64);
+                                    let rounded = (value * 100.0).round() / 100.0;
+
+                                    usage.minimum_cost = Some(rounded);
+                                }
                             }
-                        }
-                        None => {
-                            warn!("tier cost not found for the kind {}", usage.resource_kind)
-                        }
+                            None => warn!("cost not found for {kind}"),
+                        },
+                        None => warn!("plan not found for {kind}"),
                     },
-                    None => warn!("metadata not found for the kind {}", usage.resource_kind),
+                    None => warn!("metadata not found for {kind}"),
                 },
                 Err(error) => error!(?error, "fail to find the metadata"),
             };

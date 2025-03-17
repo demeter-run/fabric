@@ -40,7 +40,7 @@ pub async fn fetch(
         .await?
         .into_iter()
         .map(|mut resource| {
-            match metadata.render_hbs(&resource.kind.to_lowercase(), &resource.spec) {
+            match metadata.render_hbs(&resource.kind, &resource.spec) {
                 Ok(annotations) => resource.annotations = Some(annotations),
                 Err(error) => error!(?error),
             };
@@ -70,7 +70,7 @@ pub async fn fetch_by_id(
     )
     .await?;
 
-    match metadata.render_hbs(&resource.kind.to_lowercase(), &resource.spec) {
+    match metadata.render_hbs(&resource.kind, &resource.spec) {
         Ok(annotations) => resource.annotations = Some(annotations),
         Err(error) => error!(?error),
     };

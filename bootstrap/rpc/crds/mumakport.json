@@ -1,5 +1,18 @@
 {
-  "cost": {},
+  "plan": {
+    "0": {
+      "dns": "demeter.run"
+    },
+    "1": {
+      "dns": "dmtr.host"
+    },
+    "2": {
+      "dns": "dmtr.host"
+    },
+    "3": {
+      "dns": "dmtr.host"
+    }
+  },
   "options": [
     {
       "description": "mainnet",
