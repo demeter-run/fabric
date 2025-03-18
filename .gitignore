@@ -1,6 +1,7 @@
 /target
 .env
 dev.*.db*
+prd.*.db*
 config.*.toml
 grpcurl*
 test/.terraform*
