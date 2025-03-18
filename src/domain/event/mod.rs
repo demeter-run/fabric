@@ -118,12 +118,18 @@ pub struct ResourceCreated {
     pub project_namespace: String,
     pub name: String,
     pub kind: String,
+    #[serde(default = "default_resource_category")]
+    pub category: String,
     pub spec: String,
     pub status: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 into_event!(ResourceCreated);
+
+fn default_resource_category() -> String {
+    "demeter-port".to_string()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceUpdated {
@@ -338,6 +344,7 @@ mod tests {
                 kind: "CardanoNodePort".into(),
                 spec: "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
                     .into(),
+                category: "demeter-port".to_string(),
                 status: ResourceStatus::Active.to_string(),
                 created_at: Utc::now(),
                 updated_at: Utc::now(),

@@ -36,7 +36,7 @@ pub async fn fetch(
     .await?;
 
     let resources = resource_cache
-        .find(&cmd.project_id, &cmd.page, &cmd.page_size)
+        .find(&cmd.project_id, &cmd.page, &cmd.page_size, &cmd.category)
         .await?
         .into_iter()
         .map(|mut resource| {
@@ -133,12 +133,15 @@ pub async fn create(
     };
 
     // TODO: add data from crd to build api resource
-    let evt = ResourceCreated {
+    let evt: ResourceCreated = ResourceCreated {
         id: cmd.id,
         project_id: project.id,
         project_namespace: project.namespace,
         name: cmd.name,
         kind: cmd.kind.clone(),
+        category: metadata.crd.spec.names.categories
+            .map(|c| c.first().map(|s: &String| s.clone()).unwrap_or_else(|| "demeter-port".to_string()))
+            .unwrap_or_else(|| "demeter-port".to_string()),
         spec: serde_json::to_string(&spec)?,
         status: ResourceStatus::Active.to_string(),
         created_at: Utc::now(),
@@ -256,6 +259,7 @@ pub struct FetchCmd {
     pub project_id: String,
     pub page: u32,
     pub page_size: u32,
+    pub category: String,
 }
 impl FetchCmd {
     pub fn new(
@@ -263,6 +267,7 @@ impl FetchCmd {
         project_id: String,
         page: Option<u32>,
         page_size: Option<u32>,
+        category: String,
     ) -> Result<Self> {
         let page = page.unwrap_or(1);
         let page_size = page_size.unwrap_or(PAGE_SIZE_DEFAULT);
@@ -278,6 +283,7 @@ impl FetchCmd {
             project_id,
             page,
             page_size,
+            category,
         })
     }
 }
@@ -378,6 +384,7 @@ mod tests {
                 project_id: Uuid::new_v4().to_string(),
                 page: 1,
                 page_size: 12,
+                category: "demeter-port".to_string(),
             }
         }
     }
@@ -420,7 +427,7 @@ mod tests {
         let mut resource_cache = MockResourceDrivenCache::new();
         resource_cache
             .expect_find()
-            .return_once(|_, _, _| Ok(vec![Resource::default()]));
+            .return_once(|_, _, _, _| Ok(vec![Resource::default()]));
 
         let mut metadata = MockMetadataDriven::new();
         metadata
