@@ -4,6 +4,7 @@ use anyhow::Result as AnyhowResult;
 use include_dir::Dir;
 
 use crate::domain::{
+    error::Error,
     metadata::{MetadataDriven, ResourceMetadata},
     Result,
 };
@@ -95,9 +96,29 @@ impl MetadataDriven for FileMetadata<'_> {
             .find(|m| m.crd.spec.names.kind == kind))
     }
 
-    fn render_hbs(&self, name: &str, spec: &str) -> Result<String> {
-        let data: serde_json::Value = serde_json::from_str(spec)?;
-        let rendered = self.hbs.render(name, &data)?;
+    fn render_hbs(&self, kind: &str, spec: &str) -> Result<String> {
+        let value = serde_json::from_str(spec)
+            .map_err(|_| Error::CommandMalformed("spec must be a json".into()))?;
+        let mut data = match value {
+            serde_json::Value::Object(v) => Ok(v),
+            _ => Err(Error::CommandMalformed("invalid spec json".into())),
+        }?;
+
+        let Some(metadata) = self.find_by_kind(kind)? else {
+            return Err(Error::Unexpected(format!("metadata not found for {kind}")));
+        };
+
+        let tier = data
+            .get("throughputTier")
+            .map(|v| v.as_str().unwrap())
+            .unwrap_or_default();
+
+        if let Some(plan) = metadata.plan.get(tier) {
+            data.insert("dns".into(), serde_json::Value::String(plan.dns.clone()));
+        }
+
+        let name = kind.to_lowercase();
+        let rendered = self.hbs.render(&name, &data)?;
         let value: serde_json::Value = serde_json::from_str(&rendered.replace('\n', ""))?;
 
         Ok(value.to_string())

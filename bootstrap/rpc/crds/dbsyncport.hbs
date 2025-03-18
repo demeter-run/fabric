@@ -1,7 +1,7 @@
 [
   {
     "label": "Public hostname",
-    "value": "dbsync-v3.demeter.run",
+    "value": "dbsync-v3.{{dns}}",
     "description": "Public hostname to use in your PostgreSQL connection"
   },
   {
@@ -26,7 +26,7 @@
   },
   {
     "label": "Connection string",
-    "value": "postgresql://{{username}}:{{password}}@dbsync-v3.demeter.run:5432/dbsync-{{network}}",
+    "value": "postgresql://{{username}}:{{password}}@dbsync-v3.{{dns}}:5432/dbsync-{{network}}",
     "description": "Connection string to use in your PostgreSQL connection"
   }
 ]

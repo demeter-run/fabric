@@ -1,8 +1,11 @@
 {
-  "cost": {
+  "plan": {
     "0": {
-      "minimum": 200,
-      "delta": 0.3
+      "dns": "demeter.run",
+      "cost": {
+        "minimum": 200,
+        "delta": 0.3
+      }
     }
   },
   "options": [

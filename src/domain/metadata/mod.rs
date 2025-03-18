@@ -39,8 +39,14 @@ pub struct ResourceMetadataCost {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceMetadataPlan {
+    pub dns: String,
+    pub cost: Option<ResourceMetadataCost>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceMetadata {
-    pub cost: HashMap<String, ResourceMetadataCost>,
+    pub plan: HashMap<String, ResourceMetadataPlan>,
     pub options: serde_json::Value,
     pub crd: CustomResourceDefinition,
 }
