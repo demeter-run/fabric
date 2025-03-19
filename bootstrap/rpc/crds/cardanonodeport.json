@@ -8,21 +8,21 @@
       }
     },
     "1": {
-      "dns": "dmtr.host",
+      "dns": "demeter.run",
       "cost": {
         "minimum": 0,
         "delta": 0.000013889
       }
     },
     "2": {
-      "dns": "dmtr.host",
+      "dns": "demeter.run",
       "cost": {
         "minimum": 100,
         "delta": 0.00000463
       }
     },
     "3": {
-      "dns": "dmtr.host",
+      "dns": "demeter.run",
       "cost": {
         "minimum": 200,
         "delta": 0.000003472
