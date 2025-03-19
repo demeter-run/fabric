@@ -16,8 +16,6 @@ use crate::{
 
 pub async fn schedule(config: UsageConfig) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
-    sqlite_cache.migrate().await?;
-
     let usage_cache = Arc::new(SqliteUsageDrivenCache::new(sqlite_cache.clone()));
 
     let prometheus_driven = Arc::new(PrometheusUsageDriven::new(&config.prometheus_url));
