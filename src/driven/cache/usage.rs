@@ -45,7 +45,7 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                 	  u.tier, 
                     SUM(u.interval) as interval,
                 	  SUM(u.units) as units, 
-                	  STRFTIME('%Y-%m', 'now') as period 
+                	  STRFTIME('%Y-%m', u.created_at) as period
                 FROM
                     "usage" u 
                 INNER JOIN resource r ON
