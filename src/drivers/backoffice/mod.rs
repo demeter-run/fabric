@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{
     domain::{
@@ -352,58 +352,71 @@ pub async fn fetch_diff(config: BackofficeConfig, output: OutputFormat) -> Resul
 }
 
 fn output_csv_usage(report: Vec<UsageReport>, period: &str) {
-    let path = format!("{period}.csv");
-    let result = csv::Writer::from_path(&path);
-    if let Err(error) = result {
-        error!(?error);
-        return;
+    let mut report_by_cluster: HashMap<String, Vec<UsageReport>> = HashMap::new();
+
+    for r in report.into_iter() {
+        report_by_cluster
+            .entry(r.cluster_id.clone())
+            .or_default()
+            .push(r);
     }
 
-    let mut wtr = result.unwrap();
+    for (cluster_id, report) in report_by_cluster {
+        let path = format!("{cluster_id}.{period}.csv");
+        let result = csv::Writer::from_path(&path);
+        if let Err(error) = result {
+            error!(?error);
+            return;
+        }
 
-    let result = wtr.write_record([
-        "",
-        "project",
-        "stripe_id",
-        "kind",
-        "name",
-        "tier",
-        "time",
-        "units",
-        "units_cost",
-        "minimum_cost",
-    ]);
-    if let Err(error) = result {
-        error!(?error);
-        return;
-    }
+        let mut wtr = result.unwrap();
 
-    for (i, r) in report.iter().enumerate() {
         let result = wtr.write_record([
-            &(i + 1).to_string(),
-            &r.project_namespace,
-            &r.project_billing_provider_id,
-            &r.resource_kind,
-            &r.resource_name,
-            &r.tier,
-            &format!("{:.1}h", ((r.interval as f64) / 60.) / 60.),
-            &r.units.to_string(),
-            &format!("${:.2}", r.units_cost.unwrap_or(0.)),
-            &format!("${:.2}", r.minimum_cost.unwrap_or(0.)),
+            "",
+            "cluster",
+            "project",
+            "stripe_id",
+            "kind",
+            "name",
+            "tier",
+            "time",
+            "units",
+            "units_cost",
+            "minimum_cost",
         ]);
         if let Err(error) = result {
             error!(?error);
             return;
         }
-    }
 
-    let result = wtr.flush();
-    if let Err(error) = result {
-        error!(?error);
-        return;
-    }
+        for (i, r) in report.iter().enumerate() {
+            let result = wtr.write_record([
+                &(i + 1).to_string(),
+                &r.cluster_id,
+                &r.project_namespace,
+                &r.project_billing_provider_id,
+                &r.resource_kind,
+                &r.resource_name,
+                &r.tier,
+                &format!("{:.1}h", ((r.interval as f64) / 60.) / 60.),
+                &r.units.to_string(),
+                &format!("${:.2}", r.units_cost.unwrap_or(0.)),
+                &format!("${:.2}", r.minimum_cost.unwrap_or(0.)),
+            ]);
+            if let Err(error) = result {
+                error!(?error);
+                return;
+            }
+        }
 
-    println!("File {} created", path)
+        let result = wtr.flush();
+        if let Err(error) = result {
+            error!(?error);
+            return;
+        }
+
+        info!("File {} created", path)
+    }
 }
 
 fn output_json_usage(report: Vec<UsageReport>) {
@@ -411,6 +424,7 @@ fn output_json_usage(report: Vec<UsageReport>) {
 
     for r in report {
         json.push(json!({
+            "cluster_id": r.cluster_id,
             "project_id": r.project_id,
             "project_namespace": r.project_namespace,
             "stripe_id": r.project_billing_provider_id,
@@ -432,6 +446,7 @@ fn output_table_usage(report: Vec<UsageReport>) {
     let mut table = Table::new();
     table.set_header(vec![
         "",
+        "cluster",
         "project",
         "stripe_id",
         "kind",
@@ -446,6 +461,7 @@ fn output_table_usage(report: Vec<UsageReport>) {
     for (i, r) in report.iter().enumerate() {
         table.add_row(vec![
             &(i + 1).to_string(),
+            &r.cluster_id,
             &r.project_namespace,
             &r.project_billing_provider_id,
             &r.resource_kind,

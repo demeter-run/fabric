@@ -33,6 +33,7 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
         let report = sqlx::query_as::<_, UsageReport>(
             r#"
                 SELECT 
+                    u.cluster_id,
                 	  p.id as project_id,
                 	  p.namespace as project_namespace,
                 	  p.billing_provider as project_billing_provider,
@@ -45,12 +46,21 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                     SUM(u.interval) as interval,
                 	  SUM(u.units) as units, 
                 	  STRFTIME('%Y-%m', 'now') as period 
-                FROM "usage" u 
-                INNER JOIN resource r ON r.id == u.resource_id
-                INNER JOIN project p ON p.id == r.project_id 
-                WHERE STRFTIME('%Y-%m', u.created_at) = STRFTIME('%Y-%m', 'now') AND r.project_id = $1 
-                GROUP BY resource_id, tier 
-                ORDER BY units DESC
+                FROM
+                    "usage" u 
+                INNER JOIN resource r ON
+                    r.id == u.resource_id
+                INNER JOIN project p ON
+                    p.id == r.project_id 
+                WHERE
+                    STRFTIME('%Y-%m', u.created_at) = STRFTIME('%Y-%m', 'now')
+                    AND r.project_id = $1 
+                GROUP BY 
+                    u.cluster_id,
+                    u.resource_id,
+                    u.tier
+                ORDER BY
+                    units DESC
                 LIMIT $2
                 OFFSET $3;
             "#,
@@ -124,29 +134,41 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
         Ok(())
     }
 }
-#[async_trait::async_trait] impl UsageDrivenCacheBackoffice for SqliteUsageDrivenCache {
+#[async_trait::async_trait]
+impl UsageDrivenCacheBackoffice for SqliteUsageDrivenCache {
     async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReport>> {
         let report_aggregated = sqlx::query_as::<_, UsageReport>(
             r#"
                 SELECT
-                	  p.id as project_id,
-                	  p.namespace as project_namespace,
-                	  p.billing_provider as project_billing_provider,
-                	  p.billing_provider_id as project_billing_provider_id,
-                	  r.id as resource_id,
-                	  r.kind as resource_kind,
-                	  r.name as resource_name,
-                	  r.spec as resource_spec,
-                	  u.tier as tier, 
-                	  SUM(u.interval) as interval, 
-                	  SUM(u.units) as units, 
-                	  STRFTIME('%Y-%m', 'now') as period 
-                FROM "usage" u 
-                INNER JOIN resource r ON r.id == u.resource_id
-                INNER JOIN project p ON p.id == r.project_id 
-                WHERE STRFTIME('%Y-%m', u.created_at) = $1
-                GROUP BY resource_id, tier 
-                ORDER BY project_namespace, resource_id ASC;
+                	u.cluster_id,
+                	p.id as project_id,
+                	p.namespace as project_namespace,
+                	p.billing_provider as project_billing_provider,
+                	p.billing_provider_id as project_billing_provider_id,
+                	r.id as resource_id,
+                	r.kind as resource_kind,
+                	r.name as resource_name,
+                	r.spec as resource_spec,
+                	u.tier as tier,
+                	SUM(u.interval) as interval,
+                	SUM(u.units) as units,
+                	STRFTIME('%Y-%m', u.created_at) as period
+                FROM
+                	"usage" u
+                INNER JOIN resource r ON
+                	r.id == u.resource_id
+                INNER JOIN project p ON
+                	p.id == r.project_id
+                WHERE
+                	STRFTIME('%Y-%m', u.created_at) = $1
+                GROUP BY
+                	cluster_id,
+                	resource_id,
+                	tier
+                ORDER BY
+                	cluster_id,
+                	project_namespace,
+                	resource_id ASC;
             "#,
         )
         .bind(period)
@@ -176,6 +198,7 @@ impl FromRow<'_, SqliteRow> for Usage {
 impl FromRow<'_, SqliteRow> for UsageReport {
     fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
         Ok(Self {
+            cluster_id: row.try_get("cluster_id")?,
             project_id: row.try_get("project_id")?,
             project_namespace: row.try_get("project_namespace")?,
             project_billing_provider: row.try_get("project_billing_provider")?,

@@ -8,7 +8,7 @@ use fabric::drivers::{
     cache::CacheConfig,
 };
 use serde::Deserialize;
-use tracing::{info, Level};
+use tracing::Level;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 #[derive(Parser)]
@@ -133,8 +133,6 @@ async fn main() -> Result<()> {
             fabric::drivers::backoffice::fetch_diff(config.clone().into(), output).await?;
         }
         Commands::Usage(args) => {
-            info!("sincronizing cache");
-
             let output = match args.output {
                 Some(output) => match output.as_str() {
                     "table" => OutputFormat::Table,

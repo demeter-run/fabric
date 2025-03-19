@@ -71,7 +71,10 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
             };
 
             let interval = last_timestamp - first_timestamp;
-            let units = last_value - first_value;
+            let units = match last_value - first_value {
+                v if v < 0 => 0,
+                v => v,
+            };
 
             UsageResourceUnit {
                 units,

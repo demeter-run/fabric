@@ -59,6 +59,7 @@ pub trait UsageReportImpl {
 }
 #[derive(Debug, Clone)]
 pub struct UsageReport {
+    pub cluster_id: String,
     pub project_id: String,
     pub project_namespace: String,
     pub project_billing_provider: String,
@@ -102,7 +103,6 @@ impl UsageReportImpl for Vec<UsageReport> {
                                     let value =
                                         (cost.minimum / month_interval) * (usage.interval as f64);
                                     let rounded = (value * 100.0).round() / 100.0;
-
                                     usage.minimum_cost = Some(rounded);
                                 }
                             }
@@ -150,7 +150,7 @@ mod tests {
                 id: Uuid::new_v4().to_string(),
                 event_id: Uuid::new_v4().to_string(),
                 resource_id: Uuid::new_v4().to_string(),
-                cluster_id: Uuid::new_v4().to_string(),
+                cluster_id: "demeter".into(),
                 units: 120,
                 tier: "0".into(),
                 interval: 10,
@@ -162,6 +162,7 @@ mod tests {
     impl Default for UsageReport {
         fn default() -> Self {
             Self {
+                cluster_id: "txpipe-us-east-2-m2".into(),
                 project_id: Uuid::new_v4().to_string(),
                 project_namespace: "xxx".into(),
                 project_billing_provider: "stripe".into(),
