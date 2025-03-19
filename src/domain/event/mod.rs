@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::Result;
 
-use super::error::Error;
+use super::{error::Error, DEFAULT_CATEGORY};
 
 macro_rules! into_event {
     ($name:ident) => {
@@ -128,7 +128,7 @@ pub struct ResourceCreated {
 into_event!(ResourceCreated);
 
 fn default_resource_category() -> String {
-    "demeter-port".to_string()
+    DEFAULT_CATEGORY.to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -344,7 +344,7 @@ mod tests {
                 kind: "CardanoNodePort".into(),
                 spec: "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
                     .into(),
-                category: "demeter-port".to_string(),
+                category: DEFAULT_CATEGORY.to_string(),
                 status: ResourceStatus::Active.to_string(),
                 created_at: Utc::now(),
                 updated_at: Utc::now(),

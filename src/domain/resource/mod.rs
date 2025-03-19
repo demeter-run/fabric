@@ -104,7 +104,7 @@ pub struct ResourceProject {
 mod tests {
     use uuid::Uuid;
 
-    use crate::domain::utils;
+    use crate::domain::{utils, DEFAULT_CATEGORY};
 
     use super::*;
 
@@ -117,7 +117,7 @@ mod tests {
                 kind: "CardanoNodePort".into(),
                 spec: "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
                     .into(),
-                category: "demeter-port".into(),
+                category: DEFAULT_CATEGORY.to_string(),
                 annotations: None,
                 status: ResourceStatus::Active,
                 created_at: Utc::now(),

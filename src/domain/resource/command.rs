@@ -9,14 +9,7 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::domain::{
-    auth::{assert_permission, Credential},
-    error::Error,
-    event::{EventDrivenBridge, ResourceCreated, ResourceDeleted},
-    metadata::{KnownField, MetadataDriven},
-    project::cache::ProjectDrivenCache,
-    resource::{ResourceStatus, ResourceUpdated},
-    utils::{self, get_schema_from_crd},
-    Result, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
+    auth::{assert_permission, Credential}, error::Error, event::{EventDrivenBridge, ResourceCreated, ResourceDeleted}, metadata::{KnownField, MetadataDriven}, project::cache::ProjectDrivenCache, resource::{ResourceStatus, ResourceUpdated}, utils::{self, get_schema_from_crd}, Result, DEFAULT_CATEGORY, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX
 };
 
 use super::{cache::ResourceDrivenCache, Resource};
@@ -140,8 +133,8 @@ pub async fn create(
         name: cmd.name,
         kind: cmd.kind.clone(),
         category: metadata.crd.spec.names.categories
-            .map(|c| c.first().map(|s: &String| s.clone()).unwrap_or_else(|| "demeter-port".to_string()))
-            .unwrap_or_else(|| "demeter-port".to_string()),
+            .and_then(|c| c.first().map(String::to_owned))
+            .unwrap_or(DEFAULT_CATEGORY.to_string()),
         spec: serde_json::to_string(&spec)?,
         status: ResourceStatus::Active.to_string(),
         created_at: Utc::now(),
@@ -267,10 +260,11 @@ impl FetchCmd {
         project_id: String,
         page: Option<u32>,
         page_size: Option<u32>,
-        category: String,
+        category: Option<String>,
     ) -> Result<Self> {
         let page = page.unwrap_or(1);
         let page_size = page_size.unwrap_or(PAGE_SIZE_DEFAULT);
+        let category = category.unwrap_or(DEFAULT_CATEGORY.to_string());
 
         if page_size >= PAGE_SIZE_MAX {
             return Err(Error::CommandMalformed(format!(
@@ -384,7 +378,7 @@ mod tests {
                 project_id: Uuid::new_v4().to_string(),
                 page: 1,
                 page_size: 12,
-                category: "demeter-port".to_string(),
+                category: DEFAULT_CATEGORY.to_string(),
             }
         }
     }

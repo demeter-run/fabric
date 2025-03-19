@@ -336,7 +336,7 @@ impl FromRow<'_, SqliteRow> for ResourceProject {
 
 #[cfg(test)]
 mod tests {
-    use crate::driven::cache::tests::mock_project;
+    use crate::{domain::DEFAULT_CATEGORY, driven::cache::tests::mock_project};
 
     use super::*;
 
@@ -353,7 +353,7 @@ mod tests {
         };
         cache.create(&resource).await.unwrap();
 
-        let result = cache.find(&project.id, &1, &12, "demeter-port").await;
+        let result = cache.find(&project.id, &1, &12, DEFAULT_CATEGORY).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 1);
@@ -372,7 +372,7 @@ mod tests {
         cache.create(&resource).await.unwrap();
         cache.delete(&resource.id, &Utc::now()).await.unwrap();
 
-        let result = cache.find(&project.id, &1, &12, "demeter-port").await;
+        let result = cache.find(&project.id, &1, &12, DEFAULT_CATEGORY).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -390,7 +390,7 @@ mod tests {
         };
         cache.create(&resource).await.unwrap();
 
-        let result = cache.find(&project.id, &2, &12, "demeter-port").await;
+        let result = cache.find(&project.id, &2, &12, DEFAULT_CATEGORY).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -400,7 +400,7 @@ mod tests {
         let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
         let cache = SqliteResourceDrivenCache::new(sqlite_cache.clone());
 
-        let result = cache.find(Default::default(), &1, &12, "demeter-port").await;
+        let result = cache.find(Default::default(), &1, &12, DEFAULT_CATEGORY).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());

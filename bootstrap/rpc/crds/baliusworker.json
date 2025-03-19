@@ -1,32 +1,16 @@
 {
   "plan": {
     "0": {
-      "dns": "demeter.run",
-      "cost": {
-        "minimum": 0,
-        "delta": 0
-      }
+      "dns": "demeter.run"
     },
     "1": {
-      "dns": "demeter.run",
-      "cost": {
-        "minimum": 0,
-        "delta": 0
-      }
+      "dns": "demeter.run"
     },
     "2": {
-      "dns": "demeter.run",
-      "cost": {
-        "minimum": 30,
-        "delta": 0
-      }
+      "dns": "demeter.run"
     },
     "3": {
-      "dns": "demeter.run",
-      "cost": {
-        "minimum": 80,
-        "delta": 0
-      }
+      "dns": "demeter.run"
     }
   },
   "options": [
