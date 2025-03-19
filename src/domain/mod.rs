@@ -13,6 +13,7 @@ pub mod utils;
 pub const PAGE_SIZE_DEFAULT: u32 = 12;
 pub const PAGE_SIZE_MAX: u32 = 120;
 pub const MAX_SECRET: usize = 2;
+pub const DEFAULT_CATEGORY: &str = "demeter-port";
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 

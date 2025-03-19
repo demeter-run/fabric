@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait ResourceDrivenCache: Send + Sync {
-    async fn find(&self, project_id: &str, page: &u32, page_size: &u32) -> Result<Vec<Resource>>;
+    async fn find(&self, project_id: &str, page: &u32, page_size: &u32, category: &str) -> Result<Vec<Resource>>;
     async fn find_by_id(&self, id: &str) -> Result<Option<Resource>>;
     async fn find_by_name(&self, project_id: &str, name: &str) -> Result<Option<Resource>>;
 

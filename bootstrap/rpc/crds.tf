@@ -5,6 +5,8 @@ resource "kubernetes_config_map_v1" "fabric_rpc_crds" {
   }
 
   data = {
+    "baliusworker.hbs"     = "${file("${path.module}/crds/baliusworker.hbs")}"
+    "baliusworker.json"    = "${file("${path.module}/crds/baliusworker.json")}"
     "blockfrostport.hbs"   = "${file("${path.module}/crds/blockfrostport.hbs")}"
     "blockfrostport.json"  = "${file("${path.module}/crds/blockfrostport.json")}"
     "cardanonodeport.hbs"  = "${file("${path.module}/crds/cardanonodeport.hbs")}"

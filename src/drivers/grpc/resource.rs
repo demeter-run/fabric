@@ -53,7 +53,7 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)
+        let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size, req.category)
             .inspect_err(|err| handle_error_metric(self.metrics.clone(), "resource", err))?;
 
         let resources = command::fetch(

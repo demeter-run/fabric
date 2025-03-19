@@ -23,29 +23,31 @@ impl SqliteResourceDrivenCache {
 }
 #[async_trait::async_trait]
 impl ResourceDrivenCache for SqliteResourceDrivenCache {
-    async fn find(&self, project_id: &str, page: &u32, page_size: &u32) -> Result<Vec<Resource>> {
+    async fn find(&self, project_id: &str, page: &u32, page_size: &u32, category: &str) -> Result<Vec<Resource>> {
         let offset = page_size * (page - 1);
 
         let resources = sqlx::query_as::<_, Resource>(
             r#"
-                SELECT 
-                    r.id, 
-                	  r.project_id, 
-                	  r.name, 
-                	  r.kind, 
-                	  r.spec, 
+                SELECT
+                    r.id,
+                    r.project_id,
+                    r.name,
+                    r.kind,
+                    r.category,
+                    r.spec,
                     r.status,
-                	  r.created_at, 
-                	  r.updated_at
+                    r.created_at,
+                    r.updated_at
                 FROM resource r
-                WHERE r.project_id = $1 and r.status != $2
+                WHERE r.project_id = $1 and r.status != $2 and r.category = $3
                 ORDER BY r.created_at DESC
-                LIMIT $3
-                OFFSET $4;
-            "#,
+                LIMIT $4
+                OFFSET $5;
+            "#
         )
         .bind(project_id)
         .bind(ResourceStatus::Deleted.to_string())
+        .bind(category)
         .bind(page_size)
         .bind(offset)
         .fetch_all(&self.sqlite.db)
@@ -57,14 +59,15 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
         let resource = sqlx::query_as::<_, Resource>(
             r#"
                 SELECT 
-                    r.id, 
-                	  r.project_id, 
-                	  r.name, 
-                	  r.kind, 
-                	  r.spec, 
+                    r.id,
+                    r.project_id,
+                    r.name,
+                    r.kind,
+                    r.category,
+                    r.spec,
                     r.status,
-                	  r.created_at, 
-                	  r.updated_at
+                    r.created_at,
+                    r.updated_at
                 FROM resource r 
                 WHERE r.id = $1 and r.status != $2;
             "#,
@@ -80,14 +83,15 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
         let resource = sqlx::query_as::<_, Resource>(
             r#"
                 SELECT 
-                    r.id, 
-                	  r.project_id, 
-                	  r.name, 
-                	  r.kind, 
-                	  r.spec, 
+                    r.id,
+                    r.project_id,
+                    r.name,
+                    r.kind,
+                    r.category,
+                    r.spec,
                     r.status,
-                	  r.created_at, 
-                	  r.updated_at
+                    r.created_at,
+                    r.updated_at
                 FROM resource r 
                 WHERE r.project_id = $1 AND r.name = $2 AND r.status != $3;
             "#,
@@ -111,17 +115,19 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
                     project_id,
                     name,
                     kind,
+                    category,
                     spec,
                     status,
                     created_at,
                     updated_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             "#,
             resource.id,
             resource.project_id,
             resource.name,
             resource.kind,
+            resource.category,
             resource.spec,
             status,
             resource.created_at,
@@ -211,6 +217,7 @@ impl ResourceDrivenCacheBackoffice for SqliteResourceDrivenCache {
                     p.namespace as project_namespace,
                     r.name,
                     r.kind,
+                    r.category,
                     r.spec,
                     r.status,
                     r.created_at,
@@ -237,6 +244,7 @@ impl ResourceDrivenCacheBackoffice for SqliteResourceDrivenCache {
                     r.project_id,
                     r.name,
                     r.kind,
+                    r.category,
                     r.spec,
                     r.status,
                     r.created_at,
@@ -264,6 +272,7 @@ impl ResourceDrivenCacheBackoffice for SqliteResourceDrivenCache {
                     r.project_id,
                     r.name,
                     r.kind,
+                    r.category,
                     r.spec,
                     r.status,
                     r.created_at,
@@ -292,6 +301,7 @@ impl FromRow<'_, SqliteRow> for Resource {
             name: row.try_get("name")?,
             kind: row.try_get("kind")?,
             spec: row.try_get("spec")?,
+            category: row.try_get("category")?,
             annotations: None,
             status: status
                 .parse()
@@ -312,6 +322,7 @@ impl FromRow<'_, SqliteRow> for ResourceProject {
             project_namespace: row.try_get("project_namespace")?,
             name: row.try_get("name")?,
             kind: row.try_get("kind")?,
+            category: row.try_get("category")?,
             spec: row.try_get("spec")?,
             annotations: None,
             status: status
@@ -325,7 +336,7 @@ impl FromRow<'_, SqliteRow> for ResourceProject {
 
 #[cfg(test)]
 mod tests {
-    use crate::driven::cache::tests::mock_project;
+    use crate::{domain::DEFAULT_CATEGORY, driven::cache::tests::mock_project};
 
     use super::*;
 
@@ -342,7 +353,7 @@ mod tests {
         };
         cache.create(&resource).await.unwrap();
 
-        let result = cache.find(&project.id, &1, &12).await;
+        let result = cache.find(&project.id, &1, &12, DEFAULT_CATEGORY).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 1);
@@ -361,7 +372,7 @@ mod tests {
         cache.create(&resource).await.unwrap();
         cache.delete(&resource.id, &Utc::now()).await.unwrap();
 
-        let result = cache.find(&project.id, &1, &12).await;
+        let result = cache.find(&project.id, &1, &12, DEFAULT_CATEGORY).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -379,7 +390,7 @@ mod tests {
         };
         cache.create(&resource).await.unwrap();
 
-        let result = cache.find(&project.id, &2, &12).await;
+        let result = cache.find(&project.id, &2, &12, DEFAULT_CATEGORY).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -389,7 +400,7 @@ mod tests {
         let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
         let cache = SqliteResourceDrivenCache::new(sqlite_cache.clone());
 
-        let result = cache.find(Default::default(), &1, &12).await;
+        let result = cache.find(Default::default(), &1, &12, DEFAULT_CATEGORY).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());

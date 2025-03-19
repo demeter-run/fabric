@@ -16,6 +16,7 @@ pub struct Resource {
     pub project_id: String,
     pub name: String,
     pub kind: String,
+    pub category: String,
     pub spec: String,
     pub annotations: Option<String>,
     pub status: ResourceStatus,
@@ -31,6 +32,7 @@ impl TryFrom<ResourceCreated> for Resource {
             project_id: value.project_id,
             name: value.name,
             kind: value.kind,
+            category: value.category,
             spec: value.spec,
             annotations: None,
             status: value.status.parse()?,
@@ -90,6 +92,7 @@ pub struct ResourceProject {
     pub project_namespace: String,
     pub name: String,
     pub kind: String,
+    pub category: String,
     pub spec: String,
     pub annotations: Option<String>,
     pub status: ResourceStatus,
@@ -101,7 +104,7 @@ pub struct ResourceProject {
 mod tests {
     use uuid::Uuid;
 
-    use crate::domain::utils;
+    use crate::domain::{utils, DEFAULT_CATEGORY};
 
     use super::*;
 
@@ -114,6 +117,7 @@ mod tests {
                 kind: "CardanoNodePort".into(),
                 spec: "{\"version\":\"stable\",\"network\":\"mainnet\",\"throughputTier\":\"1\"}"
                     .into(),
+                category: DEFAULT_CATEGORY.to_string(),
                 annotations: None,
                 status: ResourceStatus::Active,
                 created_at: Utc::now(),
