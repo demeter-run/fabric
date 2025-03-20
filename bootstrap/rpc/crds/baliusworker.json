@@ -63,6 +63,11 @@
         {
           "additionalPrinterColumns": [
             {
+              "jsonPath": ".spec.displayName",
+              "name": "Display Name",
+              "type": "string"
+            },
+            {
               "jsonPath": ".spec.network",
               "name": "Network",
               "type": "string"
@@ -102,6 +107,9 @@
                       "additionalProperties": true,
                       "type": "object"
                     },
+                    "displayName": {
+                      "type": "string"
+                    },
                     "network": {
                       "type": "string"
                     },
@@ -118,6 +126,7 @@
                   "required": [
                     "authToken",
                     "config",
+                    "displayName",
                     "network",
                     "throughputTier",
                     "url",
@@ -128,16 +137,16 @@
                 "status": {
                   "nullable": true,
                   "properties": {
-                  "authToken": {
-                    "type": "string"
-                  },
-                  "authenticatedEndpointUrl": {
-                    "nullable": true,
-                    "type": "string"
-                  },
-                  "endpointUrl": {
-                    "type": "string"
-                  }
+                    "authToken": {
+                      "type": "string"
+                    },
+                    "authenticatedEndpointUrl": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "endpointUrl": {
+                      "type": "string"
+                    }
                   },
                   "required": [
                     "authToken",
