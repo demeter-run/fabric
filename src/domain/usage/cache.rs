@@ -12,6 +12,7 @@ pub trait UsageDrivenCache: Send + Sync {
         project_id: &str,
         page: &u32,
         page_size: &u32,
+        cluster_id: Option<String>,
     ) -> Result<Vec<UsageReport>>;
     async fn find_clusters(
         &self,

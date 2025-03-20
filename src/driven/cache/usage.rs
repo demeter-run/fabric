@@ -27,10 +27,11 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
         project_id: &str,
         page: &u32,
         page_size: &u32,
+        cluster_id: Option<String>,
     ) -> Result<Vec<UsageReport>> {
         let offset = page_size * (page - 1);
 
-        let report = sqlx::query_as::<_, UsageReport>(
+        let mut query = String::from(
             r#"
                 SELECT 
                     u.cluster_id,
@@ -53,8 +54,9 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                 INNER JOIN project p ON
                     p.id == r.project_id 
                 WHERE
-                    STRFTIME('%Y-%m', u.created_at) = STRFTIME('%Y-%m', 'now')
+                    STRFTIME('%Y-%m', u.created_at) = '2024-11'--STRFTIME('%Y-%m', 'now')
                     AND r.project_id = $1 
+                    --WHERE--
                 GROUP BY 
                     u.cluster_id,
                     u.resource_id,
@@ -64,12 +66,22 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                 LIMIT $2
                 OFFSET $3;
             "#,
-        )
-        .bind(project_id)
-        .bind(page_size)
-        .bind(offset)
-        .fetch_all(&self.sqlite.db)
-        .await?;
+        );
+
+        if cluster_id.is_some() {
+            query = query.replace("--WHERE--", "AND u.cluster_id = $4");
+        }
+
+        let mut query = sqlx::query_as::<_, UsageReport>(&query)
+            .bind(project_id)
+            .bind(page_size)
+            .bind(offset);
+
+        if let Some(cluster_id) = cluster_id {
+            query = query.bind(cluster_id);
+        }
+
+        let report = query.fetch_all(&self.sqlite.db).await?;
 
         Ok(report)
     }
@@ -314,7 +326,7 @@ mod tests {
 
         cache.create(usages).await.unwrap();
 
-        let result = cache.find_report(&project.id, &1, &12).await;
+        let result = cache.find_report(&project.id, &1, &12, None).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 1);
@@ -343,7 +355,7 @@ mod tests {
 
         cache.create(usages).await.unwrap();
 
-        let result = cache.find_report(&project.id, &1, &12).await;
+        let result = cache.find_report(&project.id, &1, &12, None).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 2);

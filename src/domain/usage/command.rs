@@ -25,7 +25,7 @@ pub async fn fetch_report(
     .await?;
 
     let usage = usage_cache
-        .find_report(&cmd.project_id, &cmd.page, &cmd.page_size)
+        .find_report(&cmd.project_id, &cmd.page, &cmd.page_size, cmd.cluster_id)
         .await?
         .calculate_cost(metadata.clone());
 
@@ -58,6 +58,7 @@ pub struct FetchCmd {
     pub project_id: String,
     pub page: u32,
     pub page_size: u32,
+    pub cluster_id: Option<String>,
 }
 impl FetchCmd {
     pub fn new(
@@ -65,6 +66,7 @@ impl FetchCmd {
         project_id: String,
         page: Option<u32>,
         page_size: Option<u32>,
+        cluster_id: Option<String>,
     ) -> Result<Self> {
         let page = page.unwrap_or(1);
         let page_size = page_size.unwrap_or(PAGE_SIZE_DEFAULT);
@@ -80,6 +82,7 @@ impl FetchCmd {
             project_id,
             page,
             page_size,
+            cluster_id,
         })
     }
 }
@@ -102,6 +105,7 @@ mod tests {
                 project_id: Uuid::new_v4().to_string(),
                 page: 1,
                 page_size: 12,
+                cluster_id: None,
             }
         }
     }
@@ -116,7 +120,7 @@ mod tests {
         let mut usage_cache = MockUsageDrivenCache::new();
         usage_cache
             .expect_find_report()
-            .return_once(|_, _, _| Ok(vec![UsageReport::default()]));
+            .return_once(|_, _, _, _| Ok(vec![UsageReport::default()]));
 
         let mut metadata = MockMetadataDriven::new();
         metadata

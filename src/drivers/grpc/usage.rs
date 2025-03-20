@@ -49,8 +49,14 @@ impl proto::usage_service_server::UsageService for UsageServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)
-            .inspect_err(|err| handle_error_metric(self.metrics.clone(), "usage", err))?;
+        let cmd = command::FetchCmd::new(
+            credential,
+            req.project_id,
+            req.page,
+            req.page_size,
+            req.cluster_id,
+        )
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "usage", err))?;
 
         let usage_report = command::fetch_report(
             self.project_cache.clone(),
@@ -78,7 +84,7 @@ impl proto::usage_service_server::UsageService for UsageServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)
+        let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size, None)
             .inspect_err(|err| handle_error_metric(self.metrics.clone(), "usage", err))?;
 
         let clusters =
