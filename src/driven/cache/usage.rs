@@ -97,6 +97,44 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
         Ok(resources)
     }
 
+    async fn find_clusters(
+        &self,
+        project_id: &str,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<Vec<String>> {
+        let offset = page_size * (page - 1);
+
+        let rows = sqlx::query(
+            r#"
+                SELECT
+                	u.cluster_id,
+                	SUM(u.units) as units
+                FROM
+                	"usage" u
+                INNER JOIN resource r ON
+	                r.id == u.resource_id
+                WHERE
+                  STRFTIME('%Y-%m', u.created_at) = STRFTIME('%Y-%m', 'now')
+                  AND r.project_id = $1 
+                GROUP BY
+                	u.cluster_id
+                ORDER BY 
+                	units ASC
+                LIMIT $2
+                OFFSET $3;
+            "#,
+        )
+        .bind(project_id)
+        .bind(page_size)
+        .bind(offset)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        let clusters = rows.iter().map(|r| r.get("cluster_id")).collect();
+        Ok(clusters)
+    }
+
     async fn create(&self, usages: Vec<Usage>) -> Result<()> {
         let mut tx = self.sqlite.db.begin().await?;
 
@@ -352,5 +390,34 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 1);
+    }
+
+    #[tokio::test]
+    async fn it_should_find_usage_clusters() {
+        let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
+        let cache = SqliteUsageDrivenCache::new(sqlite_cache.clone());
+
+        let project = mock_project(sqlite_cache.clone()).await;
+        let resource = mock_resource(sqlite_cache.clone(), &project.id).await;
+
+        let usages = vec![
+            Usage {
+                cluster_id: "cluster_1".into(),
+                resource_id: resource.id.clone(),
+                ..Default::default()
+            },
+            Usage {
+                cluster_id: "cluster_2".into(),
+                resource_id: resource.id.clone(),
+                ..Default::default()
+            },
+        ];
+
+        cache.create(usages).await.unwrap();
+
+        let result = cache.find_clusters(&project.id, &1, &12).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().len() == 2);
     }
 }

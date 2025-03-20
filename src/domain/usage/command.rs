@@ -32,6 +32,26 @@ pub async fn fetch_report(
     Ok(usage)
 }
 
+pub async fn fetch_clusters(
+    project_cache: Arc<dyn ProjectDrivenCache>,
+    usage_cache: Arc<dyn UsageDrivenCache>,
+    cmd: FetchCmd,
+) -> Result<Vec<String>> {
+    assert_permission(
+        project_cache.clone(),
+        &cmd.credential,
+        &cmd.project_id,
+        Some(ProjectUserRole::Owner),
+    )
+    .await?;
+
+    let clusters = usage_cache
+        .find_clusters(&cmd.project_id, &cmd.page, &cmd.page_size)
+        .await?;
+
+    Ok(clusters)
+}
+
 #[derive(Debug, Clone)]
 pub struct FetchCmd {
     pub credential: Credential,
