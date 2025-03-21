@@ -429,7 +429,8 @@ mod tests {
     #[tokio::test]
     async fn it_should_find_usage_clusters() {
         let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
-        let cache = SqliteUsageDrivenCache::new(sqlite_cache.clone());
+        let cache: Box<dyn UsageDrivenCache> =
+            Box::new(SqliteUsageDrivenCache::new(sqlite_cache.clone()));
 
         let project = mock_project(sqlite_cache.clone()).await;
         let resource = mock_resource(sqlite_cache.clone(), &project.id).await;
