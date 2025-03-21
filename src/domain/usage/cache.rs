@@ -27,7 +27,7 @@ pub trait UsageDrivenCache: Send + Sync {
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait UsageDrivenCacheBackoffice: Send + Sync {
-    async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReport>>;
+    async fn find_report_aggregated(&self, period: &str, cluster_id: &str) -> Result<Vec<UsageReport>>;
     async fn find_clusters(&self, period: &str) -> Result<Vec<String>>;
 }
 

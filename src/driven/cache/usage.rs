@@ -185,7 +185,11 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
 }
 #[async_trait::async_trait]
 impl UsageDrivenCacheBackoffice for SqliteUsageDrivenCache {
-    async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReport>> {
+    async fn find_report_aggregated(
+        &self,
+        period: &str,
+        cluster_id: &str,
+    ) -> Result<Vec<UsageReport>> {
         let report_aggregated = sqlx::query_as::<_, UsageReport>(
             r#"
                 SELECT
@@ -210,17 +214,17 @@ impl UsageDrivenCacheBackoffice for SqliteUsageDrivenCache {
                 	p.id == r.project_id
                 WHERE
                 	STRFTIME('%Y-%m', u.created_at) = $1
+                  AND u.cluster_id = $2
                 GROUP BY
-                	cluster_id,
                 	resource_id,
                 	tier
                 ORDER BY
-                	cluster_id,
                 	project_namespace,
                 	resource_id ASC;
             "#,
         )
         .bind(period)
+        .bind(cluster_id)
         .fetch_all(&self.sqlite.db)
         .await?;
 
@@ -405,7 +409,7 @@ mod tests {
         cache.create(usages).await.unwrap();
 
         let result = cache
-            .find_report_aggregated(&Utc::now().format("%Y-%m").to_string())
+            .find_report_aggregated(&Utc::now().format("%Y-%m").to_string(), "demeter".into())
             .await;
 
         assert!(result.is_ok());

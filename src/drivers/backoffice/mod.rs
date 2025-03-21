@@ -52,7 +52,7 @@ pub async fn fetch_usage(
 
     for cluster in clusters {
         let report = usage_cache
-            .find_report_aggregated(period)
+            .find_report_aggregated(period, &cluster)
             .await?
             .calculate_cost(metadata.clone(), true);
 
