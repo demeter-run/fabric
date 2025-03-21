@@ -12,7 +12,14 @@ pub trait UsageDrivenCache: Send + Sync {
         project_id: &str,
         page: &u32,
         page_size: &u32,
+        cluster_id: Option<String>,
     ) -> Result<Vec<UsageReport>>;
+    async fn find_clusters(
+        &self,
+        project_id: &str,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<Vec<String>>;
     async fn find_resouces(&self) -> Result<Vec<UsageResource>>;
     async fn create(&self, usage: Vec<Usage>) -> Result<()>;
 }
@@ -20,7 +27,8 @@ pub trait UsageDrivenCache: Send + Sync {
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait UsageDrivenCacheBackoffice: Send + Sync {
-    async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReport>>;
+    async fn find_report_aggregated(&self, period: &str, cluster_id: &str) -> Result<Vec<UsageReport>>;
+    async fn find_clusters(&self, period: &str) -> Result<Vec<String>>;
 }
 
 pub async fn create(cache: Arc<dyn UsageDrivenCache>, evt: UsageCreated) -> Result<()> {
@@ -42,3 +50,4 @@ mod tests {
         assert!(result.is_ok());
     }
 }
+

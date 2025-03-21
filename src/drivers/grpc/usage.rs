@@ -49,8 +49,14 @@ impl proto::usage_service_server::UsageService for UsageServiceImpl {
 
         let req = request.into_inner();
 
-        let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size)
-            .inspect_err(|err| handle_error_metric(self.metrics.clone(), "usage", err))?;
+        let cmd = command::FetchCmd::new(
+            credential,
+            req.project_id,
+            req.page,
+            req.page_size,
+            req.cluster_id,
+        )
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "usage", err))?;
 
         let usage_report = command::fetch_report(
             self.project_cache.clone(),
@@ -62,7 +68,32 @@ impl proto::usage_service_server::UsageService for UsageServiceImpl {
         .inspect_err(|err| handle_error_metric(self.metrics.clone(), "usage", err))?;
 
         let records = usage_report.into_iter().map(|v| v.into()).collect();
+
         let message = proto::FetchUsageReportResponse { records };
+
+        Ok(tonic::Response::new(message))
+    }
+
+    async fn fetch_usage_cluster(
+        &self,
+        request: tonic::Request<proto::FetchUsageClusterRequest>,
+    ) -> Result<tonic::Response<proto::FetchUsageClusterResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = command::FetchCmd::new(credential, req.project_id, req.page, req.page_size, None)
+            .inspect_err(|err| handle_error_metric(self.metrics.clone(), "usage", err))?;
+
+        let clusters =
+            command::fetch_clusters(self.project_cache.clone(), self.usage_cache.clone(), cmd)
+                .await
+                .inspect_err(|err| handle_error_metric(self.metrics.clone(), "usage", err))?;
+
+        let message = proto::FetchUsageClusterResponse { clusters };
 
         Ok(tonic::Response::new(message))
     }

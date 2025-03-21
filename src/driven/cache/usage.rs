@@ -27,12 +27,14 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
         project_id: &str,
         page: &u32,
         page_size: &u32,
+        cluster_id: Option<String>,
     ) -> Result<Vec<UsageReport>> {
         let offset = page_size * (page - 1);
 
-        let report = sqlx::query_as::<_, UsageReport>(
+        let mut query = String::from(
             r#"
                 SELECT 
+                    u.cluster_id,
                 	  p.id as project_id,
                 	  p.namespace as project_namespace,
                 	  p.billing_provider as project_billing_provider,
@@ -44,22 +46,41 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                 	  u.tier, 
                     SUM(u.interval) as interval,
                 	  SUM(u.units) as units, 
-                	  STRFTIME('%Y-%m', 'now') as period 
-                FROM "usage" u 
-                INNER JOIN resource r ON r.id == u.resource_id
-                INNER JOIN project p ON p.id == r.project_id 
-                WHERE STRFTIME('%Y-%m', u.created_at) = STRFTIME('%Y-%m', 'now') AND r.project_id = $1 
-                GROUP BY resource_id, tier 
-                ORDER BY units DESC
+                	  STRFTIME('%Y-%m', u.created_at) as period
+                FROM
+                    "usage" u 
+                INNER JOIN resource r ON
+                    r.id == u.resource_id
+                INNER JOIN project p ON
+                    p.id == r.project_id 
+                WHERE
+                    STRFTIME('%Y-%m', u.created_at) = STRFTIME('%Y-%m', 'now')
+                    AND r.project_id = $1 
+                    --WHERE--
+                GROUP BY 
+                    u.resource_id,
+                    u.tier
+                ORDER BY
+                    units DESC
                 LIMIT $2
                 OFFSET $3;
             "#,
-        )
-        .bind(project_id)
-        .bind(page_size)
-        .bind(offset)
-        .fetch_all(&self.sqlite.db)
-        .await?;
+        );
+
+        if cluster_id.is_some() {
+            query = query.replace("--WHERE--", "AND u.cluster_id = $4");
+        }
+
+        let mut query = sqlx::query_as::<_, UsageReport>(&query)
+            .bind(project_id)
+            .bind(page_size)
+            .bind(offset);
+
+        if let Some(cluster_id) = cluster_id {
+            query = query.bind(cluster_id);
+        }
+
+        let report = query.fetch_all(&self.sqlite.db).await?;
 
         Ok(report)
     }
@@ -85,6 +106,44 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
         .await?;
 
         Ok(resources)
+    }
+
+    async fn find_clusters(
+        &self,
+        project_id: &str,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<Vec<String>> {
+        let offset = page_size * (page - 1);
+
+        let rows = sqlx::query(
+            r#"
+                SELECT
+                	u.cluster_id,
+                	SUM(u.units) as units
+                FROM
+                	"usage" u
+                INNER JOIN resource r ON
+	                r.id == u.resource_id
+                WHERE
+                  STRFTIME('%Y-%m', u.created_at) = STRFTIME('%Y-%m', 'now')
+                  AND r.project_id = $1 
+                GROUP BY
+                	u.cluster_id
+                ORDER BY 
+                	units DESC
+                LIMIT $2
+                OFFSET $3;
+            "#,
+        )
+        .bind(project_id)
+        .bind(page_size)
+        .bind(offset)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        let clusters = rows.iter().map(|r| r.get("cluster_id")).collect();
+        Ok(clusters)
     }
 
     async fn create(&self, usages: Vec<Usage>) -> Result<()> {
@@ -124,36 +183,75 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
         Ok(())
     }
 }
-#[async_trait::async_trait] impl UsageDrivenCacheBackoffice for SqliteUsageDrivenCache {
-    async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReport>> {
+#[async_trait::async_trait]
+impl UsageDrivenCacheBackoffice for SqliteUsageDrivenCache {
+    async fn find_report_aggregated(
+        &self,
+        period: &str,
+        cluster_id: &str,
+    ) -> Result<Vec<UsageReport>> {
         let report_aggregated = sqlx::query_as::<_, UsageReport>(
             r#"
                 SELECT
-                	  p.id as project_id,
-                	  p.namespace as project_namespace,
-                	  p.billing_provider as project_billing_provider,
-                	  p.billing_provider_id as project_billing_provider_id,
-                	  r.id as resource_id,
-                	  r.kind as resource_kind,
-                	  r.name as resource_name,
-                	  r.spec as resource_spec,
-                	  u.tier as tier, 
-                	  SUM(u.interval) as interval, 
-                	  SUM(u.units) as units, 
-                	  STRFTIME('%Y-%m', 'now') as period 
-                FROM "usage" u 
-                INNER JOIN resource r ON r.id == u.resource_id
-                INNER JOIN project p ON p.id == r.project_id 
-                WHERE STRFTIME('%Y-%m', u.created_at) = $1
-                GROUP BY resource_id, tier 
-                ORDER BY project_namespace, resource_id ASC;
+                	u.cluster_id,
+                	p.id as project_id,
+                	p.namespace as project_namespace,
+                	p.billing_provider as project_billing_provider,
+                	p.billing_provider_id as project_billing_provider_id,
+                	r.id as resource_id,
+                	r.kind as resource_kind,
+                	r.name as resource_name,
+                	r.spec as resource_spec,
+                	u.tier as tier,
+                	SUM(u.interval) as interval,
+                	SUM(u.units) as units,
+                	STRFTIME('%Y-%m', u.created_at) as period
+                FROM
+                	"usage" u
+                INNER JOIN resource r ON
+                	r.id == u.resource_id
+                INNER JOIN project p ON
+                	p.id == r.project_id
+                WHERE
+                	STRFTIME('%Y-%m', u.created_at) = $1
+                  AND u.cluster_id = $2
+                GROUP BY
+                	resource_id,
+                	tier
+                ORDER BY
+                	project_namespace,
+                	resource_id ASC;
+            "#,
+        )
+        .bind(period)
+        .bind(cluster_id)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(report_aggregated)
+    }
+
+    async fn find_clusters(&self, period: &str) -> Result<Vec<String>> {
+        let rows = sqlx::query(
+            r#"
+                SELECT
+                	u.cluster_id
+                FROM
+                	"usage" u
+                INNER JOIN resource r ON
+	                r.id == u.resource_id
+                WHERE
+                	STRFTIME('%Y-%m', u.created_at) = $1
+                GROUP BY
+                	u.cluster_id;
             "#,
         )
         .bind(period)
         .fetch_all(&self.sqlite.db)
         .await?;
 
-        Ok(report_aggregated)
+        let clusters = rows.iter().map(|r| r.get("cluster_id")).collect();
+        Ok(clusters)
     }
 }
 
@@ -176,6 +274,7 @@ impl FromRow<'_, SqliteRow> for Usage {
 impl FromRow<'_, SqliteRow> for UsageReport {
     fn from_row(row: &SqliteRow) -> sqlx::Result<Self> {
         Ok(Self {
+            cluster_id: row.try_get("cluster_id")?,
             project_id: row.try_get("project_id")?,
             project_namespace: row.try_get("project_namespace")?,
             project_billing_provider: row.try_get("project_billing_provider")?,
@@ -253,7 +352,7 @@ mod tests {
 
         cache.create(usages).await.unwrap();
 
-        let result = cache.find_report(&project.id, &1, &12).await;
+        let result = cache.find_report(&project.id, &1, &12, None).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 1);
@@ -282,7 +381,7 @@ mod tests {
 
         cache.create(usages).await.unwrap();
 
-        let result = cache.find_report(&project.id, &1, &12).await;
+        let result = cache.find_report(&project.id, &1, &12, None).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 2);
@@ -310,7 +409,7 @@ mod tests {
         cache.create(usages).await.unwrap();
 
         let result = cache
-            .find_report_aggregated(&Utc::now().format("%Y-%m").to_string())
+            .find_report_aggregated(&Utc::now().format("%Y-%m").to_string(), "demeter".into())
             .await;
 
         assert!(result.is_ok());
@@ -329,5 +428,35 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 1);
+    }
+
+    #[tokio::test]
+    async fn it_should_find_usage_clusters() {
+        let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
+        let cache: Box<dyn UsageDrivenCache> =
+            Box::new(SqliteUsageDrivenCache::new(sqlite_cache.clone()));
+
+        let project = mock_project(sqlite_cache.clone()).await;
+        let resource = mock_resource(sqlite_cache.clone(), &project.id).await;
+
+        let usages = vec![
+            Usage {
+                cluster_id: "cluster_1".into(),
+                resource_id: resource.id.clone(),
+                ..Default::default()
+            },
+            Usage {
+                cluster_id: "cluster_2".into(),
+                resource_id: resource.id.clone(),
+                ..Default::default()
+            },
+        ];
+
+        cache.create(usages).await.unwrap();
+
+        let result = cache.find_clusters(&project.id, &1, &12).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().len() == 2);
     }
 }
