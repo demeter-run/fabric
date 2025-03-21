@@ -27,7 +27,7 @@ pub async fn fetch_report(
     let usage = usage_cache
         .find_report(&cmd.project_id, &cmd.page, &cmd.page_size, cmd.cluster_id)
         .await?
-        .calculate_cost(metadata.clone());
+        .calculate_cost(metadata.clone(), false);
 
     Ok(usage)
 }

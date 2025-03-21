@@ -54,11 +54,10 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                 INNER JOIN project p ON
                     p.id == r.project_id 
                 WHERE
-                    STRFTIME('%Y-%m', u.created_at) = '2024-11'--STRFTIME('%Y-%m', 'now')
+                    STRFTIME('%Y-%m', u.created_at) = STRFTIME('%Y-%m', 'now')
                     AND r.project_id = $1 
                     --WHERE--
                 GROUP BY 
-                    u.cluster_id,
                     u.resource_id,
                     u.tier
                 ORDER BY
@@ -132,7 +131,7 @@ impl UsageDrivenCache for SqliteUsageDrivenCache {
                 GROUP BY
                 	u.cluster_id
                 ORDER BY 
-                	units ASC
+                	units DESC
                 LIMIT $2
                 OFFSET $3;
             "#,
@@ -226,6 +225,29 @@ impl UsageDrivenCacheBackoffice for SqliteUsageDrivenCache {
         .await?;
 
         Ok(report_aggregated)
+    }
+
+    async fn find_clusters(&self, period: &str) -> Result<Vec<String>> {
+        let rows = sqlx::query(
+            r#"
+                SELECT
+                	u.cluster_id
+                FROM
+                	"usage" u
+                INNER JOIN resource r ON
+	                r.id == u.resource_id
+                WHERE
+                	STRFTIME('%Y-%m', u.created_at) = $1
+                GROUP BY
+                	u.cluster_id;
+            "#,
+        )
+        .bind(period)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        let clusters = rows.iter().map(|r| r.get("cluster_id")).collect();
+        Ok(clusters)
     }
 }
 

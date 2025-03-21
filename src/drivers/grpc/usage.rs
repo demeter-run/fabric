@@ -68,6 +68,7 @@ impl proto::usage_service_server::UsageService for UsageServiceImpl {
         .inspect_err(|err| handle_error_metric(self.metrics.clone(), "usage", err))?;
 
         let records = usage_report.into_iter().map(|v| v.into()).collect();
+
         let message = proto::FetchUsageReportResponse { records };
 
         Ok(tonic::Response::new(message))

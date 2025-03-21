@@ -28,6 +28,7 @@ pub trait UsageDrivenCache: Send + Sync {
 #[async_trait::async_trait]
 pub trait UsageDrivenCacheBackoffice: Send + Sync {
     async fn find_report_aggregated(&self, period: &str) -> Result<Vec<UsageReport>>;
+    async fn find_clusters(&self, period: &str) -> Result<Vec<String>>;
 }
 
 pub async fn create(cache: Arc<dyn UsageDrivenCache>, evt: UsageCreated) -> Result<()> {
@@ -49,3 +50,4 @@ mod tests {
         assert!(result.is_ok());
     }
 }
+

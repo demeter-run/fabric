@@ -55,7 +55,7 @@ pub struct UsageUnitMetric {
 }
 
 pub trait UsageReportImpl {
-    fn calculate_cost(&mut self, metadata: Arc<dyn MetadataDriven>) -> Self;
+    fn calculate_cost(&mut self, metadata: Arc<dyn MetadataDriven>, calculate_min: bool) -> Self;
 }
 #[derive(Debug, Clone)]
 pub struct UsageReport {
@@ -76,7 +76,7 @@ pub struct UsageReport {
     pub minimum_cost: Option<f64>,
 }
 impl UsageReportImpl for Vec<UsageReport> {
-    fn calculate_cost(&mut self, metadata: Arc<dyn MetadataDriven>) -> Self {
+    fn calculate_cost(&mut self, metadata: Arc<dyn MetadataDriven>, calculate_min: bool) -> Self {
         let now = chrono::Utc::now();
         let next_month = if now.month() == 12 {
             chrono::NaiveDate::from_ymd_opt(now.year() + 1, 1, 1).unwrap()
@@ -100,10 +100,14 @@ impl UsageReportImpl for Vec<UsageReport> {
                                 usage.units_cost = Some(rounded);
 
                                 if cost.minimum > 0. {
-                                    let value =
-                                        (cost.minimum / month_interval) * (usage.interval as f64);
-                                    let rounded = (value * 100.0).round() / 100.0;
-                                    usage.minimum_cost = Some(rounded);
+                                    if calculate_min {
+                                        let value = (cost.minimum / month_interval)
+                                            * (usage.interval as f64);
+                                        let rounded = (value * 100.0).round() / 100.0;
+                                        usage.minimum_cost = Some(rounded);
+                                    } else {
+                                        usage.minimum_cost = Some(cost.minimum);
+                                    }
                                 }
                             }
                             None => warn!("cost not found for {kind}"),

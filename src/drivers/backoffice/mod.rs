@@ -48,16 +48,20 @@ pub async fn fetch_usage(
 
     let metadata = Arc::new(FileMetadata::from_dir(METADATA.clone())?);
 
-    let report = usage_cache
-        .find_report_aggregated(period)
-        .await?
-        .calculate_cost(metadata.clone());
+    let clusters = usage_cache.find_clusters(period).await?;
 
-    match output {
-        OutputFormat::Table => output_table_usage(report),
-        OutputFormat::Json => output_json_usage(report),
-        OutputFormat::Csv => output_csv_usage(report, period),
-    };
+    for cluster in clusters {
+        let report = usage_cache
+            .find_report_aggregated(period)
+            .await?
+            .calculate_cost(metadata.clone(), true);
+
+        match output {
+            OutputFormat::Table => output_table_usage(report, &cluster),
+            OutputFormat::Json => output_json_usage(report, &cluster),
+            OutputFormat::Csv => output_csv_usage(report, &cluster, period),
+        };
+    }
 
     Ok(())
 }
@@ -351,80 +355,69 @@ pub async fn fetch_diff(config: BackofficeConfig, output: OutputFormat) -> Resul
     Ok(())
 }
 
-fn output_csv_usage(report: Vec<UsageReport>, period: &str) {
-    let mut report_by_cluster: HashMap<String, Vec<UsageReport>> = HashMap::new();
-
-    for r in report.into_iter() {
-        report_by_cluster
-            .entry(r.cluster_id.clone())
-            .or_default()
-            .push(r);
+fn output_csv_usage(report: Vec<UsageReport>, cluster_id: &str, period: &str) {
+    let path = format!("{cluster_id}.{period}.csv");
+    let result = csv::Writer::from_path(&path);
+    if let Err(error) = result {
+        error!(?error);
+        return;
     }
 
-    for (cluster_id, report) in report_by_cluster {
-        let path = format!("{cluster_id}.{period}.csv");
-        let result = csv::Writer::from_path(&path);
-        if let Err(error) = result {
-            error!(?error);
-            return;
-        }
+    let mut wtr = result.unwrap();
 
-        let mut wtr = result.unwrap();
+    let result = wtr.write_record([
+        "",
+        "cluster",
+        "project",
+        "stripe_id",
+        "kind",
+        "name",
+        "tier",
+        "time",
+        "units",
+        "units_cost",
+        "minimum_cost",
+    ]);
+    if let Err(error) = result {
+        error!(?error);
+        return;
+    }
 
+    for (i, r) in report.iter().enumerate() {
         let result = wtr.write_record([
-            "",
-            "cluster",
-            "project",
-            "stripe_id",
-            "kind",
-            "name",
-            "tier",
-            "time",
-            "units",
-            "units_cost",
-            "minimum_cost",
+            &(i + 1).to_string(),
+            &r.cluster_id,
+            &r.project_namespace,
+            &r.project_billing_provider_id,
+            &r.resource_kind,
+            &r.resource_name,
+            &r.tier,
+            &format!("{:.1}h", ((r.interval as f64) / 60.) / 60.),
+            &r.units.to_string(),
+            &format!("${:.2}", r.units_cost.unwrap_or(0.)),
+            &format!("${:.2}", r.minimum_cost.unwrap_or(0.)),
         ]);
         if let Err(error) = result {
             error!(?error);
             return;
         }
-
-        for (i, r) in report.iter().enumerate() {
-            let result = wtr.write_record([
-                &(i + 1).to_string(),
-                &r.cluster_id,
-                &r.project_namespace,
-                &r.project_billing_provider_id,
-                &r.resource_kind,
-                &r.resource_name,
-                &r.tier,
-                &format!("{:.1}h", ((r.interval as f64) / 60.) / 60.),
-                &r.units.to_string(),
-                &format!("${:.2}", r.units_cost.unwrap_or(0.)),
-                &format!("${:.2}", r.minimum_cost.unwrap_or(0.)),
-            ]);
-            if let Err(error) = result {
-                error!(?error);
-                return;
-            }
-        }
-
-        let result = wtr.flush();
-        if let Err(error) = result {
-            error!(?error);
-            return;
-        }
-
-        info!("File {} created", path)
     }
+
+    let result = wtr.flush();
+    if let Err(error) = result {
+        error!(?error);
+        return;
+    }
+
+    info!("File {} created", path)
 }
 
-fn output_json_usage(report: Vec<UsageReport>) {
+fn output_json_usage(report: Vec<UsageReport>, cluster_id: &str) {
     let mut json = vec![];
 
     for r in report {
         json.push(json!({
-            "cluster_id": r.cluster_id,
+            "cluster_id": cluster_id,
             "project_id": r.project_id,
             "project_namespace": r.project_namespace,
             "stripe_id": r.project_billing_provider_id,
@@ -442,7 +435,7 @@ fn output_json_usage(report: Vec<UsageReport>) {
     println!("{}", serde_json::to_string_pretty(&json).unwrap());
 }
 
-fn output_table_usage(report: Vec<UsageReport>) {
+fn output_table_usage(report: Vec<UsageReport>, cluster_id: &str) {
     let mut table = Table::new();
     table.set_header(vec![
         "",
@@ -461,7 +454,7 @@ fn output_table_usage(report: Vec<UsageReport>) {
     for (i, r) in report.iter().enumerate() {
         table.add_row(vec![
             &(i + 1).to_string(),
-            &r.cluster_id,
+            cluster_id,
             &r.project_namespace,
             &r.project_billing_provider_id,
             &r.resource_kind,
