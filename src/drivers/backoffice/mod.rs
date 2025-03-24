@@ -5,11 +5,7 @@ use futures::future::try_join_all;
 use include_dir::{include_dir, Dir};
 use kube::ResourceExt;
 use serde_json::json;
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{collections::HashMap, path::Path, sync::Arc};
 use tracing::{error, info};
 
 use crate::{
@@ -659,17 +655,8 @@ struct ProjectTable {
 }
 
 #[derive(Debug)]
-pub struct BackofficeTlsConfig {
-    pub ssl_crt_path: PathBuf,
-    pub ssl_key_path: PathBuf,
-}
-
-#[derive(Debug)]
 pub struct BackofficeConfig {
     pub db_path: String,
-    pub topic: String,
-    pub kafka: HashMap<String, String>,
-    pub tls_config: Option<BackofficeTlsConfig>,
 
     pub auth_url: String,
     pub auth_client_id: String,

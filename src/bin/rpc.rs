@@ -80,7 +80,8 @@ struct Config {
     email: EmailConfig,
     stripe: StripeConfig,
     secret: String,
-    topic: String,
+    topic_events: String,
+    topic_usage: String,
     tls: Option<TlsConfig>,
     slack_webhook_url: Option<String>,
     kafka_producer: HashMap<String, String>,
@@ -116,7 +117,7 @@ impl From<Config> for GrpcConfig {
             stripe_api_key: value.stripe.api_key,
             secret: value.secret,
             kafka: value.kafka_producer,
-            topic: value.topic,
+            topic: value.topic_events,
             invite_ttl: value.email.invite_ttl,
             ses_access_key_id: value.email.ses_access_key_id,
             ses_secret_access_key: value.email.ses_secret_access_key,
@@ -135,7 +136,7 @@ impl From<Config> for CacheConfig {
         Self {
             kafka: value.kafka_consumer,
             db_path: value.db_path,
-            topic: value.topic,
+            topics: [value.topic_events, value.topic_usage].to_vec(),
             notify: value.slack_webhook_url.map(|url| CacheNotifyConfig {
                 slack_webhook_url: url,
                 auth_url: value.auth.url,
