@@ -437,7 +437,7 @@ mod tests {
         let mut metadata = MockMetadataDriven::new();
         metadata
             .expect_render_hbs()
-            .return_once(|_, _| Ok("[{}]".into()));
+            .return_once(|_| Ok("[{}]".into()));
 
         let cmd = FetchCmd::default();
 
@@ -509,7 +509,7 @@ mod tests {
         let mut metadata = MockMetadataDriven::new();
         metadata
             .expect_render_hbs()
-            .return_once(|_, _| Ok("[{}]".into()));
+            .return_once(|_| Ok("[{}]".into()));
 
         let cmd = FetchByIdCmd::default();
 
