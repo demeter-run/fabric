@@ -9,7 +9,14 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::domain::{
-    auth::{assert_permission, Credential}, error::Error, event::{EventDrivenBridge, ResourceCreated, ResourceDeleted}, metadata::{KnownField, MetadataDriven}, project::cache::ProjectDrivenCache, resource::{ResourceStatus, ResourceUpdated}, utils::{self, get_schema_from_crd}, Result, DEFAULT_CATEGORY, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX
+    auth::{assert_permission, Credential},
+    error::Error,
+    event::{EventDrivenBridge, ResourceCreated, ResourceDeleted},
+    metadata::{KnownField, MetadataDriven},
+    project::cache::ProjectDrivenCache,
+    resource::{ResourceStatus, ResourceUpdated},
+    utils::{self, get_schema_from_crd},
+    Result, DEFAULT_CATEGORY, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
 use super::{cache::ResourceDrivenCache, Resource};
@@ -33,7 +40,7 @@ pub async fn fetch(
         .await?
         .into_iter()
         .map(|mut resource| {
-            match metadata.render_hbs(&resource.kind, &resource.spec) {
+            match metadata.render_hbs(&resource) {
                 Ok(annotations) => resource.annotations = Some(annotations),
                 Err(error) => error!(?error),
             };
@@ -63,7 +70,7 @@ pub async fn fetch_by_id(
     )
     .await?;
 
-    match metadata.render_hbs(&resource.kind, &resource.spec) {
+    match metadata.render_hbs(&resource) {
         Ok(annotations) => resource.annotations = Some(annotations),
         Err(error) => error!(?error),
     };
@@ -132,7 +139,11 @@ pub async fn create(
         project_namespace: project.namespace,
         name: cmd.name,
         kind: cmd.kind.clone(),
-        category: metadata.crd.spec.names.categories
+        category: metadata
+            .crd
+            .spec
+            .names
+            .categories
             .and_then(|c| c.first().map(String::to_owned))
             .unwrap_or(DEFAULT_CATEGORY.to_string()),
         spec: serde_json::to_string(&spec)?,
