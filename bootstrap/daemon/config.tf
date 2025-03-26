@@ -14,7 +14,8 @@ resource "kubernetes_config_map_v1" "fabric_daemon_config" {
         consumer_monitor_name = var.consumer_monitor_name
         kafka_username        = var.kafka_username
         kafka_password        = var.kafka_password
-        topic                 = var.kafka_topic
+        topic_events          = var.kafka_topic_events
+        topic_usage           = var.kafka_topic_usage
         cluster_id            = var.cluster_id
         prometheus_url        = var.prometheus_url
         prometheus_delay_sec  = var.prometheus_delay_sec
