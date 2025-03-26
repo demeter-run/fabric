@@ -50,7 +50,8 @@ pub async fn subscribe(config: CacheConfig) -> Result<()> {
     }
 
     let consumer: StreamConsumer = client_config.create()?;
-    consumer.subscribe(&[&config.topic])?;
+    let topic: Vec<&str> = config.topics.iter().map(String::as_str).collect();
+    consumer.subscribe(&topic)?;
 
     info!("Cache subscribe running");
     loop {
@@ -154,7 +155,7 @@ pub struct CacheNotifyConfig {
 
 pub struct CacheConfig {
     pub db_path: String,
-    pub topic: String,
+    pub topics: Vec<String>,
     pub kafka: HashMap<String, String>,
     pub notify: Option<CacheNotifyConfig>,
 }

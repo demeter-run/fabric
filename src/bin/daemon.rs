@@ -83,7 +83,8 @@ struct Config {
     #[serde(deserialize_with = "deserialize_duration")]
     #[serde(rename(deserialize = "delay_sec"))]
     delay: Duration,
-    topic: String,
+    topic_events: String,
+    topic_usage: String,
     kafka_producer: HashMap<String, String>,
     kafka_monitor: HashMap<String, String>,
     kafka_cache: HashMap<String, String>,
@@ -108,7 +109,7 @@ impl From<Config> for MonitorConfig {
     fn from(value: Config) -> Self {
         Self {
             kafka: value.kafka_monitor,
-            topic: value.topic,
+            topic: value.topic_events,
         }
     }
 }
@@ -122,7 +123,7 @@ impl From<Config> for UsageConfig {
             prometheus_query_step: value.prometheus.query_step,
             delay: value.delay,
             kafka: value.kafka_producer,
-            topic: value.topic,
+            topic: value.topic_usage,
         }
     }
 }
@@ -132,7 +133,7 @@ impl From<Config> for CacheConfig {
         Self {
             kafka: value.kafka_cache,
             db_path: value.db_path,
-            topic: value.topic,
+            topics: [value.topic_events, value.topic_usage].to_vec(),
             notify: None,
         }
     }

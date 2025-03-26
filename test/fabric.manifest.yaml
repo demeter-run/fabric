@@ -40,7 +40,8 @@ roleRef:
 apiVersion: v1
 data:
   daemon.toml: |
-    topic = "events"
+    topic_events="events"
+    topic_usage="usage"
     cluster_id = "625e6681-8a74-4454-b5ad-861b45c6a42e"
     delay_sec = 60
     mode = "full"
@@ -117,7 +118,8 @@ data:
     db_path="test.db"
     crds_path="/fabric/crds"
     secret="fabric@txpipe"
-    topic = "events"
+    topic_events="events"
+    topic_usage="usage"
 
     [kafka_producer]
     "bootstrap.servers" = "redpanda.demeter-kafka.svc.cluster.local:19092"
