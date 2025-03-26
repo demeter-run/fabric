@@ -68,7 +68,7 @@ spec:
       containers:
         - name: create-topic
           image: docker.redpanda.com/redpandadata/redpanda:latest
-          command: ["/bin/sh", "-c", "rpk topic create events"]
+          command: ["/bin/sh", "-c", "rpk topic create events && rpk topic create usage"]
           env:
             - name: REDPANDA_BROKERS
               value: "redpanda.demeter-kafka.svc.cluster.local:19092"

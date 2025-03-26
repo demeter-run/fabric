@@ -1,10 +1,10 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 use dotenv::dotenv;
 use fabric::drivers::{
-    backoffice::{BackofficeConfig, BackofficeTlsConfig, OutputFormat},
+    backoffice::{BackofficeConfig, OutputFormat},
     cache::CacheConfig,
 };
 use serde::Deserialize;
@@ -195,15 +195,10 @@ struct AuthConfig {
     audience: String,
 }
 #[derive(Debug, Clone, Deserialize)]
-struct TlsConfig {
-    ssl_crt_path: PathBuf,
-    ssl_key_path: PathBuf,
-}
-#[derive(Debug, Clone, Deserialize)]
 struct Config {
     db_path: String,
-    topic: String,
-    tls: Option<TlsConfig>,
+    topic_events: String,
+    topic_usage: String,
     kafka_consumer: HashMap<String, String>,
     auth: AuthConfig,
 }
@@ -222,12 +217,6 @@ impl From<Config> for BackofficeConfig {
     fn from(value: Config) -> Self {
         Self {
             db_path: value.db_path,
-            kafka: value.kafka_consumer,
-            topic: value.topic,
-            tls_config: value.tls.map(|value| BackofficeTlsConfig {
-                ssl_key_path: value.ssl_key_path,
-                ssl_crt_path: value.ssl_crt_path,
-            }),
             auth_url: value.auth.url,
             auth_client_id: value.auth.client_id,
             auth_client_secret: value.auth.client_secret,
@@ -241,7 +230,7 @@ impl From<Config> for CacheConfig {
         Self {
             kafka: value.kafka_consumer,
             db_path: value.db_path,
-            topic: value.topic,
+            topics: [value.topic_events, value.topic_usage].to_vec(),
             notify: None,
         }
     }
