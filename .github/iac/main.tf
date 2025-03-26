@@ -47,7 +47,8 @@ locals {
   kafka_rpc_password          = var.kafka_rpc_password
   kafka_daemon_username       = "daemon-us-west-2-m2"
   kafka_daemon_password       = var.kafka_daemon_password
-  kafka_topic                 = "events"
+  kafka_topic_events          = "events"
+  kafka_topic_usage           = "usage"
   auth0_client_id             = var.auth0_client_id
   auth0_client_secret         = var.auth0_client_secret
   auth0_audience              = var.auth0_audience
@@ -68,7 +69,8 @@ module "fabric_rpc" {
   consumer_name               = "rpc-ahid02"
   kafka_username              = local.kafka_rpc_username
   kafka_password              = local.kafka_rpc_password
-  kafka_topic                 = local.kafka_topic
+  kafka_topic_events          = local.kafka_topic_events
+  kafka_topic_usage           = local.kafka_topic_usage
   secret                      = local.secret
   auth0_client_id             = local.auth0_client_id
   auth0_client_secret         = local.auth0_client_secret
@@ -94,6 +96,7 @@ module "fabric_daemon" {
   consumer_cache_name   = "daemon-us-west-2-m2-cache-hi2"
   kafka_username        = local.kafka_daemon_username
   kafka_password        = local.kafka_daemon_password
-  kafka_topic           = local.kafka_topic
+  kafka_topic_events    = local.kafka_topic_events
+  kafka_topic_usage     = local.kafka_topic_usage
   mode                  = "full"
 }
