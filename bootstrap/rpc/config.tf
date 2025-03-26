@@ -17,7 +17,8 @@ resource "kubernetes_config_map_v1" "fabric_rpc_config" {
         consumer_name               = var.consumer_name
         kafka_username              = var.kafka_username
         kafka_password              = var.kafka_password
-        topic                       = var.kafka_topic
+        topic_events                = var.kafka_topic_events
+        topic_usage                 = var.kafka_topic_usage
         secret                      = var.secret
         auth0_client_id             = var.auth0_client_id
         auth0_client_secret         = var.auth0_client_secret

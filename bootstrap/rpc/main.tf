@@ -51,9 +51,14 @@ variable "slack_webhook_url" {
   default = null
 }
 
-variable "kafka_topic" {
+variable "kafka_topic_events" {
   type    = string
   default = "events"
+}
+
+variable "kafka_topic_usage" {
+  type    = string
+  default = "usage"
 }
 
 variable "secret" {
