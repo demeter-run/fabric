@@ -10,44 +10,45 @@ dmtri = { version = "0.1.0", git = "https://github.com/demeter-run/specs.git" }
 # dmtri = { version = "0.1.0", path = "../fabric-specs/gen/rust" }
 
 anyhow = "1.0.86"
-async-trait = "0.1.80"
-sqlx = { version = "0.7.4", features = ["runtime-tokio-rustls", "sqlite", "chrono"] }
-tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread", "time"] }
-tonic = { version = "0.11.0", features = ["tls"] }
-serde = { version = "1.0.203", features = ["derive"] }
-serde_json = "1.0.117"
-tracing = "0.1.40"
-tracing-subscriber = {version = "0.3.18", features = ["env-filter"]}
-rand = "0.8.5"
-dotenv = "0.15.0"
-prost = "0.12.6"
-tonic-reflection = "0.11.0"
-futures = "0.3.30"
-k8s-openapi = { version = "0.22.0", features = ["latest"] }
-kube = { version = "0.92.0", features = ["client"] }
-protoc-wkt = "1.0.0"
-config = { version = "0.14.0", features = ["toml"] }
-rdkafka = { version = "0.36.2", features = ["sasl"] }
-uuid = { version = "1.10.0", features = ["v4"] }
-reqwest = { version = "0.12.5", features = ["json", "rustls-tls-webpki-roots"] }
-jsonwebtoken = "9.3.0"
-bech32 = "0.11.0"
 argon2 = "0.5.3"
-chrono = "0.4.38"
-thiserror = "1.0.63"
-base64 = "0.22.1"
-json-patch = "2.0.0"
+async-trait = "0.1.80"
 aws-config = { version = "1.5.5", features = ["behavior-version-latest"] }
 aws-sdk-sesv2 = { version = "1.43.0", features = ["behavior-version-latest"] }
+axum = "0.7.9"
+base64 = "0.22.1"
+bech32 = "0.11.0"
+chrono = "0.4.38"
 clap = { version = "4.5.17", features = ["derive", "env"] }
 comfy-table = "7.1.1"
+config = { version = "0.14.0", features = ["toml"] }
 csv = "1.3.0"
+dotenv = "0.15.0"
+futures = "0.3.30"
 handlebars = "6.1.0"
-slack-hook = "0.8.0"
 include_dir = "0.7.4"
-regex = "1.11.0"
+json-patch = "2.0.0"
+jsonwebtoken = "9.3.0"
+k8s-openapi = { version = "0.22.0", features = ["latest"] }
+kube = { version = "0.92.0", features = ["client"] }
 prometheus = "0.13.4"
-axum = "0.7.9"
+prost = "0.12.6"
+protoc-wkt = "1.0.0"
+rand = "0.8.5"
+rdkafka = { version = "0.36.2", features = ["sasl"] }
+regex = "1.11.0"
+reqwest = { version = "0.12.5", features = ["json", "rustls-tls-webpki-roots"] }
+rustls = "0.23.25"
+serde = { version = "1.0.203", features = ["derive"] }
+serde_json = "1.0.117"
+slack-hook = "0.8.0"
+sqlx = { version = "0.7.4", features = ["runtime-tokio-rustls", "sqlite", "chrono"] }
+thiserror = "1.0.63"
+tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread", "time"] }
+tonic = { version = "0.11.0", features = ["tls"] }
+tonic-reflection = "0.11.0"
+tracing = "0.1.40"
+tracing-subscriber = {version = "0.3.18", features = ["env-filter"]}
+uuid = { version = "1.10.0", features = ["v4"] }
 
 [dev-dependencies]
 mockall = "0.12.1"
