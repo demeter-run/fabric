@@ -3,7 +3,7 @@ use std::{collections::HashMap, str::FromStr};
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use serde::{Deserialize, Serialize};
 
-use super::{error::Error, Result};
+use super::{error::Error, resource::Resource, Result};
 
 pub mod command;
 
@@ -11,7 +11,7 @@ pub mod command;
 pub trait MetadataDriven: Send + Sync {
     fn find(&self) -> Result<Vec<ResourceMetadata>>;
     fn find_by_kind(&self, kind: &str) -> Result<Option<ResourceMetadata>>;
-    fn render_hbs(&self, name: &str, spec: &str) -> Result<String>;
+    fn render_hbs(&self, resource: &Resource) -> Result<String>;
 }
 
 pub enum KnownField {
