@@ -36,7 +36,8 @@ async fn main() -> Result<()> {
     match config.mode {
         Mode::Usage => {
             let cache = fabric::drivers::cache::subscribe(config.clone().into());
-            let usage = fabric::drivers::usage::schedule(config.clone().into());
+            let usage =
+                fabric::drivers::usage::schedule(config.clone().into(), metrics_driven.clone());
 
             try_join!(cache, usage, metrics)?;
         }
@@ -48,7 +49,8 @@ async fn main() -> Result<()> {
         }
         Mode::Full => {
             let cache = fabric::drivers::cache::subscribe(config.clone().into());
-            let usage = fabric::drivers::usage::schedule(config.clone().into());
+            let usage =
+                fabric::drivers::usage::schedule(config.clone().into(), metrics_driven.clone());
             let monitor =
                 fabric::drivers::monitor::subscribe(config.clone().into(), metrics_driven.clone());
 

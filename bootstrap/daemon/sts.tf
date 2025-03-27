@@ -55,6 +55,11 @@ resource "kubernetes_stateful_set_v1" "daemon" {
             value = "/fabric/daemon.toml"
           }
 
+          env {
+            name  = "RUST_LOG"
+            value = "error"
+          }
+
           volume_mount {
             name       = "cache"
             mount_path = "/var/cache"
