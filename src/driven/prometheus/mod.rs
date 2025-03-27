@@ -1,5 +1,6 @@
 use reqwest::Client;
 use serde::{Deserialize, Deserializer};
+use tracing::error;
 
 use crate::domain::Result;
 
@@ -24,5 +25,14 @@ where
     D: Deserializer<'de>,
 {
     let value = String::deserialize(deserializer)?;
-    Ok(value.parse().unwrap())
+    Ok(match value.parse::<i64>() {
+        Ok(v) => v,
+        Err(error) => {
+            error!(
+                error = error.to_string(),
+                value, "fail to convert prometheus value"
+            );
+            0
+        }
+    })
 }

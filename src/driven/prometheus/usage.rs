@@ -23,12 +23,16 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<UsageResourceUnit>> {
-        let response = self
-            .client
-            .get(format!(
+        let url = format!(
                 "{}/query_range?query=round(usage{{project=\"{project_name}\",resource_name=\"{resource_name}\"}})",
                 &self.url
-            ))
+            );
+
+        dbg!(&url, "collecting usage metrics on prometheus");
+
+        let response = self
+            .client
+            .get(url)
             .query(&[
                 ("start", start.timestamp().to_string()),
                 ("end", end.timestamp().to_string()),
