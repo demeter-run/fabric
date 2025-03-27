@@ -3,18 +3,18 @@ use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 use anyhow::Result;
 use chrono::Utc;
 use tokio::time::sleep;
-use tracing::{info, warn};
+use tracing::{error, info};
 
 use crate::{
-    domain::usage,
+    domain::{error::Error, usage},
     driven::{
         cache::{usage::SqliteUsageDrivenCache, SqliteCache},
         kafka::KafkaProducer,
-        prometheus::PrometheusUsageDriven,
+        prometheus::{metrics::MetricsDriven, PrometheusUsageDriven},
     },
 };
 
-pub async fn schedule(config: UsageConfig) -> Result<()> {
+pub async fn schedule(config: UsageConfig, metrics: Arc<MetricsDriven>) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     let usage_cache = Arc::new(SqliteUsageDrivenCache::new(sqlite_cache.clone()));
 
@@ -42,7 +42,10 @@ pub async fn schedule(config: UsageConfig) -> Result<()> {
                 info!("Successfully sync usage");
                 cursor = Utc::now();
             }
-            Err(err) => warn!(error = err.to_string(), "Error running sync usage"),
+            Err(err) => {
+                error!(error = err.to_string(), "Error running sync usage");
+                handle_error_metric(metrics.clone(), "usage", &err);
+            }
         }
     }
 }
@@ -55,4 +58,10 @@ pub struct UsageConfig {
     pub delay: Duration,
     pub topic: String,
     pub kafka: HashMap<String, String>,
+}
+
+fn handle_error_metric(metrics: Arc<MetricsDriven>, domain: &str, error: &Error) {
+    if let Error::Unexpected(err) = error {
+        metrics.domain_error("usage", domain, &err.to_string());
+    }
 }

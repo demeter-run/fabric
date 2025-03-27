@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use chrono::{DateTime, Utc};
-use futures::future::join_all;
-use tracing::{error, info};
+use futures::future::try_join_all;
+use tracing::info;
 use uuid::Uuid;
 
 use crate::domain::{
@@ -37,14 +37,9 @@ pub async fn sync_usage(
 
     let resources = cache.find_resouces().await?;
 
-    let mut metrics: HashMap<String, UsageMetric> = HashMap::new();
+    let mut metrics_map: HashMap<String, UsageMetric> = HashMap::new();
     for r in resources {
-        let spec = serde_json::from_str::<serde_json::Value>(&r.resource_spec);
-        if let Err(error) = spec.as_ref() {
-            error!(?error, ?r.project_namespace, "fail to deserialize spec");
-        }
-        let spec = spec.unwrap();
-
+        let spec = serde_json::from_str::<serde_json::Value>(&r.resource_spec)?;
         let tier = spec.get("throughputTier");
         if tier.is_none() {
             continue;
@@ -53,13 +48,7 @@ pub async fn sync_usage(
 
         let usages = usage
             .find_metrics(&r.project_namespace, &r.resource_name, step, cursor, end)
-            .await;
-
-        if let Err(error) = usages.as_ref() {
-            error!(?error, ?r.project_namespace, "fail to collect usage metrics");
-        }
-
-        let usages = usages.unwrap();
+            .await?;
 
         if !usages.iter().any(|u| u.tier == tier) {
             let unit = UsageUnitMetric {
@@ -69,7 +58,7 @@ pub async fn sync_usage(
                 interval: (end.timestamp() - cursor.timestamp()) as u64,
                 tier: tier.into(),
             };
-            metrics
+            metrics_map
                 .entry(r.project_id.clone())
                 .and_modify(|u| u.resources.push(unit.clone()))
                 .or_insert(UsageMetric {
@@ -92,7 +81,7 @@ pub async fn sync_usage(
                 tier: resource_unit.tier,
             };
 
-            metrics
+            metrics_map
                 .entry(r.project_id.clone())
                 .and_modify(|u| u.resources.push(unit.clone()))
                 .or_insert(UsageMetric {
@@ -103,7 +92,7 @@ pub async fn sync_usage(
         }
     }
 
-    let tasks = metrics.values().map(|u| async {
+    let tasks = metrics_map.values().map(|u| async {
         let evt = UsageCreated {
             id: Uuid::new_v4().to_string(),
             cluster_id: cluster_id.into(),
@@ -122,13 +111,10 @@ pub async fn sync_usage(
                 })
                 .collect(),
         };
-
-        if let Err(error) = event.dispatch(evt.into()).await {
-            error!(?error, ?u.project_namespace, "fail to dispatch usage event");
-        }
+        event.dispatch(evt.into()).await
     });
 
-    join_all(tasks).await;
+    try_join_all(tasks).await?;
 
     info!(
         cursor = cursor.to_string(),
