@@ -1,9 +1,10 @@
 use anyhow::Result as AnyhowResult;
-use prometheus::{opts, IntCounterVec, Registry};
+use prometheus::{opts, IntCounter, IntCounterVec, Registry};
 
 pub struct MetricsDriven {
     registry: Registry,
     pub domain_errors: IntCounterVec,
+    pub usage_collected: IntCounter,
 }
 
 impl MetricsDriven {
@@ -17,9 +18,17 @@ impl MetricsDriven {
         .unwrap();
         registry.register(Box::new(domain_errors.clone()))?;
 
+        let usage_collected = IntCounter::new(
+            "fabric_domain_usage_total_units",
+            "fabric domain usage total units collected",
+        )
+        .unwrap();
+        registry.register(Box::new(usage_collected.clone()))?;
+
         Ok(Self {
             registry,
             domain_errors,
+            usage_collected,
         })
     }
 
@@ -31,5 +40,9 @@ impl MetricsDriven {
         self.domain_errors
             .with_label_values(&[source, domain, error])
             .inc()
+    }
+
+    pub fn domain_usage_collected(&self, total_units: u64) {
+        self.usage_collected.inc_by(total_units)
     }
 }

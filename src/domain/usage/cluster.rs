@@ -32,7 +32,7 @@ pub async fn sync_usage(
     cluster_id: &str,
     step: &str,
     cursor: DateTime<Utc>,
-) -> Result<()> {
+) -> Result<u64> {
     let end = Utc::now();
 
     let resources = cache.find_resouces().await?;
@@ -116,13 +116,19 @@ pub async fn sync_usage(
 
     try_join_all(tasks).await?;
 
+    let total_units = metrics_map
+        .values()
+        .map(|u| u.resources.iter().map(|r| r.units).sum::<i64>())
+        .sum::<i64>() as u64;
+
     info!(
         cursor = cursor.to_string(),
         end = end.to_string(),
+        total_units,
         "usage collected"
     );
 
-    Ok(())
+    Ok(total_units)
 }
 
 #[cfg(test)]

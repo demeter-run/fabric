@@ -38,8 +38,9 @@ pub async fn schedule(config: UsageConfig, metrics: Arc<MetricsDriven>) -> Resul
         .await;
 
         match result {
-            Ok(()) => {
+            Ok(total_units) => {
                 info!("Successfully sync usage");
+                metrics.domain_usage_collected(total_units);
                 cursor = Utc::now();
             }
             Err(err) => {

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::{
     domain::{
@@ -28,7 +28,7 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
                 &self.url
             );
 
-        dbg!(&url, "collecting usage metrics on prometheus");
+        debug!(?url, "collecting usage metrics on prometheus");
 
         let response = self
             .client
