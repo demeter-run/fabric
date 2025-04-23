@@ -27,5 +27,7 @@ resource "kubernetes_config_map_v1" "fabric_rpc_crds" {
     "submitapiport.json"   = "${file("${path.module}/crds/submitapiport.json")}"
     "utxorpcport.hbs"      = "${file("${path.module}/crds/utxorpcport.hbs")}"
     "utxorpcport.json"     = "${file("${path.module}/crds/utxorpcport.json")}"
+    "trpport.hbs"          = "${file("${path.module}/crds/trpport.hbs")}"
+    "trpport.json"         = "${file("${path.module}/crds/trpport.json")}"
   }
 }
