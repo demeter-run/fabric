@@ -17,21 +17,21 @@
     {
       "description": "mainnet",
       "spec": {
-        "network": "mainnet",
+        "network": "cardano-mainnet",
         "throughputTier": "0"
       }
     },
     {
       "description": "preprod",
       "spec": {
-        "network": "preprod",
+        "network": "cardano-preprod",
         "throughputTier": "0"
       }
     },
     {
       "description": "preview",
       "spec": {
-        "network": "preview",
+        "network": "cardano-preview",
         "throughputTier": "0"
       }
     }
