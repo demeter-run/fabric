@@ -1,6 +1,7 @@
 use anyhow::Result;
 use dmtri::demeter::ops::v1alpha::metadata_service_server::MetadataServiceServer;
 use dmtri::demeter::ops::v1alpha::resource_service_server::ResourceServiceServer;
+use dmtri::demeter::ops::v1alpha::storage_service_server::StorageServiceServer;
 use dmtri::demeter::ops::v1alpha::usage_service_server::UsageServiceServer;
 use middlewares::auth::AuthenticatorImpl;
 use std::collections::HashMap;
@@ -28,12 +29,15 @@ use crate::driven::metadata::FileMetadata;
 use crate::driven::prometheus::metrics::MetricsDriven;
 use crate::driven::ses::SESDrivenImpl;
 use crate::driven::stripe::StripeDrivenImpl;
+use crate::driven::worker::storage::keyvalue::PostgresWorkerKeyValueDrivenStorage;
+use crate::driven::worker::storage::PostgresStorage;
 
 mod metadata;
 mod middlewares;
 mod project;
 mod resource;
 mod usage;
+mod worker;
 
 pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
@@ -63,6 +67,14 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
         &config.ses_secret_access_key,
         &config.ses_region,
         &config.ses_verified_email,
+    ));
+
+    // TODO: should the worker be optional?
+    let worker_storage = Arc::new(
+        PostgresStorage::new("postgresql://postgres:postgres@localhost:5432/postgres").await?,
+    );
+    let worker_keyvalue_storage = Arc::new(PostgresWorkerKeyValueDrivenStorage::new(
+        worker_storage.clone(),
     ));
 
     let reflection = tonic_reflection::server::Builder::configure()
@@ -108,6 +120,15 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
     );
     let usage_service = UsageServiceServer::with_interceptor(usage_inner, auth_interceptor.clone());
 
+    let worker_inner = worker::WorkerKeyValueServiceImpl::new(
+        project_cache.clone(),
+        resource_cache.clone(),
+        worker_keyvalue_storage.clone(),
+        metrics.clone(),
+    );
+    let worker_service =
+        StorageServiceServer::with_interceptor(worker_inner, auth_interceptor.clone());
+
     let address = SocketAddr::from_str(&config.addr)?;
 
     let mut server = if let Some(tls) = config.tls_config {
@@ -127,6 +148,7 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
         .add_service(resource_service)
         .add_service(metadata_service)
         .add_service(usage_service)
+        .add_service(worker_service)
         .serve(address)
         .await?;
 

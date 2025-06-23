@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS usage (
   units INT NOT NULL,
   tier TEXT NOT NULL,
   interval INT NOT NULL,
-  created_at DATETIME NOT NULL,
-  FOREIGN KEY(resource_id) REFERENCES resource(id)
+  created_at DATETIME NOT NULL
+  -- FOREIGN KEY(resource_id) REFERENCES resource(id)
 );
 
