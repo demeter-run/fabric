@@ -49,8 +49,9 @@ impl proto::key_value_service_server::KeyValueService for WorkerKeyValueServiceI
 
         let req = request.into_inner();
 
-        let cmd = command::FetchCmd::new(credential, req.worker_id, req.page, req.page_size)
-            .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker", err))?;
+        let cmd =
+            command::FetchCmd::new(credential, req.worker_id, req.key, req.page, req.page_size)
+                .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker", err))?;
 
         let values = command::fetch(
             self.project_cache.clone(),

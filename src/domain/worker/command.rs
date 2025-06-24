@@ -29,7 +29,7 @@ pub async fn fetch(
     .await?;
 
     let values = key_value_storage
-        .find(&cmd.worker_id, &cmd.page, &cmd.page_size)
+        .find(&cmd.worker_id, cmd.key, &cmd.page, &cmd.page_size)
         .await?;
 
     Ok(values)
@@ -85,6 +85,7 @@ pub async fn delete(
 pub struct FetchCmd {
     pub credential: Credential,
     pub worker_id: String,
+    pub key: Option<String>,
     pub page: u32,
     pub page_size: u32,
 }
@@ -92,6 +93,7 @@ impl FetchCmd {
     pub fn new(
         credential: Credential,
         worker_id: String,
+        key: Option<String>,
         page: Option<u32>,
         page_size: Option<u32>,
     ) -> Result<Self> {
@@ -107,6 +109,7 @@ impl FetchCmd {
         Ok(Self {
             credential,
             worker_id,
+            key,
             page,
             page_size,
         })
@@ -160,6 +163,7 @@ mod fetch_tests {
             Self {
                 credential: Credential::Auth0("user id".into()),
                 worker_id: Uuid::new_v4().to_string(),
+                key: None,
                 page: 1,
                 page_size: 12,
             }
@@ -181,7 +185,7 @@ mod fetch_tests {
         let mut storage = MockWorkerKeyValueDrivenStorage::new();
         storage
             .expect_find()
-            .return_once(|_, _, _| Ok(vec![KeyValue::default()]));
+            .return_once(|_, _, _, _| Ok(vec![KeyValue::default()]));
 
         let cmd = FetchCmd::default();
 

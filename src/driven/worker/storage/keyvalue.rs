@@ -21,30 +21,46 @@ impl PostgresWorkerKeyValueDrivenStorage {
 
 #[async_trait::async_trait]
 impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
-    async fn find(&self, worker_id: &str, page: &u32, page_size: &u32) -> Result<Vec<KeyValue>> {
+    async fn find(
+        &self,
+        worker_id: &str,
+        key: Option<String>,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<Vec<KeyValue>> {
         let offset = (page_size * (page - 1)) as i64;
         let page_size = *page_size as i64;
 
-        let values = sqlx::query_as::<Postgres, KeyValue>(
+        let mut query = String::from(
             r#"
-                SELECT 
-                    kv.worker, 
-                    kv."key", 
-                    kv.value,
-                    kv.type,
-                    kv.secure
-                FROM
-                    kv
-                WHERE kv.worker = $1
-                LIMIT $2
-                OFFSET $3;
-            "#,
-        )
-        .bind(worker_id)
-        .bind(page_size)
-        .bind(offset)
-        .fetch_all(&self.storage.pool)
-        .await?;
+            SELECT 
+                kv.worker, 
+                kv."key", 
+                kv.value,
+                kv.type,
+                kv.secure
+            FROM
+                kv
+            WHERE kv.worker = $1
+        "#,
+        );
+
+        if key.is_some() {
+            query.push_str(" AND kv.\"key\" = $4");
+        }
+
+        query.push_str(" LIMIT $2 OFFSET $3;");
+
+        let mut q = sqlx::query_as::<_, KeyValue>(&query)
+            .bind(worker_id)
+            .bind(page_size)
+            .bind(offset);
+
+        if let Some(k) = &key {
+            q = q.bind(k);
+        }
+
+        let values = q.fetch_all(&self.storage.pool).await?;
 
         Ok(values)
     }

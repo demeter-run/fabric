@@ -8,7 +8,13 @@ pub mod command;
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait WorkerKeyValueDrivenStorage: Send + Sync {
-    async fn find(&self, worker_id: &str, page: &u32, page_size: &u32) -> Result<Vec<KeyValue>>;
+    async fn find(
+        &self,
+        worker_id: &str,
+        key: Option<String>,
+        page: &u32,
+        page_size: &u32,
+    ) -> Result<Vec<KeyValue>>;
     async fn update(&self, key_value: &KeyValue) -> Result<()>;
     async fn delete(&self, worker_id: &str, key: &str) -> Result<()>;
 }
