@@ -93,7 +93,7 @@ impl proto::key_value_service_server::KeyValueService for WorkerKeyValueServiceI
             },
         );
 
-        command::update(
+        let value = command::update(
             self.project_cache.clone(),
             self.resource_cache.clone(),
             self.worker_key_value_storage.clone(),
@@ -102,7 +102,9 @@ impl proto::key_value_service_server::KeyValueService for WorkerKeyValueServiceI
         .await
         .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker", err))?;
 
-        let message = proto::UpdateKeyValueResponse {};
+        let message = proto::UpdateKeyValueResponse {
+            updated: Some(value.into()),
+        };
 
         Ok(tonic::Response::new(message))
     }

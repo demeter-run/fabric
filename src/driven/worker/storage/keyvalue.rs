@@ -65,14 +65,15 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
         Ok(values)
     }
 
-    async fn update(&self, key_value: &KeyValue) -> Result<()> {
+    async fn update(&self, key_value: &KeyValue) -> Result<KeyValue> {
         let type_str = key_value.r#type.to_string();
 
-        let result = sqlx::query::<Postgres>(
+        let updated = sqlx::query_as::<_, KeyValue>(
             r#"
                 UPDATE kv
                 SET value = $3, type = $4, secure = $5
-                WHERE worker = $1 AND key = $2;
+                WHERE worker = $1 AND "key" = $2
+                RETURNING worker, "key", value, type, secure;
             "#,
         )
         .bind(&key_value.worker_id)
@@ -80,14 +81,13 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
         .bind(&key_value.value)
         .bind(type_str)
         .bind(key_value.secure)
-        .execute(&self.storage.pool)
+        .fetch_optional(&self.storage.pool)
         .await?;
 
-        if result.rows_affected() == 0 {
-            return Err(Error::CommandMalformed("key not found".into()));
+        match updated {
+            Some(value) => Ok(value),
+            None => Err(Error::CommandMalformed("key not found".into())),
         }
-
-        Ok(())
     }
 
     async fn delete(&self, worker_id: &str, key: &str) -> Result<()> {

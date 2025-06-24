@@ -40,7 +40,7 @@ pub async fn update(
     resource_cache: Arc<dyn ResourceDrivenCache>,
     key_value_storage: Arc<dyn WorkerKeyValueDrivenStorage>,
     cmd: UpdateCmd,
-) -> Result<()> {
+) -> Result<KeyValue> {
     let Some(resource) = resource_cache.find_by_id(&cmd.key_value.worker_id).await? else {
         return Err(Error::CommandMalformed("invalid resource id".into()));
     };
@@ -53,9 +53,7 @@ pub async fn update(
     )
     .await?;
 
-    key_value_storage.update(&cmd.key_value).await?;
-
-    Ok(())
+    key_value_storage.update(&cmd.key_value).await
 }
 
 pub async fn delete(
@@ -287,7 +285,9 @@ mod update_tests {
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
 
         let mut storage = MockWorkerKeyValueDrivenStorage::new();
-        storage.expect_update().return_once(|_| Ok(()));
+        storage
+            .expect_update()
+            .return_once(|_| Ok(KeyValue::default()));
 
         let cmd = UpdateCmd {
             key_value: KeyValue::default(),
