@@ -37,7 +37,7 @@ impl WorkerKeyValueServiceImpl {
 }
 
 #[async_trait]
-impl proto::storage_service_server::StorageService for WorkerKeyValueServiceImpl {
+impl proto::key_value_service_server::KeyValueService for WorkerKeyValueServiceImpl {
     async fn fetch_key_value(
         &self,
         request: tonic::Request<proto::FetchKeyValueRequest>,
@@ -63,6 +63,72 @@ impl proto::storage_service_server::StorageService for WorkerKeyValueServiceImpl
 
         let records = values.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchKeyValueResponse { records };
+
+        Ok(tonic::Response::new(message))
+    }
+
+    async fn update_key_value(
+        &self,
+        request: tonic::Request<proto::UpdateKeyValueRequest>,
+    ) -> Result<tonic::Response<proto::UpdateKeyValueResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = command::UpdateCmd::new(
+            credential,
+            KeyValue {
+                worker_id: req.worker_id,
+                key: req.key,
+                value: req.value.into(),
+                r#type: req
+                    .r#type
+                    .parse()
+                    .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker", err))?,
+                secure: req.secure,
+            },
+        );
+
+        command::update(
+            self.project_cache.clone(),
+            self.resource_cache.clone(),
+            self.worker_key_value_storage.clone(),
+            cmd,
+        )
+        .await
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker", err))?;
+
+        let message = proto::UpdateKeyValueResponse {};
+
+        Ok(tonic::Response::new(message))
+    }
+
+    async fn delete_key_value(
+        &self,
+        request: tonic::Request<proto::DeleteKeyValueRequest>,
+    ) -> Result<tonic::Response<proto::DeleteKeyValueResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = command::DeleteCmd::new(credential, req.worker_id, req.key);
+
+        command::delete(
+            self.project_cache.clone(),
+            self.resource_cache.clone(),
+            self.worker_key_value_storage.clone(),
+            cmd,
+        )
+        .await
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker", err))?;
+
+        let message = proto::DeleteKeyValueResponse {};
 
         Ok(tonic::Response::new(message))
     }

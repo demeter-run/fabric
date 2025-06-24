@@ -10,11 +10,12 @@ pub mod command;
 pub trait WorkerKeyValueDrivenStorage: Send + Sync {
     async fn find(&self, worker_id: &str, page: &u32, page_size: &u32) -> Result<Vec<KeyValue>>;
     async fn update(&self, key_value: &KeyValue) -> Result<()>;
-    async fn delete(&self, key: &str) -> Result<()>;
+    async fn delete(&self, worker_id: &str, key: &str) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]
 pub struct KeyValue {
+    pub worker_id: String,
     pub key: String,
     pub value: Vec<u8>,
     pub r#type: KeyValueType,
@@ -23,7 +24,7 @@ pub struct KeyValue {
 
 #[derive(Debug, Clone)]
 pub enum KeyValueType {
-    String,
+    Text,
     Bytes,
     Int,
     Bool,
@@ -33,7 +34,7 @@ impl FromStr for KeyValueType {
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
-            "string" => Ok(Self::String),
+            "text" => Ok(Self::Text),
             "bytes" => Ok(Self::Bytes),
             "int" => Ok(Self::Int),
             "bool" => Ok(Self::Bool),
@@ -44,10 +45,29 @@ impl FromStr for KeyValueType {
 impl Display for KeyValueType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::String => write!(f, "string"),
+            Self::Text => write!(f, "text"),
             Self::Bytes => write!(f, "bytes"),
             Self::Int => write!(f, "int"),
             Self::Bool => write!(f, "bool"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use uuid::Uuid;
+
+    use super::*;
+
+    impl Default for KeyValue {
+        fn default() -> Self {
+            Self {
+                worker_id: Uuid::new_v4().to_string(),
+                key: "key".into(),
+                value: "test".as_bytes().to_vec(),
+                r#type: KeyValueType::Text,
+                secure: false,
+            }
         }
     }
 }

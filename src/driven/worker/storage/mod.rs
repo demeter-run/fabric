@@ -8,7 +8,7 @@ pub struct PostgresStorage {
 
 impl PostgresStorage {
     pub async fn new(url: &str) -> Result<Self> {
-        let pool = sqlx::postgres::PgPool::connect(&url).await?;
+        let pool = sqlx::postgres::PgPool::connect(url).await?;
         Ok(Self { pool })
     }
 }

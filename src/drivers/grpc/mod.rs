@@ -1,7 +1,7 @@
 use anyhow::Result;
+use dmtri::demeter::ops::v1alpha::key_value_service_server::KeyValueServiceServer;
 use dmtri::demeter::ops::v1alpha::metadata_service_server::MetadataServiceServer;
 use dmtri::demeter::ops::v1alpha::resource_service_server::ResourceServiceServer;
-use dmtri::demeter::ops::v1alpha::storage_service_server::StorageServiceServer;
 use dmtri::demeter::ops::v1alpha::usage_service_server::UsageServiceServer;
 use middlewares::auth::AuthenticatorImpl;
 use std::collections::HashMap;
@@ -70,9 +70,8 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
     ));
 
     // TODO: should the worker be optional?
-    let worker_storage = Arc::new(
-        PostgresStorage::new("postgresql://postgres:postgres@localhost:5432/postgres").await?,
-    );
+    let worker_storage =
+        Arc::new(PostgresStorage::new("postgresql://test:test@localhost:5432/test").await?);
     let worker_keyvalue_storage = Arc::new(PostgresWorkerKeyValueDrivenStorage::new(
         worker_storage.clone(),
     ));
@@ -127,7 +126,7 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
         metrics.clone(),
     );
     let worker_service =
-        StorageServiceServer::with_interceptor(worker_inner, auth_interceptor.clone());
+        KeyValueServiceServer::with_interceptor(worker_inner, auth_interceptor.clone());
 
     let address = SocketAddr::from_str(&config.addr)?;
 
