@@ -13,6 +13,7 @@ use tonic::{
     transport::{Identity, Server, ServerTlsConfig},
     Status,
 };
+use tower_http::cors::CorsLayer;
 use tracing::{error, info};
 
 use dmtri::demeter::ops::v1alpha::project_service_server::ProjectServiceServer;
@@ -68,7 +69,7 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(dmtri::demeter::ops::v1alpha::FILE_DESCRIPTOR_SET)
         .register_encoded_file_descriptor_set(protoc_wkt::google::protobuf::FILE_DESCRIPTOR_SET)
-        .build()
+        .build_v1()
         .unwrap();
 
     let auth_interceptor =
@@ -110,23 +111,26 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
 
     let address = SocketAddr::from_str(&config.addr)?;
 
-    let mut server = if let Some(tls) = config.tls_config {
+    let mut server = Server::builder()
+        .accept_http1(true)
+        .layer(CorsLayer::permissive());
+
+    if let Some(tls) = config.tls_config {
         let cert = std::fs::read_to_string(tls.ssl_crt_path)?;
         let key = std::fs::read_to_string(tls.ssl_key_path)?;
         let identity = Identity::from_pem(cert, key);
 
-        Server::builder().tls_config(ServerTlsConfig::new().identity(identity))?
-    } else {
-        Server::builder()
-    };
+        server = server.tls_config(ServerTlsConfig::new().identity(identity))?;
+    }
 
     info!(address = config.addr, "GRPC server running");
+
     server
+        .add_service(tonic_web::enable(project_service))
+        .add_service(tonic_web::enable(resource_service))
+        .add_service(tonic_web::enable(usage_service))
+        .add_service(tonic_web::enable(metadata_service))
         .add_service(reflection)
-        .add_service(project_service)
-        .add_service(resource_service)
-        .add_service(metadata_service)
-        .add_service(usage_service)
         .serve(address)
         .await?;
 

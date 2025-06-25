@@ -5,8 +5,8 @@ edition = "2021"
 repository = "https://github.com/demeter-run/fabric"
 
 [dependencies]
-dmtri = { version = "0.1.0", git = "https://github.com/demeter-run/specs.git" }
-# dmtri = { version = "0.1.0", path = "../specs/gen/rust" }
+# dmtri = { version = "0.1.0", git = "https://github.com/demeter-run/specs.git" }
+dmtri = { version = "0.1.0", path = "../specs/gen/rust" }
 # dmtri = { version = "0.1.0", path = "../fabric-specs/gen/rust" }
 
 anyhow = "1.0.86"
@@ -44,11 +44,13 @@ slack-hook = "0.8.0"
 sqlx = { version = "0.7.4", features = ["runtime-tokio-rustls", "sqlite", "chrono"] }
 thiserror = "1.0.63"
 tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread", "time"] }
-tonic = { version = "0.11.0", features = ["tls"] }
-tonic-reflection = "0.11.0"
 tracing = "0.1.40"
 tracing-subscriber = {version = "0.3.18", features = ["env-filter"]}
 uuid = { version = "1.10.0", features = ["v4"] }
+tonic = { version = "0.12.3", features = ["tls"] }
+tonic-reflection = "0.12.3"
+tonic-web = "0.12.3"
+tower-http = { version = "0.6.1", features = ["cors", "trace"] }
 
 [dev-dependencies]
 mockall = "0.12.1"
