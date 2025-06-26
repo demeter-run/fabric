@@ -27,7 +27,7 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
         key: Option<String>,
         page: &u32,
         page_size: &u32,
-    ) -> Result<Vec<KeyValue>> {
+    ) -> Result<(i64, Vec<KeyValue>)> {
         let offset = (page_size * (page - 1)) as i64;
         let page_size = *page_size as i64;
 
@@ -36,7 +36,8 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
             SELECT 
                 kv.worker, 
                 kv."key", 
-                kv.value
+                kv.value,
+                COUNT(*) OVER () AS total_count
             FROM
                 kv
             WHERE kv.worker = $1
@@ -49,7 +50,7 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
 
         query.push_str(" LIMIT $2 OFFSET $3;");
 
-        let mut q = sqlx::query_as::<_, KeyValue>(&query)
+        let mut q = sqlx::query(&query)
             .bind(worker_id)
             .bind(page_size)
             .bind(offset);
@@ -58,9 +59,19 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
             q = q.bind(format!("%{k}%"));
         }
 
-        let values = q.fetch_all(&self.storage.pool).await?;
+        let rows = q.fetch_all(&self.storage.pool).await?;
 
-        Ok(values)
+        let count = rows
+            .first()
+            .map(|r| r.get::<i64, _>("total_count"))
+            .unwrap_or_default();
+
+        let values = rows
+            .into_iter()
+            .map(|r| KeyValue::from_row(&r))
+            .collect::<sqlx::Result<Vec<KeyValue>>>()?;
+
+        Ok((count, values))
     }
 
     async fn update(&self, key_value: &KeyValue) -> Result<KeyValue> {

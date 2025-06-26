@@ -15,7 +15,7 @@ pub async fn fetch(
     resource_cache: Arc<dyn ResourceDrivenCache>,
     key_value_storage: Arc<dyn WorkerKeyValueDrivenStorage>,
     cmd: FetchCmd,
-) -> Result<Vec<KeyValue>> {
+) -> Result<(i64, Vec<KeyValue>)> {
     let Some(resource) = resource_cache.find_by_id(&cmd.worker_id).await? else {
         return Err(Error::CommandMalformed("invalid resource id".into()));
     };
@@ -28,11 +28,11 @@ pub async fn fetch(
     )
     .await?;
 
-    let values = key_value_storage
+    let (count, values) = key_value_storage
         .find(&cmd.worker_id, cmd.key, &cmd.page, &cmd.page_size)
         .await?;
 
-    Ok(values)
+    Ok((count, values))
 }
 
 pub async fn update(
@@ -183,7 +183,7 @@ mod fetch_tests {
         let mut storage = MockWorkerKeyValueDrivenStorage::new();
         storage
             .expect_find()
-            .return_once(|_, _, _, _| Ok(vec![KeyValue::default()]));
+            .return_once(|_, _, _, _| Ok((1, vec![KeyValue::default()])));
 
         let cmd = FetchCmd::default();
 
