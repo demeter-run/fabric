@@ -4,7 +4,7 @@ use sqlx::{postgres::PgRow, FromRow, Postgres, Row};
 
 use crate::domain::{
     error::Error,
-    worker::{KeyValue, WorkerKeyValueDrivenStorage},
+    worker::storage::{KeyValue, WorkerKeyValueDrivenStorage},
     Result,
 };
 

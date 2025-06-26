@@ -5,9 +5,13 @@ use tonic::{async_trait, Status};
 use crate::{
     domain::{
         auth::Credential,
+        error::Error,
         project::cache::ProjectDrivenCache,
         resource::cache::ResourceDrivenCache,
-        worker::{command, KeyValue, WorkerKeyValueDrivenStorage},
+        worker::{
+            logs::{self, FetchDirection, Log, WorkerLogsDrivenStorage},
+            storage::{self, KeyValue, WorkerKeyValueDrivenStorage},
+        },
     },
     driven::prometheus::metrics::MetricsDriven,
 };
@@ -35,7 +39,6 @@ impl WorkerKeyValueServiceImpl {
         }
     }
 }
-
 #[async_trait]
 impl proto::key_value_service_server::KeyValueService for WorkerKeyValueServiceImpl {
     async fn fetch_key_value(
@@ -49,18 +52,27 @@ impl proto::key_value_service_server::KeyValueService for WorkerKeyValueServiceI
 
         let req = request.into_inner();
 
-        let cmd =
-            command::FetchCmd::new(credential, req.worker_id, req.key, req.page, req.page_size)
-                .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker", err))?;
+        let cmd = storage::command::FetchCmd::new(
+            credential,
+            req.worker_id,
+            req.key,
+            req.page,
+            req.page_size,
+        )
+        .inspect_err(|err| {
+            handle_error_metric(self.metrics.clone(), "worker-key-value-storage", err)
+        })?;
 
-        let (count, values) = command::fetch(
+        let (count, values) = storage::command::fetch(
             self.project_cache.clone(),
             self.resource_cache.clone(),
             self.worker_key_value_storage.clone(),
             cmd,
         )
         .await
-        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker", err))?;
+        .inspect_err(|err| {
+            handle_error_metric(self.metrics.clone(), "worker-key-value-storage", err)
+        })?;
 
         let records = values.into_iter().map(|v| v.into()).collect();
         let message = proto::FetchKeyValueResponse {
@@ -82,7 +94,7 @@ impl proto::key_value_service_server::KeyValueService for WorkerKeyValueServiceI
 
         let req = request.into_inner();
 
-        let cmd = command::UpdateCmd::new(
+        let cmd = storage::command::UpdateCmd::new(
             credential,
             KeyValue {
                 worker_id: req.worker_id,
@@ -91,14 +103,16 @@ impl proto::key_value_service_server::KeyValueService for WorkerKeyValueServiceI
             },
         );
 
-        let value = command::update(
+        let value = storage::command::update(
             self.project_cache.clone(),
             self.resource_cache.clone(),
             self.worker_key_value_storage.clone(),
             cmd,
         )
         .await
-        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker", err))?;
+        .inspect_err(|err| {
+            handle_error_metric(self.metrics.clone(), "worker-key-value-storage", err)
+        })?;
 
         let message = proto::UpdateKeyValueResponse {
             updated: Some(value.into()),
@@ -118,16 +132,18 @@ impl proto::key_value_service_server::KeyValueService for WorkerKeyValueServiceI
 
         let req = request.into_inner();
 
-        let cmd = command::DeleteCmd::new(credential, req.worker_id, req.key);
+        let cmd = storage::command::DeleteCmd::new(credential, req.worker_id, req.key);
 
-        command::delete(
+        storage::command::delete(
             self.project_cache.clone(),
             self.resource_cache.clone(),
             self.worker_key_value_storage.clone(),
             cmd,
         )
         .await
-        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker", err))?;
+        .inspect_err(|err| {
+            handle_error_metric(self.metrics.clone(), "worker-key-value-storage", err)
+        })?;
 
         let message = proto::DeleteKeyValueResponse {};
 
@@ -140,6 +156,95 @@ impl From<KeyValue> for proto::KeyValue {
         Self {
             key: value.key,
             value: value.value.into(),
+        }
+    }
+}
+
+pub struct WorkerLogsServiceImpl {
+    project_cache: Arc<dyn ProjectDrivenCache>,
+    resource_cache: Arc<dyn ResourceDrivenCache>,
+    logs_storage: Arc<dyn WorkerLogsDrivenStorage>,
+    metrics: Arc<MetricsDriven>,
+}
+impl WorkerLogsServiceImpl {
+    pub fn new(
+        project_cache: Arc<dyn ProjectDrivenCache>,
+        resource_cache: Arc<dyn ResourceDrivenCache>,
+        logs_storage: Arc<dyn WorkerLogsDrivenStorage>,
+        metrics: Arc<MetricsDriven>,
+    ) -> Self {
+        Self {
+            project_cache,
+            resource_cache,
+            logs_storage,
+            metrics,
+        }
+    }
+}
+
+#[async_trait]
+impl proto::logs_service_server::LogsService for WorkerLogsServiceImpl {
+    async fn fetch_window(
+        &self,
+        request: tonic::Request<proto::FetchLogsRequest>,
+    ) -> Result<tonic::Response<proto::FetchLogsResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let direction = if let Some(direction) = req.direction {
+            Some(direction.try_into()?)
+        } else {
+            None
+        };
+
+        let cmd = logs::command::FetchCmd::new(
+            credential,
+            req.worker_id,
+            req.cursor as i64,
+            direction,
+            req.limit.map(|l| l as i64),
+        )
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker-logs-storage", err))?;
+
+        let logs = logs::command::fetch(
+            self.project_cache.clone(),
+            self.resource_cache.clone(),
+            self.logs_storage.clone(),
+            cmd,
+        )
+        .await
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker-logs-storage", err))?;
+
+        let records = logs.into_iter().map(|v| v.into()).collect();
+        let message = proto::FetchLogsResponse { records };
+
+        Ok(tonic::Response::new(message))
+    }
+}
+
+impl TryFrom<i32> for FetchDirection {
+    type Error = Error;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Prev),
+            1 => Ok(Self::Next),
+            _ => Err(Error::CommandMalformed("invalid direction".into())),
+        }
+    }
+}
+
+impl From<Log> for proto::Log {
+    fn from(value: Log) -> Self {
+        Self {
+            timestamp: value.timestamp.timestamp() as u32,
+            level: value.level,
+            message: value.message,
+            context: value.context,
         }
     }
 }
