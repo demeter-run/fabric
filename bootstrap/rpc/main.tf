@@ -88,6 +88,10 @@ variable "email_ses_verified_email" {
   default = "no-reply@demeter.run"
 }
 
+variable "balius_pg_url" {
+  type = string
+}
+
 variable "url_prefix" {
   type    = string
   default = "rpc"
