@@ -29,8 +29,8 @@ pub async fn fetch(
     .await?;
 
     let logs = match cmd.direction {
-        FetchDirection::Prev => logs.prev(&cmd.worker_id, cmd.cursor, &cmd.limit).await?,
-        FetchDirection::Next => logs.next(&cmd.worker_id, cmd.cursor, &cmd.limit).await?,
+        FetchDirection::Prev => logs.prev(&cmd.worker_id, cmd.cursor, cmd.limit).await?,
+        FetchDirection::Next => logs.next(&cmd.worker_id, cmd.cursor, cmd.limit).await?,
     };
 
     Ok(logs)
@@ -40,22 +40,22 @@ pub async fn fetch(
 pub struct FetchCmd {
     pub credential: Credential,
     pub worker_id: String,
-    pub cursor: u64,
-    pub limit: u32,
+    pub cursor: i64,
+    pub limit: i64,
     pub direction: FetchDirection,
 }
 impl FetchCmd {
     pub fn new(
         credential: Credential,
         worker_id: String,
-        cursor: u64,
+        cursor: i64,
         direction: Option<FetchDirection>,
-        limit: Option<u32>,
+        limit: Option<i64>,
     ) -> Result<Self> {
-        let limit = limit.unwrap_or(PAGE_SIZE_DEFAULT);
+        let limit = limit.unwrap_or(PAGE_SIZE_DEFAULT as i64);
         let direction = direction.unwrap_or(FetchDirection::Next);
 
-        if limit >= PAGE_SIZE_MAX {
+        if limit >= PAGE_SIZE_MAX as i64 {
             return Err(Error::CommandMalformed(format!(
                 "limit exceeded the maximum of {PAGE_SIZE_MAX}"
             )));

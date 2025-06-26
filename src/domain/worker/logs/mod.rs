@@ -5,14 +5,14 @@ pub mod command;
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait WorkerLogsDriven: Send + Sync {
-    async fn prev(&self, worker_id: &str, cursor: u64, limit: &u32) -> Result<Vec<Log>>;
-    async fn next(&self, worker_id: &str, cursor: u64, limit: &u32) -> Result<Vec<Log>>;
+    async fn prev(&self, worker_id: &str, cursor: i64, limit: i64) -> Result<Vec<Log>>;
+    async fn next(&self, worker_id: &str, cursor: i64, limit: i64) -> Result<Vec<Log>>;
 }
 
 #[derive(Debug, Clone)]
 pub struct Log {
     pub worker_id: String,
-    pub timestamp: u64,
+    pub timestamp: i64,
     pub level: String,
     pub message: String,
     pub context: String,

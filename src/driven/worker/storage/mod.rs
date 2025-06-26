@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 pub mod keyvalue;
+pub mod logs;
 
 pub struct PostgresStorage {
     pool: sqlx::postgres::PgPool,
