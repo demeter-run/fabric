@@ -70,22 +70,11 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
         &config.ses_verified_email,
     ));
 
-    let mut server = if let Some(tls) = config.tls_config {
-        let cert = std::fs::read_to_string(tls.ssl_crt_path)?;
-        let key = std::fs::read_to_string(tls.ssl_key_path)?;
-        let identity = Identity::from_pem(cert, key);
-
-        Server::builder().tls_config(ServerTlsConfig::new().identity(identity))?
-    } else {
-        Server::builder()
-    };
-
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(dmtri::demeter::ops::v1alpha::FILE_DESCRIPTOR_SET)
         .register_encoded_file_descriptor_set(protoc_wkt::google::protobuf::FILE_DESCRIPTOR_SET)
         .build_v1()
         .unwrap();
-    let mut router = server.add_service(reflection);
 
     let auth_interceptor =
         AuthenticatorImpl::new(auth0.clone(), project_cache.clone(), metrics.clone());
@@ -102,7 +91,7 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
     );
     let project_service =
         ProjectServiceServer::with_interceptor(project_inner, auth_interceptor.clone());
-    router = router.add_service(project_service);
+    let project_service = tonic_web::enable(project_service);
 
     let resource_inner = resource::ResourceServiceImpl::new(
         project_cache.clone(),
@@ -113,11 +102,11 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
     );
     let resource_service =
         ResourceServiceServer::with_interceptor(resource_inner, auth_interceptor.clone());
-    router = router.add_service(resource_service);
+    let resource_service = tonic_web::enable(resource_service);
 
     let metadata_inner = metadata::MetadataServiceImpl::new(metadata.clone(), metrics.clone());
     let metadata_service = MetadataServiceServer::new(metadata_inner);
-    router = router.add_service(metadata_service);
+    let metadata_service = tonic_web::enable(metadata_service);
 
     let usage_inner = usage::UsageServiceImpl::new(
         project_cache.clone(),
@@ -126,9 +115,9 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
         metrics.clone(),
     );
     let usage_service = UsageServiceServer::with_interceptor(usage_inner, auth_interceptor.clone());
-    router = router.add_service(usage_service);
+    let usage_service = tonic_web::enable(usage_service);
 
-    if let Some(pg_url) = config.balius_pg_url {
+    let worker_service = if let Some(pg_url) = config.balius_pg_url {
         let worker_storage = Arc::new(PostgresStorage::new(&pg_url).await?);
         let worker_keyvalue_storage = Arc::new(PostgresWorkerKeyValueDrivenStorage::new(
             worker_storage.clone(),
@@ -141,8 +130,10 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
         );
         let worker_service =
             KeyValueServiceServer::with_interceptor(worker_inner, auth_interceptor.clone());
-        router = router.add_service(worker_service);
-    }
+        Some(tonic_web::enable(worker_service))
+    } else {
+        None
+    };
 
     let address = SocketAddr::from_str(&config.addr)?;
 
@@ -161,11 +152,12 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
     info!(address = config.addr, "GRPC server running");
 
     server
-        .add_service(tonic_web::enable(project_service))
-        .add_service(tonic_web::enable(resource_service))
-        .add_service(tonic_web::enable(usage_service))
-        .add_service(tonic_web::enable(metadata_service))
+        .add_service(project_service)
+        .add_service(resource_service)
+        .add_service(usage_service)
+        .add_service(metadata_service)
         .add_service(reflection)
+        .add_optional_service(worker_service)
         .serve(address)
         .await?;
 
