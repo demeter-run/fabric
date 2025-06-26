@@ -582,40 +582,12 @@ dependencies = [
 
 [[package]]
 name = "axum"
-version = "0.6.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b829e4e32b91e643de6eafe82b1d90675f5874230191a4ffbc1b336dec4d6bf"
-dependencies = [
- "async-trait",
- "axum-core 0.3.4",
- "bitflags 1.3.2",
- "bytes 1.10.1",
- "futures-util",
- "http 0.2.12",
- "http-body 0.4.6",
- "hyper 0.14.32",
- "itoa 1.0.15",
- "matchit",
- "memchr",
- "mime",
- "percent-encoding 2.3.1",
- "pin-project-lite",
- "rustversion",
- "serde",
- "sync_wrapper 0.1.2",
- "tower 0.4.13",
- "tower-layer",
- "tower-service",
-]
-
-[[package]]
-name = "axum"
 version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edca88bc138befd0323b20752846e6587272d3b03b0343c8ea28a6f819e6e71f"
 dependencies = [
  "async-trait",
- "axum-core 0.4.5",
+ "axum-core",
  "bytes 1.10.1",
  "futures-util",
  "http 1.3.1",
@@ -634,29 +606,16 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_urlencoded 0.7.1",
+<<<<<<< HEAD
  "sync_wrapper 1.0.2",
+=======
+ "sync_wrapper",
+>>>>>>> main
  "tokio 1.45.1",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
  "tracing",
-]
-
-[[package]]
-name = "axum-core"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "759fa577a247914fd3f7f76d62972792636412fbfd634cd452f6a385a74d2d2c"
-dependencies = [
- "async-trait",
- "bytes 1.10.1",
- "futures-util",
- "http 0.2.12",
- "http-body 0.4.6",
- "mime",
- "rustversion",
- "tower-layer",
- "tower-service",
 ]
 
 [[package]]
@@ -674,7 +633,7 @@ dependencies = [
  "mime",
  "pin-project-lite",
  "rustversion",
- "sync_wrapper 1.0.2",
+ "sync_wrapper",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -1394,14 +1353,22 @@ dependencies = [
 [[package]]
 name = "dmtri"
 version = "0.1.0"
+<<<<<<< HEAD
 source = "git+https://github.com/demeter-run/specs.git#c77e4b4830ac93482b62c3302713aa4af6e791dd"
+=======
+source = "git+https://github.com/demeter-run/specs.git#3997b815e7394d62b78d368d0029a76a3edbfa06"
+>>>>>>> main
 dependencies = [
  "bytes 1.10.1",
  "futures-core",
  "pbjson",
  "pbjson-types",
  "prost 0.13.5",
+<<<<<<< HEAD
  "prost-types 0.13.5",
+=======
+ "prost-types",
+>>>>>>> main
  "serde",
  "tonic 0.12.3",
 ]
@@ -1549,7 +1516,7 @@ dependencies = [
  "async-trait",
  "aws-config",
  "aws-sdk-sesv2",
- "axum 0.7.9",
+ "axum",
  "base64 0.22.1",
  "bech32",
  "chrono",
@@ -1581,8 +1548,14 @@ dependencies = [
  "sqlx",
  "thiserror 1.0.69",
  "tokio 1.45.1",
+<<<<<<< HEAD
  "tonic 0.11.0",
+=======
+ "tonic",
+>>>>>>> main
  "tonic-reflection",
+ "tonic-web",
+ "tower-http 0.6.6",
  "tracing",
  "tracing-subscriber",
  "uuid 1.17.0",
@@ -2308,6 +2281,7 @@ dependencies = [
  "tokio-rustls 0.26.2",
  "tower-service",
  "webpki-roots 1.0.1",
+<<<<<<< HEAD
 ]
 
 [[package]]
@@ -2320,6 +2294,8 @@ dependencies = [
  "pin-project-lite",
  "tokio 1.45.1",
  "tokio-io-timeout",
+=======
+>>>>>>> main
 ]
 
 [[package]]
@@ -2633,6 +2609,7 @@ name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+<<<<<<< HEAD
 dependencies = [
  "either",
 ]
@@ -2642,6 +2619,8 @@ name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+=======
+>>>>>>> main
 dependencies = [
  "either",
 ]
@@ -2794,7 +2773,11 @@ dependencies = [
  "hyper 1.6.0",
  "hyper-http-proxy",
  "hyper-rustls 0.27.7",
+<<<<<<< HEAD
  "hyper-timeout 0.5.2",
+=======
+ "hyper-timeout",
+>>>>>>> main
  "hyper-util",
  "jsonpath-rust",
  "k8s-openapi",
@@ -3462,7 +3445,11 @@ dependencies = [
  "heck 0.5.0",
  "itertools 0.13.0",
  "prost 0.13.5",
+<<<<<<< HEAD
  "prost-types 0.13.5",
+=======
+ "prost-types",
+>>>>>>> main
 ]
 
 [[package]]
@@ -3754,14 +3741,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
  "heck 0.5.0",
+<<<<<<< HEAD
  "itertools 0.14.0",
+=======
+ "itertools 0.12.1",
+>>>>>>> main
  "log",
  "multimap",
  "once_cell",
  "petgraph",
  "prettyplease",
  "prost 0.13.5",
+<<<<<<< HEAD
  "prost-types 0.13.5",
+=======
+ "prost-types",
+>>>>>>> main
  "regex",
  "syn 2.0.104",
  "tempfile",
@@ -3778,6 +3773,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.104",
+<<<<<<< HEAD
 ]
 
 [[package]]
@@ -3800,6 +3796,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9091c90b0a32608e984ff2fa4091273cbdd755d54935c51d520887f4a1dbd5b0"
 dependencies = [
  "prost 0.12.6",
+=======
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.13.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
+dependencies = [
+ "anyhow",
+ "itertools 0.12.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.13.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52c2c1bf36ddb1a1c396b3601a3cec27c2462e45f07c386894ec3ccf5332bd16"
+dependencies = [
+ "prost 0.13.5",
+>>>>>>> main
 ]
 
 [[package]]
@@ -4238,7 +4258,11 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded 0.7.1",
+<<<<<<< HEAD
  "sync_wrapper 1.0.2",
+=======
+ "sync_wrapper",
+>>>>>>> main
  "tokio 1.45.1",
  "tokio-native-tls",
  "tokio-rustls 0.26.2",
@@ -4395,8 +4419,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.22.4"
+version = "0.23.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+<<<<<<< HEAD
 checksum = "bf4ef73721ac7bcd79b2b315da7779d8fc09718c6b3d2d1b2d94850eb8c18432"
 dependencies = [
  "log",
@@ -4411,6 +4436,8 @@ dependencies = [
 name = "rustls"
 version = "0.23.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+=======
+>>>>>>> main
 checksum = "7160e3e10bf4535308537f3c4e1641468cd0e485175d6163087c0393c7d46643"
 dependencies = [
  "aws-lc-rs",
@@ -4500,8 +4527,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.102.8"
+version = "0.103.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+<<<<<<< HEAD
 checksum = "64ca1bc8749bd4cf37b5ce386cc146580777b4e8572c7b97baf22c83f444bee9"
 dependencies = [
  "ring",
@@ -4513,6 +4541,8 @@ dependencies = [
 name = "rustls-webpki"
 version = "0.103.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+=======
+>>>>>>> main
 checksum = "e4a72fe2bcf7a6ac6fd7d0b9e5cb68aeb7d4c0a0271730218b3e92d43b4eb435"
 dependencies = [
  "aws-lc-rs",
@@ -5208,12 +5238,6 @@ dependencies = [
 
 [[package]]
 name = "sync_wrapper"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2047c6ded9c721764247e62cd3b03c09ffc529b2ba5b10ec482ae507a4a70160"
-
-[[package]]
-name = "sync_wrapper"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
@@ -5488,6 +5512,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "tokio-io-timeout"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5498,6 +5523,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> main
 name = "tokio-macros"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5545,6 +5572,7 @@ checksum = "c28327cf380ac148141087fbfb9de9d7bd4e84ab5d2c28fbc911d753de8a7081"
 dependencies = [
  "rustls 0.21.12",
  "tokio 1.45.1",
+<<<<<<< HEAD
 ]
 
 [[package]]
@@ -5556,6 +5584,8 @@ dependencies = [
  "rustls 0.22.4",
  "rustls-pki-types",
  "tokio 1.45.1",
+=======
+>>>>>>> main
 ]
 
 [[package]]
@@ -5683,32 +5713,49 @@ dependencies = [
 [[package]]
 name = "toml_write"
 version = "0.1.2"
+<<<<<<< HEAD
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "tonic"
 version = "0.11.0"
+=======
+>>>>>>> main
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76c4eb7a4e9ef9d4763600161f12f5070b92a578e1b634db88a6887844c91a13"
+checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
+
+[[package]]
+name = "tonic"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "877c5b330756d856ffcc4553ab34a5684481ade925ecc54bcd1bf02b1d0d4d52"
 dependencies = [
  "async-stream",
  "async-trait",
- "axum 0.6.20",
- "base64 0.21.7",
+ "axum",
+ "base64 0.22.1",
  "bytes 1.10.1",
- "h2 0.3.26",
- "http 0.2.12",
- "http-body 0.4.6",
- "hyper 0.14.32",
- "hyper-timeout 0.4.1",
+ "h2 0.4.10",
+ "http 1.3.1",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.6.0",
+ "hyper-timeout",
+ "hyper-util",
  "percent-encoding 2.3.1",
  "pin-project",
- "prost 0.12.6",
+ "prost 0.13.5",
  "rustls-pemfile 2.2.0",
+<<<<<<< HEAD
  "rustls-pki-types",
  "tokio 1.45.1",
  "tokio-rustls 0.25.0",
+=======
+ "socket2",
+ "tokio 1.45.1",
+ "tokio-rustls 0.26.2",
+>>>>>>> main
  "tokio-stream",
  "tower 0.4.13",
  "tower-layer",
@@ -5739,15 +5786,40 @@ dependencies = [
 
 [[package]]
 name = "tonic-reflection"
-version = "0.11.0"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "548c227bd5c0fae5925812c4ec6c66ffcfced23ea370cb823f4d18f0fc1cb6a7"
+checksum = "878d81f52e7fcfd80026b7fdb6a9b578b3c3653ba987f87f0dce4b64043cba27"
 dependencies = [
+<<<<<<< HEAD
  "prost 0.12.6",
  "prost-types 0.12.6",
+=======
+ "prost 0.13.5",
+ "prost-types",
+>>>>>>> main
  "tokio 1.45.1",
  "tokio-stream",
  "tonic 0.11.0",
+]
+
+[[package]]
+name = "tonic-web"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5299dd20801ad736dccb4a5ea0da7376e59cd98f213bf1c3d478cf53f4834b58"
+dependencies = [
+ "base64 0.22.1",
+ "bytes 1.10.1",
+ "http 1.3.1",
+ "http-body 1.0.1",
+ "http-body-util",
+ "pin-project",
+ "tokio-stream",
+ "tonic",
+ "tower-http 0.5.2",
+ "tower-layer",
+ "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -5779,7 +5851,11 @@ dependencies = [
  "futures-core",
  "futures-util",
  "pin-project-lite",
+<<<<<<< HEAD
  "sync_wrapper 1.0.2",
+=======
+ "sync_wrapper",
+>>>>>>> main
  "tokio 1.45.1",
  "tower-layer",
  "tower-service",
@@ -5821,6 +5897,10 @@ dependencies = [
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
+<<<<<<< HEAD
+=======
+ "tracing",
+>>>>>>> main
 ]
 
 [[package]]
