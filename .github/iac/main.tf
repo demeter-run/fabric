@@ -35,6 +35,7 @@ variable "stripe_api_key" {}
 variable "slack_webhook_url" {}
 variable "email_ses_access_key_id" {}
 variable "email_ses_secret_access_key" {}
+variable "balius_pg_url" {}
 
 
 locals {
@@ -58,6 +59,7 @@ locals {
   email_ses_access_key_id     = var.email_ses_access_key_id
   email_ses_secret_access_key = var.email_ses_secret_access_key
   email_ses_verified_email    = "no-reply@demeter.run"
+  balius_pg_url               = var.balius_pg_url
 }
 
 module "fabric_rpc" {
@@ -83,6 +85,7 @@ module "fabric_rpc" {
   email_ses_secret_access_key = local.email_ses_secret_access_key
   email_ses_verified_email    = local.email_ses_verified_email
   url_prefix                  = "rpc"
+  balius_pg_url               = local.balius_pg_url
 }
 
 module "fabric_daemon" {
