@@ -7,3 +7,4 @@ pub mod prometheus;
 pub mod ses;
 pub mod slack;
 pub mod stripe;
+pub mod worker;

@@ -75,6 +75,10 @@ struct PrometheusConfig {
     addr: String,
 }
 #[derive(Debug, Clone, Deserialize)]
+struct BaliusConfig {
+    pg_url: String,
+}
+#[derive(Debug, Clone, Deserialize)]
 struct Config {
     addr: String,
     db_path: String,
@@ -90,6 +94,7 @@ struct Config {
     kafka_producer: HashMap<String, String>,
     kafka_consumer: HashMap<String, String>,
     prometheus: PrometheusConfig,
+    balius: Option<BaliusConfig>,
 }
 impl Config {
     pub fn new() -> Result<Self> {
@@ -130,6 +135,7 @@ impl From<Config> for GrpcConfig {
                 ssl_key_path: value.ssl_key_path,
                 ssl_crt_path: value.ssl_crt_path,
             }),
+            balius_pg_url: value.balius.map(|b| b.pg_url),
         }
     }
 }

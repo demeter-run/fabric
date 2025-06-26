@@ -9,6 +9,7 @@ pub mod project;
 pub mod resource;
 pub mod usage;
 pub mod utils;
+pub mod worker;
 
 pub const PAGE_SIZE_DEFAULT: u32 = 12;
 pub const PAGE_SIZE_MAX: u32 = 120;

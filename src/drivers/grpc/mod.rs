@@ -1,4 +1,5 @@
 use anyhow::Result;
+use dmtri::demeter::ops::v1alpha::key_value_service_server::KeyValueServiceServer;
 use dmtri::demeter::ops::v1alpha::metadata_service_server::MetadataServiceServer;
 use dmtri::demeter::ops::v1alpha::resource_service_server::ResourceServiceServer;
 use dmtri::demeter::ops::v1alpha::usage_service_server::UsageServiceServer;
@@ -29,12 +30,15 @@ use crate::driven::metadata::FileMetadata;
 use crate::driven::prometheus::metrics::MetricsDriven;
 use crate::driven::ses::SESDrivenImpl;
 use crate::driven::stripe::StripeDrivenImpl;
+use crate::driven::worker::storage::keyvalue::PostgresWorkerKeyValueDrivenStorage;
+use crate::driven::worker::storage::PostgresStorage;
 
 mod metadata;
 mod middlewares;
 mod project;
 mod resource;
 mod usage;
+mod worker;
 
 pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
@@ -87,6 +91,7 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
     );
     let project_service =
         ProjectServiceServer::with_interceptor(project_inner, auth_interceptor.clone());
+    let project_service = tonic_web::enable(project_service);
 
     let resource_inner = resource::ResourceServiceImpl::new(
         project_cache.clone(),
@@ -97,9 +102,11 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
     );
     let resource_service =
         ResourceServiceServer::with_interceptor(resource_inner, auth_interceptor.clone());
+    let resource_service = tonic_web::enable(resource_service);
 
     let metadata_inner = metadata::MetadataServiceImpl::new(metadata.clone(), metrics.clone());
     let metadata_service = MetadataServiceServer::new(metadata_inner);
+    let metadata_service = tonic_web::enable(metadata_service);
 
     let usage_inner = usage::UsageServiceImpl::new(
         project_cache.clone(),
@@ -108,6 +115,25 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
         metrics.clone(),
     );
     let usage_service = UsageServiceServer::with_interceptor(usage_inner, auth_interceptor.clone());
+    let usage_service = tonic_web::enable(usage_service);
+
+    let worker_service = if let Some(pg_url) = config.balius_pg_url {
+        let worker_storage = Arc::new(PostgresStorage::new(&pg_url).await?);
+        let worker_keyvalue_storage = Arc::new(PostgresWorkerKeyValueDrivenStorage::new(
+            worker_storage.clone(),
+        ));
+        let worker_inner = worker::WorkerKeyValueServiceImpl::new(
+            project_cache.clone(),
+            resource_cache.clone(),
+            worker_keyvalue_storage.clone(),
+            metrics.clone(),
+        );
+        let worker_service =
+            KeyValueServiceServer::with_interceptor(worker_inner, auth_interceptor.clone());
+        Some(tonic_web::enable(worker_service))
+    } else {
+        None
+    };
 
     let address = SocketAddr::from_str(&config.addr)?;
 
@@ -126,11 +152,12 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
     info!(address = config.addr, "GRPC server running");
 
     server
-        .add_service(tonic_web::enable(project_service))
-        .add_service(tonic_web::enable(resource_service))
-        .add_service(tonic_web::enable(usage_service))
-        .add_service(tonic_web::enable(metadata_service))
+        .add_service(project_service)
+        .add_service(resource_service)
+        .add_service(usage_service)
+        .add_service(metadata_service)
         .add_service(reflection)
+        .add_optional_service(worker_service)
         .serve(address)
         .await?;
 
@@ -161,6 +188,7 @@ pub struct GrpcConfig {
     pub ses_region: String,
     pub ses_verified_email: String,
     pub tls_config: Option<GrpcTlsConfig>,
+    pub balius_pg_url: Option<String>,
 }
 
 impl From<Error> for Status {
