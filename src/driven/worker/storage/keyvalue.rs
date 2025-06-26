@@ -36,9 +36,7 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
             SELECT 
                 kv.worker, 
                 kv."key", 
-                kv.value,
-                kv.type,
-                kv.secure
+                kv.value
             FROM
                 kv
             WHERE kv.worker = $1
@@ -46,7 +44,7 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
         );
 
         if key.is_some() {
-            query.push_str(" AND kv.\"key\" = $4");
+            query.push_str(" AND kv.\"key\" LIKE $4");
         }
 
         query.push_str(" LIMIT $2 OFFSET $3;");
@@ -57,7 +55,7 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
             .bind(offset);
 
         if let Some(k) = &key {
-            q = q.bind(k);
+            q = q.bind(format!("%{k}%"));
         }
 
         let values = q.fetch_all(&self.storage.pool).await?;
@@ -66,21 +64,17 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
     }
 
     async fn update(&self, key_value: &KeyValue) -> Result<KeyValue> {
-        let type_str = key_value.r#type.to_string();
-
         let updated = sqlx::query_as::<_, KeyValue>(
             r#"
                 UPDATE kv
-                SET value = $3, type = $4, secure = $5
+                SET value = $3
                 WHERE worker = $1 AND "key" = $2
-                RETURNING worker, "key", value, type, secure;
+                RETURNING worker, "key", value;
             "#,
         )
         .bind(&key_value.worker_id)
         .bind(&key_value.key)
         .bind(&key_value.value)
-        .bind(type_str)
-        .bind(key_value.secure)
         .fetch_optional(&self.storage.pool)
         .await?;
 
@@ -114,16 +108,10 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
 
 impl FromRow<'_, PgRow> for KeyValue {
     fn from_row(row: &PgRow) -> sqlx::Result<Self> {
-        let type_str: &str = row.try_get("type")?;
-
         Ok(Self {
             worker_id: row.try_get("worker")?,
             key: row.try_get("key")?,
             value: row.try_get("value")?,
-            r#type: type_str
-                .parse()
-                .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-            secure: row.try_get("secure")?,
         })
     }
 }

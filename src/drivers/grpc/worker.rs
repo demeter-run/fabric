@@ -85,11 +85,6 @@ impl proto::key_value_service_server::KeyValueService for WorkerKeyValueServiceI
                 worker_id: req.worker_id,
                 key: req.key,
                 value: req.value.into(),
-                r#type: req
-                    .r#type
-                    .parse()
-                    .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker", err))?,
-                secure: req.secure,
             },
         );
 
@@ -142,8 +137,6 @@ impl From<KeyValue> for proto::KeyValue {
         Self {
             key: value.key,
             value: value.value.into(),
-            r#type: value.r#type.to_string(),
-            secure: value.secure,
         }
     }
 }
