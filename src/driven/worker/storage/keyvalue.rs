@@ -44,7 +44,7 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
         );
 
         if key.is_some() {
-            query.push_str(" AND kv.\"key\" LIKE $4");
+            query.push_str(" AND kv.\"key\" ILIKE $4");
         }
 
         query.push_str(" LIMIT $2 OFFSET $3;");
