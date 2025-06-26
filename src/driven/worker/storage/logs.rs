@@ -3,7 +3,7 @@ use std::sync::Arc;
 use sqlx::{postgres::PgRow, FromRow, Postgres, Row};
 
 use crate::domain::{
-    worker::logs::{Log, WorkerLogsDriven},
+    worker::logs::{Log, WorkerLogsDrivenStorage},
     Result,
 };
 
@@ -19,7 +19,7 @@ impl PostgresWorkerLogsDrivenStorage {
 }
 
 #[async_trait::async_trait]
-impl WorkerLogsDriven for PostgresWorkerLogsDrivenStorage {
+impl WorkerLogsDrivenStorage for PostgresWorkerLogsDrivenStorage {
     async fn prev(&self, worker_id: &str, cursor: i64, limit: i64) -> Result<Vec<Log>> {
         let logs = sqlx::query_as::<Postgres, Log>(
             r#"

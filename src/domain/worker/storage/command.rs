@@ -29,7 +29,7 @@ pub async fn fetch(
     .await?;
 
     let (count, values) = key_value_storage
-        .find(&cmd.worker_id, cmd.key, &cmd.page, &cmd.page_size)
+        .find(&resource.name, cmd.key, &cmd.page, &cmd.page_size)
         .await?;
 
     Ok((count, values))

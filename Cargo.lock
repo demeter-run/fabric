@@ -1349,6 +1349,7 @@ dependencies = [
 [[package]]
 name = "dmtri"
 version = "0.1.0"
+source = "git+https://github.com/demeter-run/specs.git#c39dab9d85371c3ed57bc8ece28b05f3933c4709"
 dependencies = [
  "bytes 1.10.1",
  "futures-core",

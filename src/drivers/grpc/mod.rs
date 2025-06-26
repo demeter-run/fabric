@@ -1,5 +1,6 @@
 use anyhow::Result;
 use dmtri::demeter::ops::v1alpha::key_value_service_server::KeyValueServiceServer;
+use dmtri::demeter::ops::v1alpha::logs_service_server::LogsServiceServer;
 use dmtri::demeter::ops::v1alpha::metadata_service_server::MetadataServiceServer;
 use dmtri::demeter::ops::v1alpha::resource_service_server::ResourceServiceServer;
 use dmtri::demeter::ops::v1alpha::usage_service_server::UsageServiceServer;
@@ -31,6 +32,7 @@ use crate::driven::prometheus::metrics::MetricsDriven;
 use crate::driven::ses::SESDrivenImpl;
 use crate::driven::stripe::StripeDrivenImpl;
 use crate::driven::worker::storage::keyvalue::PostgresWorkerKeyValueDrivenStorage;
+use crate::driven::worker::storage::logs::PostgresWorkerLogsDrivenStorage;
 use crate::driven::worker::storage::PostgresStorage;
 
 mod metadata;
@@ -117,22 +119,35 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
     let usage_service = UsageServiceServer::with_interceptor(usage_inner, auth_interceptor.clone());
     let usage_service = tonic_web::enable(usage_service);
 
-    let worker_service = if let Some(pg_url) = config.balius_pg_url {
-        let worker_storage = Arc::new(PostgresStorage::new(&pg_url).await?);
-        let worker_keyvalue_storage = Arc::new(PostgresWorkerKeyValueDrivenStorage::new(
-            worker_storage.clone(),
-        ));
-        let worker_inner = worker::WorkerKeyValueServiceImpl::new(
+    let (worker_kv_service, worker_logs_service) = if let Some(pg_url) = config.balius_pg_url {
+        let storage = Arc::new(PostgresStorage::new(&pg_url).await?);
+        let kv_storage = Arc::new(PostgresWorkerKeyValueDrivenStorage::new(storage.clone()));
+        let logs_storage = Arc::new(PostgresWorkerLogsDrivenStorage::new(storage.clone()));
+
+        let kv_inner = worker::WorkerKeyValueServiceImpl::new(
             project_cache.clone(),
             resource_cache.clone(),
-            worker_keyvalue_storage.clone(),
+            kv_storage.clone(),
             metrics.clone(),
         );
-        let worker_service =
-            KeyValueServiceServer::with_interceptor(worker_inner, auth_interceptor.clone());
-        Some(tonic_web::enable(worker_service))
+        let kv_service =
+            KeyValueServiceServer::with_interceptor(kv_inner, auth_interceptor.clone());
+
+        let logs_inner = worker::WorkerLogsServiceImpl::new(
+            project_cache.clone(),
+            resource_cache.clone(),
+            logs_storage.clone(),
+            metrics.clone(),
+        );
+        let logs_service =
+            LogsServiceServer::with_interceptor(logs_inner, auth_interceptor.clone());
+
+        (
+            Some(tonic_web::enable(kv_service)),
+            Some(tonic_web::enable(logs_service)),
+        )
     } else {
-        None
+        (None, None)
     };
 
     let address = SocketAddr::from_str(&config.addr)?;
@@ -157,7 +172,8 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
         .add_service(usage_service)
         .add_service(metadata_service)
         .add_service(reflection)
-        .add_optional_service(worker_service)
+        .add_optional_service(worker_kv_service)
+        .add_optional_service(worker_logs_service)
         .serve(address)
         .await?;
 

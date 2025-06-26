@@ -8,12 +8,12 @@ use crate::domain::{
     Result, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
-use super::{FetchDirection, Log, WorkerLogsDriven};
+use super::{FetchDirection, Log, WorkerLogsDrivenStorage};
 
 pub async fn fetch(
     project_cache: Arc<dyn ProjectDrivenCache>,
     resource_cache: Arc<dyn ResourceDrivenCache>,
-    logs: Arc<dyn WorkerLogsDriven>,
+    logs_storage: Arc<dyn WorkerLogsDrivenStorage>,
     cmd: FetchCmd,
 ) -> Result<Vec<Log>> {
     let Some(resource) = resource_cache.find_by_id(&cmd.worker_id).await? else {
@@ -29,8 +29,16 @@ pub async fn fetch(
     .await?;
 
     let logs = match cmd.direction {
-        FetchDirection::Prev => logs.prev(&cmd.worker_id, cmd.cursor, cmd.limit).await?,
-        FetchDirection::Next => logs.next(&cmd.worker_id, cmd.cursor, cmd.limit).await?,
+        FetchDirection::Prev => {
+            logs_storage
+                .prev(&resource.name, cmd.cursor, cmd.limit)
+                .await?
+        }
+        FetchDirection::Next => {
+            logs_storage
+                .next(&resource.name, cmd.cursor, cmd.limit)
+                .await?
+        }
     };
 
     Ok(logs)
@@ -78,7 +86,7 @@ mod fetch_tests {
     use crate::domain::{
         project::{cache::MockProjectDrivenCache, ProjectUser},
         resource::{cache::MockResourceDrivenCache, Resource},
-        worker::logs::MockWorkerLogsDriven,
+        worker::logs::MockWorkerLogsDrivenStorage,
     };
 
     use super::*;
@@ -107,8 +115,9 @@ mod fetch_tests {
             .expect_find_user_permission()
             .return_once(|_, _| Ok(Some(ProjectUser::default())));
 
-        let mut logs = MockWorkerLogsDriven::new();
-        logs.expect_next()
+        let mut logs_storage = MockWorkerLogsDrivenStorage::new();
+        logs_storage
+            .expect_next()
             .return_once(|_, _, _| Ok(vec![Log::default()]));
 
         let cmd = FetchCmd::default();
@@ -116,7 +125,7 @@ mod fetch_tests {
         let result = fetch(
             Arc::new(project_cache),
             Arc::new(resource_cache),
-            Arc::new(logs),
+            Arc::new(logs_storage),
             cmd,
         )
         .await;
@@ -136,14 +145,14 @@ mod fetch_tests {
             .expect_find_user_permission()
             .return_once(|_, _| Ok(None));
 
-        let logs = MockWorkerLogsDriven::new();
+        let logs_storage = MockWorkerLogsDrivenStorage::new();
 
         let cmd = FetchCmd::default();
 
         let result = fetch(
             Arc::new(project_cache),
             Arc::new(resource_cache),
-            Arc::new(logs),
+            Arc::new(logs_storage),
             cmd,
         )
         .await;
@@ -159,7 +168,7 @@ mod fetch_tests {
             .return_once(|_| Ok(Some(Resource::default())));
 
         let project_cache = MockProjectDrivenCache::new();
-        let logs = MockWorkerLogsDriven::new();
+        let logs_storage = MockWorkerLogsDrivenStorage::new();
 
         let cmd = FetchCmd {
             credential: Credential::ApiKey(Uuid::new_v4().to_string()),
@@ -169,7 +178,7 @@ mod fetch_tests {
         let result = fetch(
             Arc::new(project_cache),
             Arc::new(resource_cache),
-            Arc::new(logs),
+            Arc::new(logs_storage),
             cmd,
         )
         .await;
