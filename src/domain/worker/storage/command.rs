@@ -151,7 +151,7 @@ mod fetch_tests {
     use crate::domain::{
         project::{cache::MockProjectDrivenCache, ProjectUser},
         resource::{cache::MockResourceDrivenCache, Resource},
-        worker::MockWorkerKeyValueDrivenStorage,
+        worker::storage::MockWorkerKeyValueDrivenStorage,
     };
 
     use super::*;
@@ -258,7 +258,7 @@ mod update_tests {
     use crate::domain::{
         project::{cache::MockProjectDrivenCache, ProjectUser},
         resource::{cache::MockResourceDrivenCache, Resource},
-        worker::MockWorkerKeyValueDrivenStorage,
+        worker::storage::MockWorkerKeyValueDrivenStorage,
     };
 
     use super::*;
@@ -370,7 +370,7 @@ mod delete_tests {
     use crate::domain::{
         project::{cache::MockProjectDrivenCache, ProjectUser},
         resource::{cache::MockResourceDrivenCache, Resource},
-        worker::MockWorkerKeyValueDrivenStorage,
+        worker::storage::MockWorkerKeyValueDrivenStorage,
     };
 
     use super::*;

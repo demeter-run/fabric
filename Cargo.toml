@@ -5,8 +5,8 @@ edition = "2021"
 repository = "https://github.com/demeter-run/fabric"
 
 [dependencies]
-dmtri = { version = "0.1.0", git = "https://github.com/demeter-run/specs.git" }
-# dmtri = { version = "0.1.0", path = "../specs/gen/rust" }
+# dmtri = { version = "0.1.0", git = "https://github.com/demeter-run/specs.git" }
+dmtri = { version = "0.1.0", path = "../specs/gen/rust" }
 # dmtri = { version = "0.1.0", path = "../fabric-specs/gen/rust" }
 
 anyhow = "1.0.86"

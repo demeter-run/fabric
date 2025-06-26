@@ -7,7 +7,7 @@ use crate::{
         auth::Credential,
         project::cache::ProjectDrivenCache,
         resource::cache::ResourceDrivenCache,
-        worker::{command, KeyValue, WorkerKeyValueDrivenStorage},
+        worker::storage::{command, KeyValue, WorkerKeyValueDrivenStorage},
     },
     driven::prometheus::metrics::MetricsDriven,
 };
@@ -35,7 +35,6 @@ impl WorkerKeyValueServiceImpl {
         }
     }
 }
-
 #[async_trait]
 impl proto::key_value_service_server::KeyValueService for WorkerKeyValueServiceImpl {
     async fn fetch_key_value(
@@ -141,5 +140,59 @@ impl From<KeyValue> for proto::KeyValue {
             key: value.key,
             value: value.value.into(),
         }
+    }
+}
+
+pub struct WorkerLogsServiceImpl {
+    project_cache: Arc<dyn ProjectDrivenCache>,
+    resource_cache: Arc<dyn ResourceDrivenCache>,
+    metrics: Arc<MetricsDriven>,
+}
+impl WorkerLogsServiceImpl {
+    pub fn new(
+        project_cache: Arc<dyn ProjectDrivenCache>,
+        resource_cache: Arc<dyn ResourceDrivenCache>,
+        metrics: Arc<MetricsDriven>,
+    ) -> Self {
+        Self {
+            project_cache,
+            resource_cache,
+            metrics,
+        }
+    }
+}
+
+#[async_trait]
+impl proto::logs_service_server::LogsService for WorkerLogsServiceImpl {
+    async fn fetch_window(
+        &self,
+        request: tonic::Request<proto::FetchLogRequest>,
+    ) -> Result<tonic::Response<proto::FetchLogResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        // let cmd =
+        //     command::FetchCmd::new(credential, req.worker_id, req.key, req.page, req.page_size)
+        //         .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker", err))?;
+        //
+        // let (count, values) = command::fetch(
+        //     self.project_cache.clone(),
+        //     self.resource_cache.clone(),
+        //     self.worker_key_value_storage.clone(),
+        //     cmd,
+        // )
+        // .await
+        // .inspect_err(|err| handle_error_metric(self.metrics.clone(), "worker", err))?;
+        //
+        // let records = values.into_iter().map(|v| v.into()).collect();
+        // let message = proto::FetchKeyValueResponse {
+        //     total_records: count as u32,
+        //     records,
+        // };
+        todo!()
     }
 }
