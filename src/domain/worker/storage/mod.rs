@@ -12,7 +12,7 @@ pub trait WorkerKeyValueDrivenStorage: Send + Sync {
         page: &u32,
         page_size: &u32,
     ) -> Result<(i64, Vec<KeyValue>)>;
-    async fn update(&self, key_value: &KeyValue) -> Result<KeyValue>;
+    async fn update(&self, worker_id: &str, key_value: &KeyValue) -> Result<KeyValue>;
     async fn delete(&self, worker_id: &str, key: &str) -> Result<()>;
 }
 

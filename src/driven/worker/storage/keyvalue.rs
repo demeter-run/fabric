@@ -74,7 +74,7 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
         Ok((count, values))
     }
 
-    async fn update(&self, key_value: &KeyValue) -> Result<KeyValue> {
+    async fn update(&self, worker_id: &str, key_value: &KeyValue) -> Result<KeyValue> {
         let updated = sqlx::query_as::<_, KeyValue>(
             r#"
                 UPDATE kv
@@ -83,7 +83,7 @@ impl WorkerKeyValueDrivenStorage for PostgresWorkerKeyValueDrivenStorage {
                 RETURNING worker, "key", value;
             "#,
         )
-        .bind(&key_value.worker_id)
+        .bind(worker_id)
         .bind(&key_value.key)
         .bind(&key_value.value)
         .fetch_optional(&self.storage.pool)

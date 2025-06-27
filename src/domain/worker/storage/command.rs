@@ -53,7 +53,9 @@ pub async fn update(
     )
     .await?;
 
-    key_value_storage.update(&cmd.key_value).await
+    key_value_storage
+        .update(&resource.name, &cmd.key_value)
+        .await
 }
 
 pub async fn delete(
@@ -74,7 +76,7 @@ pub async fn delete(
     )
     .await?;
 
-    key_value_storage.delete(&cmd.worker_id, &cmd.key).await?;
+    key_value_storage.delete(&resource.name, &cmd.key).await?;
 
     Ok(())
 }
@@ -287,7 +289,7 @@ mod update_tests {
         let mut storage = MockWorkerKeyValueDrivenStorage::new();
         storage
             .expect_update()
-            .return_once(|_| Ok(KeyValue::default()));
+            .return_once(|_, _| Ok(KeyValue::default()));
 
         let cmd = UpdateCmd {
             key_value: KeyValue::default(),
