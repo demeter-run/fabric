@@ -120,7 +120,7 @@ jobs:
       - name: Rename artifacts
         run: |+
           mv .github/image/bin/daemon-Linux-x86_64 .github/image/bin/daemon-Linux-amd64
-          mv .github/image/bin/proxy-Linux-x86_64 .github/image/bin/rpc-Linux-amd64
+          mv .github/image/bin/rpc-Linux-x86_64 .github/image/bin/rpc-Linux-amd64
           mv .github/image/bin/backoffice-Linux-x86_64 .github/image/bin/backoffice-Linux-amd64
 
       - name: Build and push
