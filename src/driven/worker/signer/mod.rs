@@ -32,8 +32,12 @@ impl VaultWorkerSignerDrivenStorage {
         Ok(Self { client })
     }
 
+    pub fn worker_prefix(worker_id: &str) -> String {
+        format!("{worker_id}-")
+    }
+
     pub fn key_for_worker(worker_id: &str, key_name: &str) -> String {
-        format!("{worker_id}-{key_name}")
+        format!("{}-{key_name}", Self::worker_prefix(worker_id))
     }
 }
 
@@ -47,7 +51,7 @@ impl WorkerSignerDrivenStorage for VaultWorkerSignerDrivenStorage {
             .filter(|key| key.starts_with(worker_id))
             .map(|key| Signer {
                 worker_id: worker_id.to_string(),
-                key_name: key.to_owned(),
+                key_name: key.replace(&Self::worker_prefix(worker_id), "").to_owned(),
             })
             .collect())
     }
