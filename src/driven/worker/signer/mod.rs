@@ -37,7 +37,7 @@ impl VaultWorkerSignerDrivenStorage {
     }
 
     pub fn key_for_worker(worker_id: &str, key_name: &str) -> String {
-        format!("{}-{key_name}", Self::worker_prefix(worker_id))
+        format!("{}{key_name}", Self::worker_prefix(worker_id))
     }
 }
 
