@@ -53,23 +53,23 @@ jobs:
           mv target/${{ matrix.target }}/release/rpc${{ matrix.ext }} rpc-${{ matrix.release_for }}${{ matrix.ext }}
           mv target/${{ matrix.target }}/release/cli${{ matrix.ext }} backoffice-${{ matrix.release_for }}${{ matrix.ext }}
 
-      - name: upload controller 
+      - name: upload daemon
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-controller-${{ matrix.release_for }}
-          path: controller-${{ matrix.release_for }}${{ matrix.ext }}
+          name: binaries-daemon-${{ matrix.release_for }}
+          path: daemon-${{ matrix.release_for }}${{ matrix.ext }}
 
-      - name: upload proxy 
+      - name: upload rpc 
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-proxy-${{ matrix.release_for }}
-          path: proxy-${{ matrix.release_for }}${{ matrix.ext }}
+          name: binaries-rpc-${{ matrix.release_for }}
+          path: rpc-${{ matrix.release_for }}${{ matrix.ext }}
       
-      - name: upload instance 
+      - name: upload backoffice
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-instance-${{ matrix.release_for }}
-          path: instance-${{ matrix.release_for }}${{ matrix.ext }}
+          name: binaries-backoffice-${{ matrix.release_for }}
+          path: backoffice-${{ matrix.release_for }}${{ matrix.ext }}
 
   docker:
     runs-on: ubuntu-latest
