@@ -92,6 +92,14 @@ variable "balius_pg_url" {
   type = string
 }
 
+variable "balius_vault_token" {
+  type = string
+}
+
+variable "balius_vault_address" {
+  type = string
+}
+
 variable "url_prefix" {
   type    = string
   default = "rpc"
