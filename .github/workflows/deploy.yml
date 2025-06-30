@@ -23,6 +23,8 @@ jobs:
        TF_VAR_daemon_image: ghcr.io/demeter-run/fabric-daemon:${{ github.sha }}
        TF_VAR_kafka_daemon_password: ${{ secrets.KAFKA_DAEMON_PASSWORD }}
        TF_VAR_balius_pg_url: ${{ secrets.BALIUS_PG_URL }}
+       TF_VAR_balius_vault_token: ${{ secrets.BALIUS_VAULT_TOKEN }}
+       TF_VAR_balius_vault_address: ${{ secrets.BALIUS_VAULT_ADDRESS }}
     steps:
       - uses: actions/checkout@v2
 

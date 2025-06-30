@@ -77,6 +77,8 @@ struct PrometheusConfig {
 #[derive(Debug, Clone, Deserialize)]
 struct BaliusConfig {
     pg_url: String,
+    vault_address: String,
+    vault_token: String,
 }
 #[derive(Debug, Clone, Deserialize)]
 struct Config {
@@ -135,7 +137,9 @@ impl From<Config> for GrpcConfig {
                 ssl_key_path: value.ssl_key_path,
                 ssl_crt_path: value.ssl_crt_path,
             }),
-            balius_pg_url: value.balius.map(|b| b.pg_url),
+            balius_pg_url: value.balius.as_ref().map(|b| b.pg_url.clone()),
+            balius_vault_address: value.balius.as_ref().map(|b| b.vault_address.clone()),
+            balius_vault_token: value.balius.as_ref().map(|b| b.vault_token.clone()),
         }
     }
 }

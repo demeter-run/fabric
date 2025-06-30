@@ -5,7 +5,7 @@ edition = "2021"
 repository = "https://github.com/demeter-run/fabric"
 
 [dependencies]
-dmtri = { version = "0.1.0", git = "https://github.com/demeter-run/specs.git" }
+dmtri = { git = "https://github.com/demeter-run/specs.git", rev = "8e90dbc6d58ce84025a3eaa9a5fdcab126af3099" }
 # dmtri = { version = "0.1.0", path = "../specs/gen/rust" }
 # dmtri = { version = "0.1.0", path = "../fabric-specs/gen/rust" }
 
@@ -51,6 +51,7 @@ tonic = { version = "0.12.3", features = ["tls"] }
 tonic-reflection = "0.12.3"
 tonic-web = "0.12.3"
 tower-http = { version = "0.6.1", features = ["cors", "trace"] }
+vaultrs = { git = "https://github.com/jmgilman/vaultrs", rev = "45833fe9c92051b6d61b1f6bf9b8ca76919759a4" }
 
 [dev-dependencies]
 mockall = "0.12.1"

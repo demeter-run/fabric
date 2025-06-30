@@ -31,6 +31,8 @@ resource "kubernetes_config_map_v1" "fabric_rpc_config" {
         email_ses_region            = var.email_ses_region
         email_ses_verified_email    = var.email_ses_verified_email
         balius_pg_url               = var.balius_pg_url
+        balius_vault_token          = var.balius_vault_token
+        balius_vault_address        = var.balius_vault_address
       }
     )}"
   }
