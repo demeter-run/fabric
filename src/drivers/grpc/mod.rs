@@ -3,6 +3,7 @@ use dmtri::demeter::ops::v1alpha::key_value_service_server::KeyValueServiceServe
 use dmtri::demeter::ops::v1alpha::logs_service_server::LogsServiceServer;
 use dmtri::demeter::ops::v1alpha::metadata_service_server::MetadataServiceServer;
 use dmtri::demeter::ops::v1alpha::resource_service_server::ResourceServiceServer;
+use dmtri::demeter::ops::v1alpha::signer_service_server::SignerServiceServer;
 use dmtri::demeter::ops::v1alpha::usage_service_server::UsageServiceServer;
 use middlewares::auth::AuthenticatorImpl;
 use std::collections::HashMap;
@@ -31,6 +32,7 @@ use crate::driven::metadata::FileMetadata;
 use crate::driven::prometheus::metrics::MetricsDriven;
 use crate::driven::ses::SESDrivenImpl;
 use crate::driven::stripe::StripeDrivenImpl;
+use crate::driven::worker::signer::VaultWorkerSignerDrivenStorage;
 use crate::driven::worker::storage::keyvalue::PostgresWorkerKeyValueDrivenStorage;
 use crate::driven::worker::storage::logs::PostgresWorkerLogsDrivenStorage;
 use crate::driven::worker::storage::PostgresStorage;
@@ -150,6 +152,24 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
         (None, None)
     };
 
+    let worker_signer_service = if let (Some(address), Some(token)) =
+        (config.balius_vault_address, config.balius_vault_token)
+    {
+        let storage = Arc::new(VaultWorkerSignerDrivenStorage::try_new(&address, &token)?);
+        let signer_inner = worker::WorkerSignerServiceImpl::new(
+            project_cache.clone(),
+            resource_cache.clone(),
+            storage.clone(),
+            metrics.clone(),
+        );
+        let signer_service =
+            SignerServiceServer::with_interceptor(signer_inner, auth_interceptor.clone());
+
+        Some(tonic_web::enable(signer_service))
+    } else {
+        None
+    };
+
     let address = SocketAddr::from_str(&config.addr)?;
 
     let mut server = Server::builder()
@@ -174,6 +194,7 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
         .add_service(reflection)
         .add_optional_service(worker_kv_service)
         .add_optional_service(worker_logs_service)
+        .add_optional_service(worker_signer_service)
         .serve(address)
         .await?;
 
@@ -205,6 +226,8 @@ pub struct GrpcConfig {
     pub ses_verified_email: String,
     pub tls_config: Option<GrpcTlsConfig>,
     pub balius_pg_url: Option<String>,
+    pub balius_vault_token: Option<String>,
+    pub balius_vault_address: Option<String>,
 }
 
 impl From<Error> for Status {

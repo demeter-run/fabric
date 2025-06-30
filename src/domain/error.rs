@@ -62,3 +62,13 @@ impl From<slack_hook::Error> for Error {
         Self::Unexpected(format!("Invalid webhook URL: {}", value))
     }
 }
+impl From<vaultrs::error::ClientError> for Error {
+    fn from(value: vaultrs::error::ClientError) -> Self {
+        Self::Unexpected(format!("Failed to query vault: {}", value))
+    }
+}
+impl From<vaultrs::client::VaultClientSettingsBuilderError> for Error {
+    fn from(value: vaultrs::client::VaultClientSettingsBuilderError) -> Self {
+        Self::Unexpected(format!("Failed to create vault client: {}", value))
+    }
+}

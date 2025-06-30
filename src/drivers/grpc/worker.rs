@@ -10,6 +10,7 @@ use crate::{
         resource::cache::ResourceDrivenCache,
         worker::{
             logs::{self, FetchDirection, Log, WorkerLogsDrivenStorage},
+            signer::{self, Signer, WorkerSignerDrivenStorage},
             storage::{self, KeyValue, WorkerKeyValueDrivenStorage},
         },
     },
@@ -245,6 +246,136 @@ impl From<Log> for proto::Log {
             level: value.level,
             message: value.message,
             context: value.context,
+        }
+    }
+}
+
+pub struct WorkerSignerServiceImpl {
+    project_cache: Arc<dyn ProjectDrivenCache>,
+    resource_cache: Arc<dyn ResourceDrivenCache>,
+    signer_storage: Arc<dyn WorkerSignerDrivenStorage>,
+    metrics: Arc<MetricsDriven>,
+}
+impl WorkerSignerServiceImpl {
+    pub fn new(
+        project_cache: Arc<dyn ProjectDrivenCache>,
+        resource_cache: Arc<dyn ResourceDrivenCache>,
+        signer_storage: Arc<dyn WorkerSignerDrivenStorage>,
+        metrics: Arc<MetricsDriven>,
+    ) -> Self {
+        Self {
+            project_cache,
+            resource_cache,
+            signer_storage,
+            metrics,
+        }
+    }
+}
+
+#[async_trait]
+impl proto::signer_service_server::SignerService for WorkerSignerServiceImpl {
+    async fn list(
+        &self,
+        request: tonic::Request<proto::ListSignerRequest>,
+    ) -> Result<tonic::Response<proto::ListSignerResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = signer::command::ListCmd::new(credential, req.worker_id);
+
+        let signers = signer::command::list(
+            self.project_cache.clone(),
+            self.resource_cache.clone(),
+            self.signer_storage.clone(),
+            cmd,
+        )
+        .await
+        .inspect_err(|err| {
+            handle_error_metric(self.metrics.clone(), "worker-signer-storage", err)
+        })?;
+
+        let keys = signers.into_iter().map(|v| v.into()).collect();
+        let message = proto::ListSignerResponse { keys };
+
+        Ok(tonic::Response::new(message))
+    }
+
+    async fn get_public_key(
+        &self,
+        request: tonic::Request<proto::GetPublicKeySignerRequest>,
+    ) -> Result<tonic::Response<proto::GetPublicKeySignerResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = signer::command::GetPublicKeyCmd::new(credential, req.worker_id, req.key_name);
+
+        let public_key = signer::command::get_public_key(
+            self.project_cache.clone(),
+            self.resource_cache.clone(),
+            self.signer_storage.clone(),
+            cmd,
+        )
+        .await
+        .inspect_err(|err| {
+            handle_error_metric(self.metrics.clone(), "worker-signer-storage", err)
+        })?;
+
+        let message = proto::GetPublicKeySignerResponse {
+            public_key: public_key.map(|x| x.into()),
+        };
+
+        Ok(tonic::Response::new(message))
+    }
+
+    async fn sign_payload(
+        &self,
+        request: tonic::Request<proto::SignPayloadSignerRequest>,
+    ) -> Result<tonic::Response<proto::SignPayloadSignerResponse>, tonic::Status> {
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+
+        let cmd = signer::command::SignPayloadCmd::new(
+            credential,
+            req.worker_id,
+            req.key_name,
+            req.payload.to_vec(),
+        );
+
+        let signed_payload = signer::command::sign_payload(
+            self.project_cache.clone(),
+            self.resource_cache.clone(),
+            self.signer_storage.clone(),
+            cmd,
+        )
+        .await
+        .inspect_err(|err| {
+            handle_error_metric(self.metrics.clone(), "worker-signer-storage", err)
+        })?;
+
+        let message = proto::SignPayloadSignerResponse {
+            signed_payload: signed_payload.into(),
+        };
+
+        Ok(tonic::Response::new(message))
+    }
+}
+
+impl From<Signer> for proto::Signer {
+    fn from(value: Signer) -> Self {
+        Self {
+            key_name: value.key_name,
         }
     }
 }
