@@ -42,7 +42,7 @@ jobs:
           toolchain: stable
 
       - name: Install sasl dependencies
-        run: sudo apt-get update && sudo apt-get install install -y libsasl2-dev cmake
+        run: sudo apt-get update && sudo apt-get install -y libsasl2-dev cmake
 
       - name: Run cargo build
         run: cargo build --target ${{ matrix.target }} ${{ matrix.args }}
