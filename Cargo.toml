@@ -5,7 +5,7 @@ edition = "2021"
 repository = "https://github.com/demeter-run/fabric"
 
 [dependencies]
-dmtri = { git = "https://github.com/demeter-run/specs.git", branch = "feat/signer-interface" }
+dmtri = { git = "https://github.com/demeter-run/specs.git", rev = "8e90dbc6d58ce84025a3eaa9a5fdcab126af3099" }
 # dmtri = { version = "0.1.0", path = "../specs/gen/rust" }
 # dmtri = { version = "0.1.0", path = "../fabric-specs/gen/rust" }
 
