@@ -1,0 +1,243 @@
+#!/bin/bash
+
+GRPCURL_VERSION="1.9.1"
+CARDANO_NODE_VERSION="10.1.3"
+OPSGENIE_URL="https://api.opsgenie.com/v2/alerts"
+FABRIC_URL="rpc.demeter.run:443"
+MAX_ATTEMPT=3
+SLEEP_DURATION=3
+NODE_SLOT=0
+
+install_dependencies() {
+    echo "Downloading Dependencies ..."
+
+    sudo apt update -y && sudo apt install -y socat postgresql-client
+    
+    # Download and extract grpcurl
+    wget "https://github.com/fullstorydev/grpcurl/releases/download/v${GRPCURL_VERSION}/grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz"
+    tar -zxvf "./grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz" grpcurl
+    
+    # Download and extract cardano 
+    wget "https://github.com/IntersectMBO/cardano-node/releases/download/${CARDANO_NODE_VERSION}/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz"
+    mkdir ./cardano-node && tar -zxvf "./cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz" -C ./cardano-node
+    mv ./cardano-node/bin/cardano-cli .
+}
+
+send_opsgenie_alert() {
+  local message=$1
+  local description=$2
+
+  curl -X POST "$OPSGENIE_URL" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: GenieKey $OPSGENIE_KEY" \
+    -d '{
+      "message": "'"${message}"'",
+      "description": "'"${description}"'",
+      "priority": "P1",
+      "tags": ["alertname:Fabric Port Errors", "github:ci"]
+    }'
+}
+
+handle_error() {
+  local resource_name=$1
+  local error_message=$2
+
+  echo "Error: $error_message"
+  send_opsgenie_alert "$resource_name Failure" "$error_message"
+  finish
+  exit 1
+}
+
+http_port_expect() {
+    local endpoint=$1
+    local path=$2
+
+    for attempt in $(seq 1 $MAX_ATTEMPT); do
+        sleep $SLEEP_DURATION
+
+        JSON_DATA=$(curl --location "$endpoint/$path")
+
+        if [[ -n "$JSON_DATA" ]]; then
+            echo "$JSON_DATA"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+node_port_expect() {
+    local node_key=$1
+    
+    socat -d -d UNIX-LISTEN:node.socket,reuseaddr,fork OPENSSL:"$node_key.cnode-m1.demeter.run:9443",verify=1 &
+
+    for attempt in $(seq 1 $MAX_ATTEMPT); do
+        sleep $SLEEP_DURATION
+
+        if [[ -e "node.socket" ]]; then
+            JSON_DATA=$(./cardano-cli query tip --socket-path node.socket --mainnet)
+            SYNC_PROGRESS=$(echo "$JSON_DATA" | jq -r '.syncProgress')
+            MIN_EXPECTED_SYNC_PROGRESS="99.00"
+            MAX_EXPECTED_SYNC_PROGRESS="100.00"
+            
+            if (( $(echo "$SYNC_PROGRESS >= $MIN_EXPECTED_SYNC_PROGRESS" | bc -l) )) && (( $(echo "$SYNC_PROGRESS <= $MAX_EXPECTED_SYNC_PROGRESS" | bc -l) )); then
+                echo "Cardano Node Sync Progress $SYNC_PROGRESS"
+                NODE_SLOT=$(echo "$(echo "$JSON_DATA" | jq -r '.slot')")
+                return 0  
+            else
+                echo "Error: syncProgress is not within the acceptable range of 99 to 100"
+                return 1
+            fi
+        fi
+    done
+
+    return 1
+}
+
+fabric_rpc_expect() {
+    for attempt in $(seq 1 $MAX_ATTEMPT); do
+        sleep $SLEEP_DURATION
+
+        RESPONSE=$(./grpcurl -H "dmtr-api-key: $TEST_FABRIC_KEY" -H "project-id: $TEST_FABRIC_PROJECT_ID" -d "{\"project_id\": \"$TEST_FABRIC_PROJECT_ID\"}" rpc.demeter.run:443 demeter.ops.v1alpha.ResourceService.FetchResources | jq '.records | length')
+
+        if [[ "$RESPONSE" -gt 0 ]]; then
+            echo "$RESPONSE"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+utxorpc_port_expect() {
+    local key=$1
+
+    for attempt in $(seq 1 $MAX_ATTEMPT); do
+        sleep $SLEEP_DURATION
+
+        UTXO_SLOT=$(./grpcurl -H "dmtr-api-key: $key" -H 'content-type: application/grpc' mainnet.utxorpc-v0.demeter.run:443 utxorpc.v1alpha.query.QueryService.ReadParams | jq -r '.ledgerTip.slot')
+
+        if [[ -n "$UTXO_SLOT" ]]; then
+            echo "$UTXO_SLOT"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+submit_api_port_expect() {
+    local key=$1
+
+    for attempt in $(seq 1 $MAX_ATTEMPT); do
+        status_code=$(curl -o /dev/null -s -w "%{http_code}" \
+          --location \
+          --request POST \
+          "https://$key.submitapi-m1.demeter.run/api/submit/tx" \
+          --header 'Content-Type: application/cbor' \
+          --data '')
+
+        if [[ -n "$status_code" && "$status_code" -eq 400 ]]; then
+            return 0
+        fi
+
+        sleep $SLEEP_DURATION
+    done
+
+    return 1
+}
+
+echo "Configuring environment ..."
+
+install_dependencies
+
+echo "Starting tests ..."
+
+echo "Testing Fabric RPC..."
+fabric_rpc_expect
+if [ $? -ne 0 ]; then
+  handle_error "FabricRPC" "FabricRPC validation failed"
+fi
+
+echo "Testing CardanoNodePort ..."
+node_port_expect $TEST_KEY_MAINNET_CARDANO_NODE_PORT
+if [ $? -ne 0 ]; then
+  handle_error "CardanoNodePort" "CardanoNodePort validation failed"
+fi
+echo "Node slot: $NODE_SLOT"
+NODE_SLOT=$(( NODE_SLOT - 120 ))
+
+echo "Testing Blockfrost ..."
+RESPONSE=$(http_port_expect "https://$TEST_KEY_MAINNET_BLOCKFROST_PORT.blockfrost-m1.demeter.run" "blocks/latest")
+if [ $? -ne 0 ]; then
+  handle_error "BlockfrostPort" "BlockfrostPort validation failed"
+fi
+SLOT="$(echo "$RESPONSE" | jq -r '.slot')"
+echo "Blockfrost slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    handle_error "BlockfrostPort" "BlockfrostPort is not in the chain tip"
+fi
+
+echo "Testing KupoPort ..."
+RESPONSE=$(http_port_expect "https://$TEST_KEY_MAINNET_KUPO_PORT.mainnet-v2.kupo-m1.demeter.run" "health")
+SLOT=$(echo "$RESPONSE" | grep "^kupo_most_recent_checkpoint " | awk '{print $2}')
+if [ $? -ne 0 ]; then
+  handle_error "KupoPort" "KupoPort validation failed"
+fi
+echo "Kupo slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    handle_error "KupoPort" "KupoPort is not in the chain tip"
+fi
+
+echo "Testing OgmiosPort ..."
+RESPONSE=$(http_port_expect "https://$TEST_KEY_MAINNET_OGMIOS_PORT.mainnet-v6.ogmios-m1.demeter.run" "health")
+SLOT="$(echo "$RESPONSE" | jq -r '.lastKnownTip.slot')"
+if [ $? -ne 0 ]; then
+  handle_error "OgmiosPort" "OgmiosPort validation failed"
+fi
+echo "Ogmios slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    handle_error "OgmiosPort" "OgmiosPort is not in the chain tip"
+fi
+
+echo "Testing UtxoRpcPort ..."
+SLOT=$(utxorpc_port_expect $TEST_KEY_MAINNET_UTXORPC_PORT)
+if [ $? -ne 0 ]; then
+  handle_error "UtxoRpcPort" "UtxoRpcPort validation failed"
+fi
+echo "UtxoRpc slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    handle_error "UtxoRpcPort" "UtxoRpcPort is not in the chain tip"
+fi
+
+echo "Testing MumakPort ..."
+export PGUSER=$TEST_USERNAME_MUMAK_PORT
+export PGPASSWORD=$TEST_PASSWORD_MUMAK_PORT 
+SLOT=$(psql --dbname=cardano-mainnet --host=mumak-m0.demeter.run -c "select slot from blocks order by slot desc limit 1" -t)
+if [ $? -ne 0 ]; then
+  handle_error "MumakPort" "MumakPort validation failed"
+fi
+echo "Mumak slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    handle_error "MumakPort" "MumakPort is not in the chain tip"
+fi
+
+echo "Testing DbSyncPort ..."
+export PGUSER=$TEST_USERNAME_DBSYNC_PORT
+export PGPASSWORD=$TEST_PASSWORD_DBSYNC_PORT 
+SLOT=$(psql --dbname=dbsync-mainnet --host=dbsync-v3.demeter.run -c "select slot_no from block where block_no is not null order by block_no desc limit 1" -t)
+if [ $? -ne 0 ]; then
+  handle_error "DbSyncPort" "DbSyncPort validation failed"
+fi
+echo "DbSync slot: $SLOT"
+if (( SLOT < NODE_SLOT )); then
+    handle_error "DbSyncPort" "DbSyncPort is not in the chain tip"
+fi
+
+echo "Testing SubmitApiPort ..."
+submit_api_port_expect $TEST_KEY_MAINNET_SUBMITAPI_PORT
+if [ $? -ne 0 ]; then
+  handle_error "SubmitApiPort" "SubmitApiPort validation failed"
+fi
+
+echo "Tests done"
