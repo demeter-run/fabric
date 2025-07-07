@@ -77,7 +77,7 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(dmtri::demeter::ops::v1alpha::FILE_DESCRIPTOR_SET)
         .register_encoded_file_descriptor_set(protoc_wkt::google::protobuf::FILE_DESCRIPTOR_SET)
-        .build_v1()
+        .build_v1alpha()
         .unwrap();
 
     let auth_interceptor =
