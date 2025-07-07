@@ -1,0 +1,34 @@
+name: Test e2e health check
+
+on:
+  workflow_dispatch: {}
+  schedule:
+  - cron: "0 * * * *"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Run Integration Tests
+        env:
+          OPSGENIE_KEY: ${{ secrets.OPSGENIE_KEY }}
+
+          TEST_KEY_MAINNET_CARDANO_NODE_PORT: ${{ secrets.TEST_KEY_MAINNET_CARDANO_NODE_PORT }}
+          TEST_KEY_MAINNET_BLOCKFROST_PORT: ${{ secrets.TEST_KEY_MAINNET_BLOCKFROST_PORT }}
+          TEST_KEY_MAINNET_KUPO_PORT: ${{ secrets.TEST_KEY_MAINNET_KUPO_PORT }}
+          TEST_KEY_MAINNET_OGMIOS_PORT: ${{ secrets.TEST_KEY_MAINNET_OGMIOS_PORT }}
+          TEST_KEY_MAINNET_UTXORPC_PORT: ${{ secrets.TEST_KEY_MAINNET_UTXORPC_PORT }}
+          TEST_KEY_MAINNET_SUBMITAPI_PORT: ${{ secrets.TEST_KEY_MAINNET_SUBMITAPI_PORT }}
+
+          TEST_USERNAME_MUMAK_PORT: ${{ secrets.TEST_USERNAME_MUMAK_PORT }}
+          TEST_PASSWORD_MUMAK_PORT: ${{ secrets.TEST_PASSWORD_MUMAK_PORT }}
+
+          TEST_USERNAME_DBSYNC_PORT: ${{ secrets.TEST_USERNAME_DBSYNC_PORT }}
+          TEST_PASSWORD_DBSYNC_PORT: ${{ secrets.TEST_PASSWORD_DBSYNC_PORT }}
+
+          TEST_FABRIC_KEY: ${{ secrets.TEST_FABRIC_KEY }}
+          TEST_FABRIC_PROJECT_ID: ${{ secrets.TEST_FABRIC_PROJECT_ID }}
+        run: ./test/e2e-check
