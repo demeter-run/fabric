@@ -50,6 +50,17 @@ resource "kubernetes_stateful_set_v1" "rpc" {
           name  = "rpc"
           image = var.image
 
+          liveness_probe {
+            tcp_socket {
+              port = local.port
+            }
+            initial_delay_seconds = 10
+            period_seconds        = 5
+            timeout_seconds       = 5
+            failure_threshold     = 3
+            success_threshold     = 1
+          }
+
           env {
             name  = "RPC_CONFIG"
             value = "/fabric/config/rpc.toml"
