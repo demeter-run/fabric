@@ -11,10 +11,16 @@ use tracing::{error, info};
 use crate::{
     domain::{
         auth::{Auth0Driven, Auth0Profile},
+        event::{EventDrivenBridge, ProjectDeleted, ResourceDeleted},
         metadata::MetadataDriven,
-        project::{cache::ProjectDrivenCacheBackoffice, ProjectStatus, ProjectUserProject},
+        project::{
+            cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice},
+            ProjectStatus, ProjectUserProject,
+        },
         resource::{
-            cache::ResourceDrivenCacheBackoffice, cluster::ResourceDrivenClusterBackoffice,
+            cache::{ResourceDrivenCache, ResourceDrivenCacheBackoffice},
+            cluster::ResourceDrivenClusterBackoffice,
+            ResourceStatus,
         },
         usage::{cache::UsageDrivenCacheBackoffice, UsageReport, UsageReportImpl},
     },
@@ -25,6 +31,7 @@ use crate::{
             usage::SqliteUsageDrivenCache, SqliteCache,
         },
         k8s::K8sCluster,
+        kafka::KafkaProducer,
         metadata::FileMetadata,
     },
 };
@@ -161,6 +168,89 @@ pub async fn fetch_projects(
 
         output_table_project(projects.collect());
     }
+
+    Ok(())
+}
+
+pub async fn delete_project(config: BackofficeConfig, id: String) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let cache: Box<dyn ProjectDrivenCache> =
+        Box::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+
+    let event = Arc::new(KafkaProducer::new(
+        &config.topic_events,
+        &config.kafka_producer,
+    )?);
+
+    let project = match cache.find_by_id(&id).await? {
+        Some(project) => project,
+        None => {
+            error!("Failed to locate project");
+            return Ok(());
+        }
+    };
+
+    let evt = ProjectDeleted {
+        id: id.clone(),
+        namespace: project.namespace,
+        deleted_at: Utc::now(),
+    };
+
+    event.dispatch(evt.into()).await?;
+    info!(project = &id, "project deleted");
+
+    Ok(())
+}
+
+pub async fn delete_resource(
+    config: BackofficeConfig,
+    id: String,
+    project_id: String,
+) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let project_cache: Box<dyn ProjectDrivenCache> =
+        Box::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+
+    let resource_cache: Box<dyn ResourceDrivenCache> =
+        Box::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
+
+    let event = Arc::new(KafkaProducer::new(
+        &config.topic_events,
+        &config.kafka_producer,
+    )?);
+
+    let resource = match resource_cache.find_by_id(&id).await? {
+        Some(resource) => resource,
+        None => {
+            error!("Failed to locate resource");
+            return Ok(());
+        }
+    };
+
+    let project = match project_cache.find_by_id(&project_id).await? {
+        Some(project) => project,
+        None => {
+            error!("Failed to locate project");
+            return Ok(());
+        }
+    };
+
+    let evt = ResourceDeleted {
+        id,
+        project_id: project.id,
+        project_namespace: project.namespace,
+        name: resource.name,
+        kind: resource.kind.clone(),
+        status: ResourceStatus::Deleted.to_string(),
+        deleted_at: Utc::now(),
+    };
+
+    event.dispatch(evt.into()).await?;
+    info!(resource = resource.kind, "resource deleted");
 
     Ok(())
 }
@@ -662,4 +752,7 @@ pub struct BackofficeConfig {
     pub auth_client_id: String,
     pub auth_client_secret: String,
     pub auth_audience: String,
+
+    pub topic_events: String,
+    pub kafka_producer: HashMap<String, String>,
 }
