@@ -52,6 +52,13 @@ pub struct ProjectArgs {
 }
 
 #[derive(Parser, Clone)]
+pub struct DeleteProjectArgs {
+    /// Project id
+    #[arg(short, long)]
+    pub id: String,
+}
+
+#[derive(Parser, Clone)]
 pub struct ResourceArgs {
     /// Project namespace
     #[arg(short, long)]
@@ -60,6 +67,17 @@ pub struct ResourceArgs {
     /// By any resource spec value
     #[arg(short, long)]
     pub spec: Option<String>,
+}
+
+#[derive(Parser, Clone)]
+pub struct DeleteResourceArgs {
+    /// UUID of the resource to delete.
+    #[arg(short, long)]
+    pub id: String,
+
+    /// ID of the project to delete.
+    #[arg(short, long)]
+    pub project_id: String,
 }
 
 #[derive(Parser, Clone)]
@@ -97,6 +115,12 @@ enum Commands {
 
     /// Check the diff of the state with the cluster
     Diff(DiffArgs),
+
+    /// Delete project
+    DeleteProject(DeleteProjectArgs),
+
+    /// Delete resource
+    DeleteResource(DeleteResourceArgs),
 }
 
 #[tokio::main]
@@ -164,6 +188,17 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
+        Commands::DeleteProject(args) => {
+            fabric::drivers::backoffice::delete_project(config.clone().into(), args.id).await?;
+        }
+        Commands::DeleteResource(args) => {
+            fabric::drivers::backoffice::delete_resource(
+                config.clone().into(),
+                args.id,
+                args.project_id,
+            )
+            .await?;
+        }
         Commands::NewUsers(args) => {
             let output = match args.output {
                 Some(output) => match output.as_str() {
@@ -200,6 +235,7 @@ struct Config {
     topic_events: String,
     topic_usage: String,
     kafka_consumer: HashMap<String, String>,
+    kafka_producer: HashMap<String, String>,
     auth: AuthConfig,
 }
 impl Config {
@@ -221,6 +257,8 @@ impl From<Config> for BackofficeConfig {
             auth_client_id: value.auth.client_id,
             auth_client_secret: value.auth.client_secret,
             auth_audience: value.auth.audience,
+            topic_events: value.topic_events,
+            kafka_producer: value.kafka_producer,
         }
     }
 }
