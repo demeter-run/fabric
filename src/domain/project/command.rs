@@ -383,7 +383,7 @@ pub async fn fetch_me_user(
         ));
     };
 
-    let profile = auth0.find_info(&format!("user_id:{}", user_id)).await?;
+    let profile = auth0.find_info(&format!("user_id:{user_id}")).await?;
     if profile.is_empty() {
         return Err(Error::Unexpected("Invalid user_id".into()));
     }
@@ -534,7 +534,7 @@ pub async fn accept_user_invite(
         ));
     }
 
-    let profile = auth0.find_info(&format!("user_id:{}", user_id)).await?;
+    let profile = auth0.find_info(&format!("user_id:{user_id}")).await?;
     if profile.is_empty() {
         return Err(Error::Unexpected("Invalid user_id".into()));
     }

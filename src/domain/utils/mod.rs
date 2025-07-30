@@ -42,5 +42,5 @@ pub fn get_schema_from_crd(
 }
 
 pub fn cluster_namespace(namespace: &str) -> String {
-    format!("prj-{}", namespace)
+    format!("prj-{namespace}")
 }

@@ -235,8 +235,7 @@ impl Event {
             "ResourceDeleted" => Ok(Self::ResourceDeleted(serde_json::from_slice(payload)?)),
             "UsageCreated" => Ok(Self::UsageCreated(serde_json::from_slice(payload)?)),
             _ => Err(Error::Unexpected(format!(
-                "Event key '{}' not implemented",
-                key
+                "Event key '{key}' not implemented"
             ))),
         }
     }

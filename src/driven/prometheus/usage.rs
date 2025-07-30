@@ -45,8 +45,7 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
         if status.is_client_error() || status.is_server_error() {
             error!(status = status.to_string(), "request status code fail");
             return Err(Error::Unexpected(format!(
-                "Prometheus request error. Status: {}",
-                status
+                "Prometheus request error. Status: {status}"
             )));
         }
 
