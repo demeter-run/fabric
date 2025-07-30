@@ -175,7 +175,7 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
         };
 
         if let Some(data) = data {
-            let message = format!("{}:\n```\n{}\n```", key, data);
+            let message = format!("{key}:\n```\n{data}\n```");
             let payload = PayloadBuilder::new().text(message).build()?;
             if let Err(err) = self.client.send(&payload) {
                 error!(err = err.to_string(), "Failed to notify to slack");

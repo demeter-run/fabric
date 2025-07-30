@@ -32,7 +32,7 @@ impl Auth0DrivenImpl {
         let audience = audience.to_string();
 
         let jwks_request = client
-            .get(format!("{}/.well-known/jwks.json", url))
+            .get(format!("{url}/.well-known/jwks.json"))
             .build()?;
         let jwks_response = client.execute(jwks_request).await?;
         let jwks = jwks_response.json().await?;
@@ -70,8 +70,7 @@ impl Auth0DrivenImpl {
                 "Auth0 request error to get access token"
             );
             return Err(Error::Unexpected(format!(
-                "Auth0 request error to get access token. Status: {}",
-                access_token_status
+                "Auth0 request error to get access token. Status: {access_token_status}"
             )));
         }
         let access_token = access_token_response
@@ -142,8 +141,7 @@ impl Auth0Driven for Auth0DrivenImpl {
                 "Auth0 request error to get user info"
             );
             return Err(Error::Unexpected(format!(
-                "Auth0 request error to get user info. Status: {}",
-                profile_status
+                "Auth0 request error to get user info. Status: {profile_status}"
             )));
         }
 

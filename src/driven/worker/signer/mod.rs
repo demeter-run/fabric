@@ -71,7 +71,7 @@ impl WorkerSignerDrivenStorage for VaultWorkerSignerDrivenStorage {
             .get("1")
             .map(|key| {
                 STANDARD.decode(key).map_err(|err| {
-                    Error::Unexpected(format!("Failed to decode vault response: {:?}", err))
+                    Error::Unexpected(format!("Failed to decode vault response: {err:?}"))
                 })
             })
             .transpose()

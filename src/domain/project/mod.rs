@@ -104,8 +104,7 @@ impl FromStr for ProjectStatus {
             "pm-failed" => Ok(ProjectStatus::PaymentMethodFailed),
             "deleted" => Ok(ProjectStatus::Deleted),
             _ => Err(Error::Unexpected(format!(
-                "project status not supported: {}",
-                s
+                "project status not supported: {s}"
             ))),
         }
     }
@@ -184,8 +183,7 @@ impl FromStr for ProjectUserInviteStatus {
             "sent" => Ok(ProjectUserInviteStatus::Sent),
             "accepted" => Ok(ProjectUserInviteStatus::Accepted),
             _ => Err(Error::Unexpected(format!(
-                "project user invite status not supported: {}",
-                s
+                "project user invite status not supported: {s}"
             ))),
         }
     }
@@ -242,8 +240,7 @@ impl FromStr for ProjectUserRole {
             "owner" => Ok(ProjectUserRole::Owner),
             "member" => Ok(ProjectUserRole::Member),
             _ => Err(Error::Unexpected(format!(
-                "project user role not supported: {}",
-                s
+                "project user role not supported: {s}"
             ))),
         }
     }

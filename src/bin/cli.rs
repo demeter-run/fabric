@@ -52,6 +52,17 @@ pub struct ProjectArgs {
 }
 
 #[derive(Parser, Clone)]
+pub struct DeleteProjectArgs {
+    /// Project id
+    #[arg(short, long)]
+    pub id: String,
+
+    // Dry run
+    #[arg(short, long, action)]
+    pub dry_run: bool,
+}
+
+#[derive(Parser, Clone)]
 pub struct ResourceArgs {
     /// Project namespace
     #[arg(short, long)]
@@ -60,6 +71,40 @@ pub struct ResourceArgs {
     /// By any resource spec value
     #[arg(short, long)]
     pub spec: Option<String>,
+}
+
+#[derive(Parser, Clone)]
+pub struct DeleteResourceArgs {
+    /// UUID of the resource to delete.
+    #[arg(short, long)]
+    pub id: String,
+
+    /// ID of the project to delete.
+    #[arg(short, long)]
+    pub project_id: String,
+
+    // Dry run
+    #[arg(short, long, action)]
+    pub dry_run: bool,
+}
+
+#[derive(Parser, Clone)]
+pub struct PatchResourceArgs {
+    /// UUID of the resource to patch.
+    #[arg(short, long)]
+    pub id: String,
+
+    /// ID of the project of the resource to patch.
+    #[arg(short, long)]
+    pub project_id: String,
+
+    /// JSON patch of the resource spec.
+    #[arg(short, long)]
+    pub patch: String,
+
+    // Dry run
+    #[arg(short, long, action)]
+    pub dry_run: bool,
 }
 
 #[derive(Parser, Clone)]
@@ -92,11 +137,20 @@ enum Commands {
     /// Get resource by project namespace
     Resource(ResourceArgs),
 
+    /// Send patch for resource
+    PatchResource(PatchResourceArgs),
+
     /// Get new users since a date
     NewUsers(NewUsersArgs),
 
     /// Check the diff of the state with the cluster
     Diff(DiffArgs),
+
+    /// Delete project
+    DeleteProject(DeleteProjectArgs),
+
+    /// Delete resource
+    DeleteResource(DeleteResourceArgs),
 }
 
 #[tokio::main]
@@ -164,6 +218,33 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
+        Commands::PatchResource(args) => {
+            fabric::drivers::backoffice::patch_resource(
+                config.clone().into(),
+                args.id,
+                args.project_id,
+                args.patch,
+                args.dry_run,
+            )
+            .await?;
+        }
+        Commands::DeleteProject(args) => {
+            fabric::drivers::backoffice::delete_project(
+                config.clone().into(),
+                args.id,
+                args.dry_run,
+            )
+            .await?;
+        }
+        Commands::DeleteResource(args) => {
+            fabric::drivers::backoffice::delete_resource(
+                config.clone().into(),
+                args.id,
+                args.project_id,
+                args.dry_run,
+            )
+            .await?;
+        }
         Commands::NewUsers(args) => {
             let output = match args.output {
                 Some(output) => match output.as_str() {
@@ -198,8 +279,9 @@ struct AuthConfig {
 struct Config {
     db_path: String,
     topic_events: String,
-    topic_usage: String,
+    topic_usage: Option<String>,
     kafka_consumer: HashMap<String, String>,
+    kafka_producer: HashMap<String, String>,
     auth: AuthConfig,
 }
 impl Config {
@@ -221,6 +303,8 @@ impl From<Config> for BackofficeConfig {
             auth_client_id: value.auth.client_id,
             auth_client_secret: value.auth.client_secret,
             auth_audience: value.auth.audience,
+            topic_events: value.topic_events,
+            kafka_producer: value.kafka_producer,
         }
     }
 }
@@ -230,7 +314,10 @@ impl From<Config> for CacheConfig {
         Self {
             kafka: value.kafka_consumer,
             db_path: value.db_path,
-            topics: [value.topic_events, value.topic_usage].to_vec(),
+            topics: match value.topic_usage {
+                Some(topic) => [value.topic_events, topic].to_vec(),
+                None => [value.topic_events].to_vec(),
+            },
             notify: None,
         }
     }

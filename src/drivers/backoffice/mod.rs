@@ -11,10 +11,16 @@ use tracing::{error, info};
 use crate::{
     domain::{
         auth::{Auth0Driven, Auth0Profile},
+        event::{EventDrivenBridge, ProjectDeleted, ResourceDeleted, ResourceUpdated},
         metadata::MetadataDriven,
-        project::{cache::ProjectDrivenCacheBackoffice, ProjectStatus, ProjectUserProject},
+        project::{
+            cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice},
+            ProjectStatus, ProjectUserProject,
+        },
         resource::{
-            cache::ResourceDrivenCacheBackoffice, cluster::ResourceDrivenClusterBackoffice,
+            cache::{ResourceDrivenCache, ResourceDrivenCacheBackoffice},
+            cluster::ResourceDrivenClusterBackoffice,
+            ResourceStatus,
         },
         usage::{cache::UsageDrivenCacheBackoffice, UsageReport, UsageReportImpl},
     },
@@ -25,6 +31,7 @@ use crate::{
             usage::SqliteUsageDrivenCache, SqliteCache,
         },
         k8s::K8sCluster,
+        kafka::KafkaProducer,
         metadata::FileMetadata,
     },
 };
@@ -123,6 +130,7 @@ pub async fn fetch_projects(
                     .unwrap_or("unknown".into());
 
                 ProjectTable {
+                    id: p.id,
                     name: p.name,
                     namespace: p.namespace,
                     email,
@@ -151,6 +159,7 @@ pub async fn fetch_projects(
         }
 
         let projects = projects.into_iter().map(|p| ProjectTable {
+            id: p.id,
             name: p.name,
             namespace: p.namespace,
             email: profile.email.clone(),
@@ -160,6 +169,165 @@ pub async fn fetch_projects(
         });
 
         output_table_project(projects.collect());
+    }
+
+    Ok(())
+}
+
+pub async fn delete_project(config: BackofficeConfig, id: String, dry_run: bool) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let cache: Box<dyn ProjectDrivenCache> =
+        Box::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+
+    let event = Arc::new(KafkaProducer::new(
+        &config.topic_events,
+        &config.kafka_producer,
+    )?);
+
+    let project = match cache.find_by_id(&id).await? {
+        Some(project) => project,
+        None => {
+            error!("Failed to locate project");
+            return Ok(());
+        }
+    };
+
+    let evt = ProjectDeleted {
+        id: id.clone(),
+        namespace: project.namespace,
+        deleted_at: Utc::now(),
+    };
+
+    if dry_run {
+        info!("event to dispath: {:?}", evt)
+    } else {
+        event.dispatch(evt.into()).await?;
+        info!(project = &id, "project deleted");
+    }
+
+    Ok(())
+}
+
+pub async fn delete_resource(
+    config: BackofficeConfig,
+    id: String,
+    project_id: String,
+    dry_run: bool,
+) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let project_cache: Box<dyn ProjectDrivenCache> =
+        Box::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+
+    let resource_cache: Box<dyn ResourceDrivenCache> =
+        Box::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
+
+    let event = Arc::new(KafkaProducer::new(
+        &config.topic_events,
+        &config.kafka_producer,
+    )?);
+
+    let resource = match resource_cache.find_by_id(&id).await? {
+        Some(resource) => resource,
+        None => {
+            error!("Failed to locate resource");
+            return Ok(());
+        }
+    };
+
+    let project = match project_cache.find_by_id(&project_id).await? {
+        Some(project) => project,
+        None => {
+            error!("Failed to locate project");
+            return Ok(());
+        }
+    };
+
+    let evt = ResourceDeleted {
+        id,
+        project_id: project.id,
+        project_namespace: project.namespace,
+        name: resource.name,
+        kind: resource.kind.clone(),
+        status: ResourceStatus::Deleted.to_string(),
+        deleted_at: Utc::now(),
+    };
+
+    if dry_run {
+        info!("event to dispath: {:?}", evt)
+    } else {
+        event.dispatch(evt.into()).await?;
+        info!(resource = resource.kind, "resource deleted");
+    }
+
+    Ok(())
+}
+
+pub async fn patch_resource(
+    config: BackofficeConfig,
+    id: String,
+    project_id: String,
+    patch: String,
+    dry_run: bool,
+) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let project_cache: Box<dyn ProjectDrivenCache> =
+        Box::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+
+    let resource_cache: Box<dyn ResourceDrivenCache> =
+        Box::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
+
+    let event = Arc::new(KafkaProducer::new(
+        &config.topic_events,
+        &config.kafka_producer,
+    )?);
+
+    let resource = match resource_cache.find_by_id(&id).await? {
+        Some(resource) => resource,
+        None => {
+            error!("Failed to locate resource");
+            return Ok(());
+        }
+    };
+
+    let project = match project_cache.find_by_id(&project_id).await? {
+        Some(project) => project,
+        None => {
+            error!("Failed to locate project");
+            return Ok(());
+        }
+    };
+
+    if resource.project_id != project_id {
+        error!("Resource doesn't match project.");
+        return Ok(());
+    }
+
+    if let Err(err) = serde_json::from_str::<serde_json::Value>(&patch) {
+        error!(err = err.to_string(), "Failed to parse patch as json");
+        return Ok(());
+    }
+
+    let evt = ResourceUpdated {
+        id,
+        project_id: project.id,
+        project_namespace: project.namespace,
+        name: resource.name,
+        kind: resource.kind.clone(),
+        spec_patch: patch,
+        updated_at: Utc::now(),
+    };
+
+    if dry_run {
+        info!("event to dispath: {:?}", evt)
+    } else {
+        event.dispatch(evt.into()).await?;
+        info!(resource = resource.kind, "resource patched");
     }
 
     Ok(())
@@ -197,6 +365,7 @@ pub async fn fetch_resources(
     let mut table = Table::new();
     table.set_header(vec![
         "",
+        "id",
         "name",
         "kind",
         "status",
@@ -219,6 +388,7 @@ pub async fn fetch_resources(
 
         table.add_row(vec![
             &(i + 1).to_string(),
+            &r.id,
             &r.name,
             &r.kind,
             &r.status.to_string(),
@@ -332,7 +502,7 @@ pub async fn fetch_diff(config: BackofficeConfig, output: OutputFormat) -> Resul
             .any(|r| r.project_namespace.eq(&namespace) && r.name.eq(&name));
 
         report
-            .entry(format!("{}/{}", namespace, name))
+            .entry(format!("{namespace}/{name}"))
             .and_modify(|r| r.1 = exist)
             .or_insert((exist, true));
     }
@@ -470,6 +640,7 @@ fn output_table_project(projects: Vec<ProjectTable>) {
     let mut table = Table::new();
     table.set_header(vec![
         "",
+        "id",
         "name",
         "namespace",
         "stripe ID",
@@ -481,6 +652,7 @@ fn output_table_project(projects: Vec<ProjectTable>) {
     for (i, p) in projects.iter().enumerate() {
         table.add_row(vec![
             &(i + 1).to_string(),
+            &p.id,
             &p.name,
             &p.namespace,
             &p.billing_provider_id,
@@ -544,7 +716,7 @@ fn output_csv_diff(report: Vec<(String, (bool, bool))>) {
         return;
     }
 
-    println!("File {} created", path)
+    println!("File {path} created")
 }
 
 fn output_table_new_users(project_users: Vec<ProjectUserProject>, profiles: Vec<Auth0Profile>) {
@@ -636,7 +808,7 @@ fn output_csv_new_users(project_users: Vec<ProjectUserProject>, profiles: Vec<Au
         return;
     }
 
-    println!("File {} created", path)
+    println!("File {path} created")
 }
 
 pub enum OutputFormat {
@@ -646,6 +818,7 @@ pub enum OutputFormat {
 }
 
 struct ProjectTable {
+    pub id: String,
     pub name: String,
     pub namespace: String,
     pub email: String,
@@ -662,4 +835,7 @@ pub struct BackofficeConfig {
     pub auth_client_id: String,
     pub auth_client_secret: String,
     pub auth_audience: String,
+
+    pub topic_events: String,
+    pub kafka_producer: HashMap<String, String>,
 }

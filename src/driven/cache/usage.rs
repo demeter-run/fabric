@@ -409,7 +409,7 @@ mod tests {
         cache.create(usages).await.unwrap();
 
         let result = cache
-            .find_report_aggregated(&Utc::now().format("%Y-%m").to_string(), "demeter".into())
+            .find_report_aggregated(&Utc::now().format("%Y-%m").to_string(), "demeter")
             .await;
 
         assert!(result.is_ok());

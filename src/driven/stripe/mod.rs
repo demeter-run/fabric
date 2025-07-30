@@ -47,8 +47,7 @@ impl StripeDriven for StripeDrivenImpl {
                 "request status code fail to create stripe customer"
             );
             return Err(Error::Unexpected(format!(
-                "stripe create customer request error. Status: {}",
-                status
+                "stripe create customer request error. Status: {status}"
             )));
         }
 
