@@ -37,6 +37,14 @@
         "throughputTier": "0",
         "operatorVersion": "1"
       }
+    },
+    {
+      "description": "vector-testnet",
+      "spec": {
+        "network": "vector-testnet",
+        "throughputTier": "0",
+        "operatorVersion": "1"
+      }
     }
   ],
   "crd": {
