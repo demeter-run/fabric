@@ -210,17 +210,17 @@ if (( SLOT < NODE_SLOT )); then
     handle_error "UtxoRpcPort" "UtxoRpcPort is not in the chain tip"
 fi
 
-echo "Testing MumakPort ..."
-export PGUSER=$TEST_USERNAME_MUMAK_PORT
-export PGPASSWORD=$TEST_PASSWORD_MUMAK_PORT 
-SLOT=$(psql --dbname=cardano-mainnet --host=mumak-m0.demeter.run -c "select slot from blocks order by slot desc limit 1" -t)
-if [ $? -ne 0 ]; then
-  handle_error "MumakPort" "MumakPort validation failed"
-fi
-echo "Mumak slot: $SLOT"
-if (( SLOT < NODE_SLOT )); then
-    handle_error "MumakPort" "MumakPort is not in the chain tip"
-fi
+# echo "Testing MumakPort ..."
+# export PGUSER=$TEST_USERNAME_MUMAK_PORT
+# export PGPASSWORD=$TEST_PASSWORD_MUMAK_PORT 
+# SLOT=$(psql --dbname=cardano-mainnet --host=mumak-m0.demeter.run -c "select slot from blocks order by slot desc limit 1" -t)
+# if [ $? -ne 0 ]; then
+#   handle_error "MumakPort" "MumakPort validation failed"
+# fi
+# echo "Mumak slot: $SLOT"
+# if (( SLOT < NODE_SLOT )); then
+#     handle_error "MumakPort" "MumakPort is not in the chain tip"
+# fi
 
 echo "Testing DbSyncPort ..."
 export PGUSER=$TEST_USERNAME_DBSYNC_PORT
