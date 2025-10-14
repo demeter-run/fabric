@@ -1,7 +1,8 @@
-use std::{fs, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 
 use anyhow::Result as AnyhowResult;
 use include_dir::Dir;
+use lazy_static::lazy_static;
 
 use crate::domain::{
     error::Error,
@@ -9,6 +10,21 @@ use crate::domain::{
     resource::Resource,
     Result,
 };
+
+lazy_static! {
+    static ref LEGACY_NETWORKS: HashMap<&'static str, String> = {
+        let mut m = HashMap::new();
+        m.insert("mainnet", "cardano-mainnet".into());
+        m.insert("preprod", "cardano-preprod".into());
+        m.insert("preview", "cardano-preview".into());
+        m
+    };
+}
+
+pub fn network_with_chain_prefix(network: &str) -> String {
+    let default = network.to_string();
+    LEGACY_NETWORKS.get(network).unwrap_or(&default).to_string()
+}
 
 #[derive(Debug)]
 pub struct FileMetadata<'a> {
@@ -123,6 +139,12 @@ impl MetadataDriven for FileMetadata<'_> {
         data.insert(
             "name".into(),
             serde_json::Value::String(resource.name.clone()),
+        );
+        data.insert(
+            "networkWithChainPrefix".into(),
+            serde_json::Value::String(network_with_chain_prefix(
+                data.get("network").unwrap().as_str().unwrap(),
+            )),
         );
 
         let name = resource.kind.to_lowercase();

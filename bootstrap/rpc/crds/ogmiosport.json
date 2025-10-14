@@ -8,21 +8,21 @@
       }
     },
     "1": {
-      "dns": "demeter.run",
+      "dns": "dmtr.host",
       "cost": {
         "minimum": 0,
         "delta": 0.000002662
       }
     },
     "2": {
-      "dns": "demeter.run",
+      "dns": "dmtr.host",
       "cost": {
         "minimum": 100,
         "delta": 0.000002315
       }
     },
     "3": {
-      "dns": "demeter.run",
+      "dns": "dmtr.host",
       "cost": {
         "minimum": 200,
         "delta": 0.000001968
@@ -31,25 +31,25 @@
   },
   "options": [
     {
-      "description": "mainnet",
+      "description": "cardano-mainnet",
       "spec": {
-        "network": "mainnet",
+        "network": "cardano-mainnet",
         "throughputTier": "0",
         "version": 6
       }
     },
     {
-      "description": "preprod",
+      "description": "cardano-preprod",
       "spec": {
-        "network": "preprod",
+        "network": "cardano-preprod",
         "throughputTier": "0",
         "version": 6
       }
     },
     {
-      "description": "preview",
+      "description": "cardano-preview",
       "spec": {
-        "network": "preview",
+        "network": "cardano-preview",
         "throughputTier": "0",
         "version": 6
       }

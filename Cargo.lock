@@ -1587,6 +1587,7 @@ dependencies = [
  "jsonwebtoken",
  "k8s-openapi",
  "kube",
+ "lazy_static",
  "mockall",
  "prometheus",
  "prost 0.12.6",
