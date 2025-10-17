@@ -52,6 +52,21 @@ pub struct ProjectArgs {
 }
 
 #[derive(Parser, Clone)]
+pub struct RenameProjectArgs {
+    /// Project id
+    #[arg(short, long)]
+    pub id: String,
+
+    /// New name
+    #[arg(short, long)]
+    pub new_name: String,
+
+    // Dry run
+    #[arg(short, long, action)]
+    pub dry_run: bool,
+}
+
+#[derive(Parser, Clone)]
 pub struct DeleteProjectArgs {
     /// Project id
     #[arg(short, long)]
@@ -133,6 +148,9 @@ enum Commands {
 
     /// Get projects by user
     Project(ProjectArgs),
+
+    /// Get projects by user
+    RenameProject(RenameProjectArgs),
 
     /// Get resource by project namespace
     Resource(ResourceArgs),
@@ -224,6 +242,15 @@ async fn main() -> Result<()> {
                 args.id,
                 args.project_id,
                 args.patch,
+                args.dry_run,
+            )
+            .await?;
+        }
+        Commands::RenameProject(args) => {
+            fabric::drivers::backoffice::rename_project(
+                config.clone().into(),
+                args.id,
+                args.new_name,
                 args.dry_run,
             )
             .await?;

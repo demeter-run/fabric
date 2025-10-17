@@ -11,7 +11,9 @@ use tracing::{error, info};
 use crate::{
     domain::{
         auth::{Auth0Driven, Auth0Profile},
-        event::{EventDrivenBridge, ProjectDeleted, ResourceDeleted, ResourceUpdated},
+        event::{
+            EventDrivenBridge, ProjectDeleted, ProjectUpdated, ResourceDeleted, ResourceUpdated,
+        },
         metadata::MetadataDriven,
         project::{
             cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice},
@@ -169,6 +171,45 @@ pub async fn fetch_projects(
         });
 
         output_table_project(projects.collect());
+    }
+
+    Ok(())
+}
+
+pub async fn rename_project(
+    config: BackofficeConfig,
+    id: String,
+    new_name: String,
+    dry_run: bool,
+) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let cache: Box<dyn ProjectDrivenCache> =
+        Box::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+
+    let event = Arc::new(KafkaProducer::new(
+        &config.topic_events,
+        &config.kafka_producer,
+    )?);
+
+    if cache.find_by_id(&id).await?.is_none() {
+        error!("Failed to locate project");
+        return Ok(());
+    };
+
+    let evt = ProjectUpdated {
+        id: id.clone(),
+        name: Some(new_name),
+        status: None,
+        updated_at: Utc::now(),
+    };
+
+    if dry_run {
+        info!("event to dispath: {:?}", evt)
+    } else {
+        event.dispatch(evt.into()).await?;
+        info!(project = &id, "project updated");
     }
 
     Ok(())
