@@ -1,12 +1,12 @@
 [
   {
     "label": "Endpoint URL",
-    "value": "https://submitapi-m1.{{dns}}",
+    "value": "https://{{networkWithChainPrefix}}.submitapi-m1.{{dns}}",
     "description": "Public URL to access your SubmitAPI API"
   },
   {
     "label": "Authenticated Endpoint URL",
-    "value": "https://{{authToken}}.submitapi-m1.{{dns}}",
+    "value": "https://{{authToken}}.{{networkWithChainPrefix}}.submitapi-m1.{{dns}}",
     "description": "Authenticated public URL to access your SubmitApi API. Useful if your library does not support adding custom headers"
   },
   {

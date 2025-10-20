@@ -31,25 +31,25 @@
   },
   "options": [
     {
-      "description": "mainnet - stable (10.2.1)",
+      "description": "cardano-mainnet - stable (10.2.1)",
       "spec": {
-        "network": "mainnet",
+        "network": "cardano-mainnet",
         "version": "stable",
         "throughputTier": "0"
       }
     },
     {
-      "description": "preprod - stable (10.2.1)",
+      "description": "cardano-preprod - stable (10.2.1)",
       "spec": {
-        "network": "preprod",
+        "network": "cardano-preprod",
         "version": "stable",
         "throughputTier": "0"
       }
     },
     {
-      "description": "preview - stable (10.2.1)",
+      "description": "cardano-preview - stable (10.2.1)",
       "spec": {
-        "network": "preview",
+        "network": "cardano-preview",
         "version": "stable",
         "throughputTier": "0"
       }
