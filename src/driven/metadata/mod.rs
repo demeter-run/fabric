@@ -146,6 +146,17 @@ impl MetadataDriven for FileMetadata<'_> {
                 data.get("network").unwrap().as_str().unwrap(),
             )),
         );
+        data.insert(
+            "networkWithoutCardanoPrefix".into(),
+            serde_json::Value::String(
+                data.get("network")
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+                    .replace("cardano-", "")
+                    .to_string(),
+            ),
+        );
 
         let name = resource.kind.to_lowercase();
         let rendered = self.hbs.render(&name, &data)?;
