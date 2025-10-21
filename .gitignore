@@ -10,3 +10,5 @@ crds-path/
 .github/iac/.terraform*
 billing
 backoffice
+backoffice.db
+backoffice.toml

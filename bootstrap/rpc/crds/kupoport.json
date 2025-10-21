@@ -1,7 +1,7 @@
 {
   "plan": {
     "0": {
-      "dns": "demeter.run",
+      "dns": "dmtr.host",
       "cost": {
         "minimum": 0,
         "delta": 0
