@@ -15,21 +15,21 @@
   },
   "options": [
     {
-      "description": "mainnet",
+      "description": "cardano-mainnet",
       "spec": {
         "network": "cardano-mainnet",
         "throughputTier": "0"
       }
     },
     {
-      "description": "preprod",
+      "description": "cardano-preprod",
       "spec": {
         "network": "cardano-preprod",
         "throughputTier": "0"
       }
     },
     {
-      "description": "preview",
+      "description": "cardano-preview",
       "spec": {
         "network": "cardano-preview",
         "throughputTier": "0"

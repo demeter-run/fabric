@@ -15,25 +15,25 @@
   },
   "options": [
     {
-      "description": "mainnet",
+      "description": "cardano-mainnet",
       "spec": {
-        "network": "mainnet",
+        "network": "cardano-mainnet",
         "throughputTier": "0",
         "operatorVersion": "1"
       }
     },
     {
-      "description": "preprod",
+      "description": "cardano-preprod",
       "spec": {
-        "network": "preprod",
+        "network": "cardano-preprod",
         "throughputTier": "0",
         "operatorVersion": "1"
       }
     },
     {
-      "description": "preview",
+      "description": "cardano-preview",
       "spec": {
-        "network": "preview",
+        "network": "cardano-preview",
         "throughputTier": "0",
         "operatorVersion": "1"
       }
