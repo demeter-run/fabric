@@ -1,36 +1,29 @@
 use anyhow::{bail, Result};
+use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use chrono::{DateTime, Utc};
 use comfy_table::Table;
 use futures::future::try_join_all;
 use include_dir::{include_dir, Dir};
 use kube::ResourceExt;
 use serde_json::json;
-use std::{collections::HashMap, path::Path, sync::Arc};
+use uuid::Uuid;
+use std::{collections::HashMap, path::{Path, PathBuf}, sync::Arc};
 use tracing::{error, info};
 
 use crate::{
     domain::{
-        auth::{Auth0Driven, Auth0Profile},
-        event::{
-            EventDrivenBridge, ProjectDeleted, ProjectUpdated, ResourceDeleted, ResourceUpdated,
-        },
-        metadata::MetadataDriven,
-        project::{
-            cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice},
-            ProjectStatus, ProjectUserProject,
-        },
-        resource::{
-            cache::{ResourceDrivenCache, ResourceDrivenCacheBackoffice},
-            cluster::ResourceDrivenClusterBackoffice,
-            ResourceStatus,
-        },
-        usage::{cache::UsageDrivenCacheBackoffice, UsageReport, UsageReportImpl},
+        DEFAULT_CATEGORY, auth::{Auth0Driven, Auth0Profile}, event::{
+            EventDrivenBridge, ProjectDeleted, ProjectUpdated, ResourceCreated, ResourceDeleted, ResourceUpdated
+        }, metadata::{KnownField, MetadataDriven}, project::{
+            ProjectStatus, ProjectUserProject, cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice}
+        }, resource::{
+            ResourceStatus, cache::{ResourceDrivenCache, ResourceDrivenCacheBackoffice}, cluster::ResourceDrivenClusterBackoffice, command::{build_key, encode_key}
+        }, usage::{UsageReport, UsageReportImpl, cache::UsageDrivenCacheBackoffice}, utils::{self, get_schema_from_crd}
     },
     driven::{
         auth0::Auth0DrivenImpl,
         cache::{
-            project::SqliteProjectDrivenCache, resource::SqliteResourceDrivenCache,
-            usage::SqliteUsageDrivenCache, SqliteCache,
+            SqliteCache, project::SqliteProjectDrivenCache, resource::SqliteResourceDrivenCache, usage::SqliteUsageDrivenCache
         },
         k8s::K8sCluster,
         kafka::KafkaProducer,
@@ -248,6 +241,112 @@ pub async fn delete_project(config: BackofficeConfig, id: String, dry_run: bool)
         info!(project = &id, "project deleted");
     }
 
+    Ok(())
+}
+
+pub async fn create_resource(
+    config: BackofficeConfig,
+    project_id: String,
+    kind: String,
+    spec: String,
+    dry_run: bool,
+) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let resource_cache: Box<dyn ResourceDrivenCache> = Box::new(SqliteResourceDrivenCache::new(sqlite_cache.clone()));
+    let project_cache: Box<dyn ProjectDrivenCache> = Box::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+    let metadata = Box::new(FileMetadata::new(&config.crds_path)?);
+
+    let event = Arc::new(KafkaProducer::new(
+        &config.topic_events,
+        &config.kafka_producer,
+    )?);
+
+    let name = format!(
+        "{}-{}",
+        kind.to_lowercase().replace("port", ""),
+        utils::get_random_salt()
+    );
+
+    if resource_cache
+        .find_by_name(&project_id, &name)
+        .await?
+        .is_some()
+    {
+        error!("Invalid random name, try again");
+        return Ok(());
+    }
+
+    let Some(metadata) = metadata.find_by_kind(&kind)? else {
+        error!("Kind not supported");
+        return Ok(());
+    };
+
+    let project = match project_cache.find_by_id(&project_id).await? {
+        Some(project) => project,
+        None => {
+            error!("Failed to locate project");
+            return Ok(());
+        }
+    };
+    let resource_id = Uuid::new_v4().to_string();
+
+    let mut spec_json = match serde_json::from_str(&spec)? {
+        serde_json::Value::Object(v) => v,
+        _ => {
+            error!("invalid spec json");
+            return Ok(());
+        }
+    };
+
+    if let Some(status_schema) = get_schema_from_crd(&metadata.crd, "status") {
+        for (key, _) in status_schema {
+            if let Ok(status_field) = key.parse::<KnownField>() {
+                let value = match status_field {
+                    KnownField::AuthToken => {
+                        let key = build_key(&project.id, &resource_id)?;
+                        encode_key(key, &kind)?
+                    }
+                    KnownField::Username => {
+                        let user_key = build_key(&project.id, &resource_id)?;
+                        encode_key(user_key, &kind)?
+                    }
+                    KnownField::Password => {
+                        let password_key = build_key(&project.id, &resource_id)?;
+                        BASE64_STANDARD_NO_PAD.encode(password_key)
+                    }
+                };
+                spec_json.insert(key, serde_json::Value::String(value));
+            }
+        }
+    };
+
+    let evt = ResourceCreated {
+        id: resource_id.clone(),
+        project_id: project.id,
+        project_namespace: project.namespace,
+        name,
+        kind: kind.clone(),
+        category: metadata
+            .crd
+            .spec
+            .names
+            .categories
+            .and_then(|c| c.first().map(String::to_owned))
+            .unwrap_or(DEFAULT_CATEGORY.to_string()),
+        spec: serde_json::to_string(&spec_json)?,
+        status: ResourceStatus::Active.to_string(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    };
+
+    if dry_run {
+        info!("event to dispath: {:?}", evt)
+    } else {
+        event.dispatch(evt.into()).await?;
+        info!(resource_id, "resource created");
+    }
     Ok(())
 }
 
@@ -871,6 +970,7 @@ struct ProjectTable {
 #[derive(Debug)]
 pub struct BackofficeConfig {
     pub db_path: String,
+    pub crds_path: PathBuf,
 
     pub auth_url: String,
     pub auth_client_id: String,
