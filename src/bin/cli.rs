@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
@@ -123,6 +123,28 @@ pub struct PatchResourceArgs {
 }
 
 #[derive(Parser, Clone)]
+pub struct CreateResourceArgs {
+    /// ID of the project to create the resource in.
+    #[arg(short, long)]
+    pub project_id: String,
+
+    /// Kind of the resource to create.
+    /// E.g: "BlockfrostPort", "CardanoNodePort", "OgmiosPort", etc
+    #[arg(short, long)]
+    pub kind: String,
+
+    /// Spec of the resource to create.
+    /// This should be a JSON string.
+    /// E.g: '{"network":"cardano-preview","throughputTier":"0","operatorVersion":"1"}'
+    #[arg(short, long)]
+    pub spec: String,
+
+    // Dry run
+    #[arg(short, long, action)]
+    pub dry_run: bool,
+}
+
+#[derive(Parser, Clone)]
 pub struct NewUsersArgs {
     /// collect new users after this date (year-month-day) e.g 2024-09-01
     pub after: String,
@@ -157,6 +179,9 @@ enum Commands {
 
     /// Send patch for resource
     PatchResource(PatchResourceArgs),
+
+    /// Create a new resource
+    CreateResource(CreateResourceArgs),
 
     /// Get new users since a date
     NewUsers(NewUsersArgs),
@@ -246,6 +271,15 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
+        Commands::CreateResource(args) => {
+            fabric::drivers::backoffice::create_resource(
+                config.clone().into(),
+                args.project_id,
+                args.kind,
+                args.spec,
+                args.dry_run,
+            ).await?
+        }
         Commands::RenameProject(args) => {
             fabric::drivers::backoffice::rename_project(
                 config.clone().into(),
@@ -310,6 +344,7 @@ struct Config {
     kafka_consumer: HashMap<String, String>,
     kafka_producer: HashMap<String, String>,
     auth: AuthConfig,
+    crds_path: PathBuf,
 }
 impl Config {
     pub fn new(path: &str) -> Result<Self> {
@@ -326,6 +361,7 @@ impl From<Config> for BackofficeConfig {
     fn from(value: Config) -> Self {
         Self {
             db_path: value.db_path,
+            crds_path: value.crds_path,
             auth_url: value.auth.url,
             auth_client_id: value.auth.client_id,
             auth_client_secret: value.auth.client_secret,
