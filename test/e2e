@@ -143,29 +143,43 @@ http_port_expect() {
 
 node_port_expect() {
     local node_key=$1
-    
-    socat -d -d UNIX-LISTEN:node.socket,reuseaddr,fork OPENSSL:"$node_key.cnode-m1.demeter.run:9443",verify=1 &
+    local max_attempts=${MAX_ATTEMPT:-5}
+    local base_sleep=${SLEEP_DURATION:-2}
 
-    for attempt in $(seq 1 $MAX_ATTEMPT); do
-        sleep $SLEEP_DURATION
+    socat -d -d UNIX-LISTEN:node.socket,reuseaddr,fork OPENSSL:"$node_key.cnode-m1.demeter.run:9443",verify=1 &
+    local socat_pid=$!
+
+    for attempt in $(seq 1 "$max_attempts"); do
+        # Calculate exponential backoff: base_sleep * 2^(attempt-1)
+        local sleep_time=$(( base_sleep * 2 ** (attempt - 1) ))
+        sleep "$sleep_time"
 
         if [[ -e "node.socket" ]]; then
-            JSON_DATA=$(./cardano-cli query tip --socket-path node.socket --mainnet)
-            SYNC_PROGRESS=$(echo "$JSON_DATA" | jq -r '.syncProgress')
-            MIN_EXPECTED_SYNC_PROGRESS="99.00"
-            MAX_EXPECTED_SYNC_PROGRESS="100.00"
-            
-            if (( $(echo "$SYNC_PROGRESS >= $MIN_EXPECTED_SYNC_PROGRESS" | bc -l) )) && (( $(echo "$SYNC_PROGRESS <= $MAX_EXPECTED_SYNC_PROGRESS" | bc -l) )); then
-                echo "Cardano Node Sync Progress $SYNC_PROGRESS"
-                NODE_SLOT=$(echo "$(echo "$JSON_DATA" | jq -r '.slot')")
-                return 0  
+            JSON_DATA=$(./cardano-cli query tip --socket-path node.socket --mainnet 2>/dev/null)
+            if [[ -z "$JSON_DATA" ]]; then
+                echo "Attempt $attempt: failed to query tip"
             else
-                echo "Error: syncProgress is not within the acceptable range of 99 to 100"
-                return 1
+                SYNC_PROGRESS=$(echo "$JSON_DATA" | jq -r '.syncProgress')
+                MIN_EXPECTED_SYNC_PROGRESS="99.00"
+                MAX_EXPECTED_SYNC_PROGRESS="100.00"
+
+                if (( $(echo "$SYNC_PROGRESS >= $MIN_EXPECTED_SYNC_PROGRESS" | bc -l) )) && \
+                   (( $(echo "$SYNC_PROGRESS <= $MAX_EXPECTED_SYNC_PROGRESS" | bc -l) )); then
+                    echo "✅ Cardano Node Sync Progress: $SYNC_PROGRESS"
+                    NODE_SLOT=$(echo "$JSON_DATA" | jq -r '.slot')
+                    kill "$socat_pid" 2>/dev/null
+                    return 0
+                else
+                    echo "Attempt $attempt: syncProgress ($SYNC_PROGRESS) not within 99–100"
+                fi
             fi
+        else
+            echo "Attempt $attempt: node.socket not found yet"
         fi
     done
 
+    echo "Failed after $max_attempts attempts."
+    kill "$socat_pid" 2>/dev/null
     return 1
 }
 
