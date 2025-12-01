@@ -31,7 +31,7 @@
   },
   "options": [
     {
-      "description": "cardano-mainnet - stable (10.2.1)",
+      "description": "cardano-mainnet - stable (10.5.3)",
       "spec": {
         "network": "cardano-mainnet",
         "version": "stable",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "description": "cardano-preprod - stable (10.2.1)",
+      "description": "cardano-preprod - stable (10.5.3)",
       "spec": {
         "network": "cardano-preprod",
         "version": "stable",
@@ -47,7 +47,7 @@
       }
     },
     {
-      "description": "cardano-preview - stable (10.2.1)",
+      "description": "cardano-preview - stable (10.5.3)",
       "spec": {
         "network": "cardano-preview",
         "version": "stable",
