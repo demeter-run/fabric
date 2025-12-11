@@ -63,6 +63,14 @@
       }
     },
     {
+      "description": "vector-mainnet",
+      "spec": {
+        "network": "vector-mainnet",
+        "throughputTier": "0",
+        "operatorVersion": "1"
+      }
+    },
+    {
       "description": "prime-testnet",
       "spec": {
         "network": "prime-testnet",

@@ -52,6 +52,13 @@
       }
     },
     {
+      "description": "vector-mainnet",
+      "spec": {
+        "network": "vector-mainnet",
+        "throughputTier": "0"
+      }
+    },
+    {
       "description": "vector-testnet",
       "spec": {
         "network": "vector-testnet",
