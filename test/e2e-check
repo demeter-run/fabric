@@ -4,7 +4,7 @@ GRPCURL_VERSION="1.9.1"
 CARDANO_NODE_VERSION="10.1.3"
 OPSGENIE_URL="https://api.opsgenie.com/v2/alerts"
 FABRIC_URL="rpc.demeter.run:443"
-MAX_ATTEMPT=3
+MAX_ATTEMPT=5
 SLEEP_DURATION=3
 NODE_SLOT=0
 
@@ -12,12 +12,12 @@ install_dependencies() {
     echo "Downloading Dependencies ..."
 
     sudo apt update -y && sudo apt install -y socat postgresql-client
-    
+
     # Download and extract grpcurl
     wget "https://github.com/fullstorydev/grpcurl/releases/download/v${GRPCURL_VERSION}/grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz"
     tar -zxvf "./grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz" grpcurl
-    
-    # Download and extract cardano 
+
+    # Download and extract cardano
     wget "https://github.com/IntersectMBO/cardano-node/releases/download/${CARDANO_NODE_VERSION}/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz"
     mkdir ./cardano-node && tar -zxvf "./cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz" -C ./cardano-node
     mv ./cardano-node/bin/cardano-cli .
@@ -51,9 +51,12 @@ handle_error() {
 http_port_expect() {
     local endpoint=$1
     local path=$2
+    local base_sleep=${SLEEP_DURATION:-2}
 
     for attempt in $(seq 1 $MAX_ATTEMPT); do
-        sleep $SLEEP_DURATION
+        # Calculate exponential backoff: base_sleep * 2^(attempt-1)
+        local sleep_time=$(( base_sleep * 2 ** (attempt - 1) ))
+        sleep "$sleep_time"
 
         JSON_DATA=$(curl --location "$endpoint/$path")
 
@@ -179,7 +182,7 @@ if [ $? -ne 0 ]; then
   handle_error "CardanoNodePort" "CardanoNodePort validation failed"
 fi
 echo "Node slot: $NODE_SLOT"
-NODE_SLOT=$(( NODE_SLOT - 240 ))
+NODE_SLOT=$(( NODE_SLOT - 1000 ))
 
 echo "Testing Blockfrost ..."
 RESPONSE=$(http_port_expect "https://$TEST_KEY_MAINNET_BLOCKFROST_PORT.blockfrost-m1.demeter.run" "blocks/latest")
@@ -226,7 +229,7 @@ fi
 
 # echo "Testing MumakPort ..."
 # export PGUSER=$TEST_USERNAME_MUMAK_PORT
-# export PGPASSWORD=$TEST_PASSWORD_MUMAK_PORT 
+# export PGPASSWORD=$TEST_PASSWORD_MUMAK_PORT
 # SLOT=$(psql --dbname=cardano-mainnet --host=mumak-m0.demeter.run -c "select slot from blocks order by slot desc limit 1" -t)
 # if [ $? -ne 0 ]; then
 #   handle_error "MumakPort" "MumakPort validation failed"
@@ -238,7 +241,7 @@ fi
 
 echo "Testing DbSyncPort ..."
 export PGUSER=$TEST_USERNAME_DBSYNC_PORT
-export PGPASSWORD=$TEST_PASSWORD_DBSYNC_PORT 
+export PGPASSWORD=$TEST_PASSWORD_DBSYNC_PORT
 SLOT=$(psql --dbname=dbsync-mainnet --host=dbsync-v3.demeter.run -c "select slot_no from block where block_no is not null order by block_no desc limit 1" -t)
 if [ $? -ne 0 ]; then
   handle_error "DbSyncPort" "DbSyncPort validation failed"
