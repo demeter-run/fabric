@@ -6,7 +6,7 @@ AUTH0_URL="https://txpipe.us.auth0.com/oauth/token"
 OPSGENIE_URL="https://api.opsgenie.com/v2/alerts"
 FABRIC_URL="rpc.demeter.run:443"
 # FABRIC_URL="0.0.0.0:5000"
-MAX_ATTEMPT=3
+MAX_ATTEMPT=5
 SLEEP_DURATION=3
 NODE_SLOT=0
 
@@ -14,12 +14,12 @@ install_dependencies() {
     echo "Downloading Dependencies ..."
 
     sudo apt update -y && sudo apt install -y socat postgresql-client
-    
+
     # Download and extract grpcurl
     wget "https://github.com/fullstorydev/grpcurl/releases/download/v${GRPCURL_VERSION}/grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz"
     tar -zxvf "./grpcurl_${GRPCURL_VERSION}_linux_x86_64.tar.gz" grpcurl
-    
-    # Download and extract cardano 
+
+    # Download and extract cardano
     wget "https://github.com/IntersectMBO/cardano-node/releases/download/${CARDANO_NODE_VERSION}/cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz"
     mkdir ./cardano-node && tar -zxvf "./cardano-node-${CARDANO_NODE_VERSION}-linux.tar.gz" -C ./cardano-node
     mv ./cardano-node/bin/cardano-cli .
@@ -37,7 +37,7 @@ set_auth_token(){
     --data-urlencode "client_id=$CLIENT_ID" \
     --data-urlencode "password=$PASSWORD" \
     --data-urlencode "client_secret=$CLIENT_SECRET" | jq -r '.access_token')
-    
+
     if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
         return 1
     fi
@@ -108,7 +108,7 @@ create_port() {
 
     for attempt in $(seq 1 $MAX_ATTEMPT); do
         sleep $SLEEP_DURATION
-      
+
         RESOURCE=$(./grpcurl  \
           -H "Authorization: Bearer $TOKEN" \
           -d "{\"id\": \"$RESOURCE_ID\"}" \
@@ -126,8 +126,11 @@ create_port() {
 http_port_expect() {
     local endpoint=$1
     local path=$2
+    local base_sleep=${SLEEP_DURATION:-5}
 
     for attempt in $(seq 1 $MAX_ATTEMPT); do
+        # Calculate exponential backoff: base_sleep * 2^(attempt-1)
+        local sleep_time=$(( base_sleep * 2 ** (attempt - 1) ))
         sleep $SLEEP_DURATION
 
         JSON_DATA=$(curl --location "$endpoint/$path")
@@ -312,8 +315,8 @@ RESOURCE=$(create_port 'MumakPort' '"{\"network\":\"mainnet\",\"throughputTier\"
 if [ $? -ne 0 ]; then
   handle_error "MumakPort" "Failed to create MumakPort"
 fi
-export PGUSER=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.username') 
-export PGPASSWORD=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.password') 
+export PGUSER=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.username')
+export PGPASSWORD=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.password')
 SLOT=$(psql --dbname=cardano-mainnet --host=mumak-m0.demeter.run -c "select slot from blocks order by slot desc limit 1" -t)
 if [ $? -ne 0 ]; then
   handle_error "MumakPort" "MumakPort validation failed"
@@ -328,8 +331,8 @@ RESOURCE=$(create_port 'DbSyncPort' '"{\"network\":\"mainnet\",\"throughputTier\
 if [ $? -ne 0 ]; then
   handle_error "DbSyncPort" "Failed to create DbSyncPort"
 fi
-export PGUSER=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.username') 
-export PGPASSWORD=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.password') 
+export PGUSER=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.username')
+export PGPASSWORD=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.password')
 SLOT=$(psql --dbname=dbsync-mainnet --host=dbsync-v3.demeter.run -c "select slot_no from block where block_no is not null order by block_no desc limit 1" -t)
 if [ $? -ne 0 ]; then
   handle_error "DbSyncPort" "DbSyncPort validation failed"
