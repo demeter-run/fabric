@@ -286,7 +286,11 @@ RESOURCE=$(create_port 'OgmiosPort' '"{\"network\":\"mainnet\",\"throughputTier\
 if [ $? -ne 0 ]; then
   handle_error "OgmiosPort" "Failed to create OgmiosPort"
 fi
+echo "Resource ..."
+echo $RESOURCE
 RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').cardano-mainnet-v6.ogmios-m1.demeter.run" "health")
+echo "Response ..."
+echo $RESPONSE
 SLOT="$(echo "$RESPONSE" | jq -r '.lastKnownTip.slot')"
 if [ $? -ne 0 ]; then
   handle_error "OgmiosPort" "OgmiosPort validation failed"
