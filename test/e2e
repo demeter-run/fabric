@@ -136,6 +136,10 @@ http_port_expect() {
         JSON_DATA=$(curl --location "$endpoint/$path")
 
         if [[ -n "$JSON_DATA" ]]; then
+            if [[ "$JSON_DATA" == "Unauthorized" ]]; then
+                echo "Attempt $attempt: Received Unauthorized, retrying..."
+                continue
+            fi
             echo "$JSON_DATA"
             return 0
         fi
@@ -286,11 +290,7 @@ RESOURCE=$(create_port 'OgmiosPort' '"{\"network\":\"mainnet\",\"throughputTier\
 if [ $? -ne 0 ]; then
   handle_error "OgmiosPort" "Failed to create OgmiosPort"
 fi
-echo "Resource ..."
-echo $RESOURCE
 RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').cardano-mainnet-v6.ogmios-m1.demeter.run" "health")
-echo "Response ..."
-echo $RESPONSE
 SLOT="$(echo "$RESPONSE" | jq -r '.lastKnownTip.slot')"
 if [ $? -ne 0 ]; then
   handle_error "OgmiosPort" "OgmiosPort validation failed"
