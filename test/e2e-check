@@ -58,7 +58,7 @@ http_port_expect() {
         local sleep_time=$(( base_sleep * 2 ** (attempt - 1) ))
         sleep "$sleep_time"
 
-        JSON_DATA=$(curl --location "$endpoint/$path")
+        JSON_DATA=$(curl -H 'Accept: application/json' --location "$endpoint/$path")
 
         if [[ -n "$JSON_DATA" ]]; then
             echo "$JSON_DATA"
@@ -197,7 +197,7 @@ fi
 
 echo "Testing KupoPort ..."
 RESPONSE=$(http_port_expect "https://$TEST_KEY_MAINNET_KUPO_PORT.mainnet-v2.kupo-m1.demeter.run" "health")
-SLOT=$(echo "$RESPONSE" | grep "^kupo_most_recent_checkpoint " | awk '{print $2}')
+SLOT=$(echo "$RESPONSE" | jq ".most_recent_checkpoint")
 if [ $? -ne 0 ]; then
   handle_error "KupoPort" "KupoPort validation failed"
 fi
