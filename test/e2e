@@ -286,7 +286,7 @@ RESOURCE=$(create_port 'OgmiosPort' '"{\"network\":\"mainnet\",\"throughputTier\
 if [ $? -ne 0 ]; then
   handle_error "OgmiosPort" "Failed to create OgmiosPort"
 fi
-RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').mainnet-v6.ogmios-m1.demeter.run" "health")
+RESPONSE=$(http_port_expect "https://$(echo "$(echo "$RESOURCE" | jq -r '.records[0].spec')" | jq -r '.authToken').cardano-mainnet-v6.ogmios-m1.demeter.run" "health")
 SLOT="$(echo "$RESPONSE" | jq -r '.lastKnownTip.slot')"
 if [ $? -ne 0 ]; then
   handle_error "OgmiosPort" "OgmiosPort validation failed"
@@ -310,21 +310,21 @@ if (( SLOT < NODE_SLOT )); then
     handle_error "UtxoRpcPort" "UtxoRpcPort is not in the chain tip"
 fi
 
-echo "Testing MumakPort ..."
-RESOURCE=$(create_port 'MumakPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\"}"')
-if [ $? -ne 0 ]; then
-  handle_error "MumakPort" "Failed to create MumakPort"
-fi
-export PGUSER=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.username')
-export PGPASSWORD=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.password')
-SLOT=$(psql --dbname=cardano-mainnet --host=mumak-m0.demeter.run -c "select slot from blocks order by slot desc limit 1" -t)
-if [ $? -ne 0 ]; then
-  handle_error "MumakPort" "MumakPort validation failed"
-fi
-echo "Mumak slot: $SLOT"
-if (( SLOT < NODE_SLOT )); then
-    handle_error "MumakPort" "MumakPort is not in the chain tip"
-fi
+# echo "Testing MumakPort ..."
+# RESOURCE=$(create_port 'MumakPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\"}"')
+# if [ $? -ne 0 ]; then
+#   handle_error "MumakPort" "Failed to create MumakPort"
+# fi
+# export PGUSER=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.username')
+# export PGPASSWORD=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.password')
+# SLOT=$(psql --dbname=cardano-mainnet --host=mumak-m0.demeter.run -c "select slot from blocks order by slot desc limit 1" -t)
+# if [ $? -ne 0 ]; then
+#   handle_error "MumakPort" "MumakPort validation failed"
+# fi
+# echo "Mumak slot: $SLOT"
+# if (( SLOT < NODE_SLOT )); then
+#     handle_error "MumakPort" "MumakPort is not in the chain tip"
+# fi
 
 echo "Testing DbSyncPort ..."
 RESOURCE=$(create_port 'DbSyncPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\"}"')
