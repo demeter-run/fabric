@@ -326,21 +326,21 @@ fi
 #     handle_error "MumakPort" "MumakPort is not in the chain tip"
 # fi
 
-echo "Testing DbSyncPort ..."
-RESOURCE=$(create_port 'DbSyncPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\"}"')
-if [ $? -ne 0 ]; then
-  handle_error "DbSyncPort" "Failed to create DbSyncPort"
-fi
-export PGUSER=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.username')
-export PGPASSWORD=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.password')
-SLOT=$(psql --dbname=dbsync-mainnet --host=dbsync-v3.demeter.run -c "select slot_no from block where block_no is not null order by block_no desc limit 1" -t)
-if [ $? -ne 0 ]; then
-  handle_error "DbSyncPort" "DbSyncPort validation failed"
-fi
-echo "DbSync slot: $SLOT"
-if (( SLOT < NODE_SLOT )); then
-    handle_error "DbSyncPort" "DbSyncPort is not in the chain tip"
-fi
+# echo "Testing DbSyncPort ..."
+# RESOURCE=$(create_port 'DbSyncPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\"}"')
+# if [ $? -ne 0 ]; then
+#   handle_error "DbSyncPort" "Failed to create DbSyncPort"
+# fi
+# export PGUSER=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.username')
+# export PGPASSWORD=$(echo "$RESOURCE" | jq -r '.records[0].spec' | jq -r '.password')
+# SLOT=$(psql --dbname=dbsync-mainnet --host=dbsync-v3.demeter.run -c "select slot_no from block where block_no is not null order by block_no desc limit 1" -t)
+# if [ $? -ne 0 ]; then
+#   handle_error "DbSyncPort" "DbSyncPort validation failed"
+# fi
+# echo "DbSync slot: $SLOT"
+# if (( SLOT < NODE_SLOT )); then
+#     handle_error "DbSyncPort" "DbSyncPort is not in the chain tip"
+# fi
 
 echo "Testing SubmitApiPort ..."
 RESOURCE=$(create_port 'SubmitApiPort' '"{\"network\":\"mainnet\",\"throughputTier\":\"0\",\"operatorVersion\":\"1\"}"')

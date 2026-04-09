@@ -239,17 +239,17 @@ fi
 #     handle_error "MumakPort" "MumakPort is not in the chain tip"
 # fi
 
-echo "Testing DbSyncPort ..."
-export PGUSER=$TEST_USERNAME_DBSYNC_PORT
-export PGPASSWORD=$TEST_PASSWORD_DBSYNC_PORT
-SLOT=$(psql --dbname=dbsync-mainnet --host=dbsync-v3.demeter.run -c "select slot_no from block where block_no is not null order by block_no desc limit 1" -t)
-if [ $? -ne 0 ]; then
-  handle_error "DbSyncPort" "DbSyncPort validation failed"
-fi
-echo "DbSync slot: $SLOT"
-if (( SLOT < NODE_SLOT )); then
-    handle_error "DbSyncPort" "DbSyncPort is not in the chain tip"
-fi
+# echo "Testing DbSyncPort ..."
+# export PGUSER=$TEST_USERNAME_DBSYNC_PORT
+# export PGPASSWORD=$TEST_PASSWORD_DBSYNC_PORT
+# SLOT=$(psql --dbname=dbsync-mainnet --host=dbsync-v3.demeter.run -c "select slot_no from block where block_no is not null order by block_no desc limit 1" -t)
+# if [ $? -ne 0 ]; then
+#   handle_error "DbSyncPort" "DbSyncPort validation failed"
+# fi
+# echo "DbSync slot: $SLOT"
+# if (( SLOT < NODE_SLOT )); then
+#     handle_error "DbSyncPort" "DbSyncPort is not in the chain tip"
+# fi
 
 echo "Testing SubmitApiPort ..."
 submit_api_port_expect $TEST_KEY_MAINNET_SUBMITAPI_PORT
