@@ -11,21 +11,21 @@
       "dns": "dmtr.host",
       "cost": {
         "minimum": 0,
-        "delta": 0.0000009
+        "delta": 0.000003
       }
     },
     "2": {
       "dns": "dmtr.host",
       "cost": {
-        "minimum": 50,
-        "delta": 0.0000008
+        "minimum": 30,
+        "delta": 0.0000026
       }
     },
     "3": {
       "dns": "dmtr.host",
       "cost": {
-        "minimum": 150,
-        "delta": 0.0000007
+        "minimum": 80,
+        "delta": 0.0000023
       }
     }
   },
