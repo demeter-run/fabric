@@ -17,14 +17,14 @@
     "2": {
       "dns": "demeter.run",
       "cost": {
-        "minimum": 30,
+        "minimum": 50,
         "delta": 0.0000026
       }
     },
     "3": {
       "dns": "demeter.run",
       "cost": {
-        "minimum": 80,
+        "minimum": 150,
         "delta": 0.0000023
       }
     }
