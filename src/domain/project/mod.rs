@@ -5,8 +5,8 @@ use chrono::{DateTime, Utc};
 use super::{
     error::Error,
     event::{
-        ProjectCreated, ProjectSecretCreated, ProjectUpdated, ProjectUserInviteAccepted,
-        ProjectUserInviteCreated,
+        ProjectCreated, ProjectOwnerChanged, ProjectSecretCreated, ProjectUpdated,
+        ProjectUserInviteAccepted, ProjectUserInviteCreated,
     },
     Result,
 };
@@ -19,6 +19,7 @@ pub mod command;
 #[async_trait::async_trait]
 pub trait StripeDriven: Send + Sync {
     async fn create_customer(&self, name: &str, email: &str) -> Result<String>;
+    async fn update_customer(&self, customer_id: &str, name: &str, email: &str) -> Result<()>;
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -85,6 +86,24 @@ impl TryFrom<ProjectUpdated> for ProjectUpdate {
             },
             updated_at: value.updated_at,
         })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ProjectOwnerChange {
+    pub project_id: String,
+    pub previous_owner: String,
+    pub new_owner: String,
+    pub changed_at: DateTime<Utc>,
+}
+impl From<ProjectOwnerChanged> for ProjectOwnerChange {
+    fn from(value: ProjectOwnerChanged) -> Self {
+        Self {
+            project_id: value.project_id,
+            previous_owner: value.previous_owner,
+            new_owner: value.new_owner,
+            changed_at: value.changed_at,
+        }
     }
 }
 

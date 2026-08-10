@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                UPDATE project_user\n                SET role = $1\n                WHERE project_id = $2 AND user_id = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "03df2ffde3a46daa92116850ab79300cf093b3855653913c6a60cfa34a4fffd2"
+}

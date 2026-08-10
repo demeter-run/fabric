@@ -6,8 +6,8 @@ use crate::domain::{
     error::Error,
     project::{
         cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice},
-        Project, ProjectSecret, ProjectStatus, ProjectUpdate, ProjectUser, ProjectUserInvite,
-        ProjectUserInviteStatus, ProjectUserProject, ProjectUserRole,
+        Project, ProjectOwnerChange, ProjectSecret, ProjectStatus, ProjectUpdate, ProjectUser,
+        ProjectUserInvite, ProjectUserInviteStatus, ProjectUserProject, ProjectUserRole,
     },
     resource::ResourceStatus,
     Result,
@@ -222,6 +222,55 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
             }
             (None, None) => Ok(()),
         }
+    }
+
+    async fn change_owner(&self, change: &ProjectOwnerChange) -> Result<()> {
+        let mut tx = self.sqlite.db.begin().await?;
+
+        sqlx::query!(
+            r#"
+                UPDATE project
+                SET owner = $1, updated_at = $2
+                WHERE id = $3
+            "#,
+            change.new_owner,
+            change.changed_at,
+            change.project_id,
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let owner_role = ProjectUserRole::Owner.to_string();
+        sqlx::query!(
+            r#"
+                UPDATE project_user
+                SET role = $1
+                WHERE project_id = $2 AND user_id = $3
+            "#,
+            owner_role,
+            change.project_id,
+            change.new_owner,
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        let member_role = ProjectUserRole::Member.to_string();
+        sqlx::query!(
+            r#"
+                UPDATE project_user
+                SET role = $1
+                WHERE project_id = $2 AND user_id = $3
+            "#,
+            member_role,
+            change.project_id,
+            change.previous_owner,
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(())
     }
 
     async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()> {
@@ -884,6 +933,97 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn it_should_change_project_owner() {
+        let cache = get_cache().await;
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        // The new owner must already be a member of the project.
+        let new_owner = ProjectUser {
+            user_id: "new user id".into(),
+            project_id: project.id.clone(),
+            role: ProjectUserRole::Member,
+            created_at: Utc::now(),
+        };
+        cache
+            .create_user_acceptance("invite id", &new_owner)
+            .await
+            .unwrap();
+
+        let change = ProjectOwnerChange {
+            project_id: project.id.clone(),
+            previous_owner: project.owner.clone(),
+            new_owner: new_owner.user_id.clone(),
+            changed_at: Utc::now(),
+        };
+        let result = cache.change_owner(&change).await;
+        assert!(result.is_ok());
+
+        let updated = cache.find_by_id(&project.id).await.unwrap().unwrap();
+        assert_eq!(updated.owner, new_owner.user_id);
+
+        let new_permission = cache
+            .find_user_permission(&new_owner.user_id, &project.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(new_permission.role, ProjectUserRole::Owner);
+
+        let previous_permission = cache
+            .find_user_permission(&project.owner, &project.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(previous_permission.role, ProjectUserRole::Member);
+    }
+
+    #[tokio::test]
+    async fn it_should_change_project_owner_idempotently() {
+        let cache = get_cache().await;
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+
+        let new_owner = ProjectUser {
+            user_id: "new user id".into(),
+            project_id: project.id.clone(),
+            role: ProjectUserRole::Member,
+            created_at: Utc::now(),
+        };
+        cache
+            .create_user_acceptance("invite id", &new_owner)
+            .await
+            .unwrap();
+
+        let change = ProjectOwnerChange {
+            project_id: project.id.clone(),
+            previous_owner: project.owner.clone(),
+            new_owner: new_owner.user_id.clone(),
+            changed_at: Utc::now(),
+        };
+
+        // Replaying the same event must converge on the same state.
+        cache.change_owner(&change).await.unwrap();
+        cache.change_owner(&change).await.unwrap();
+
+        let updated = cache.find_by_id(&project.id).await.unwrap().unwrap();
+        assert_eq!(updated.owner, new_owner.user_id);
+
+        let new_permission = cache
+            .find_user_permission(&new_owner.user_id, &project.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(new_permission.role, ProjectUserRole::Owner);
+
+        let previous_permission = cache
+            .find_user_permission(&project.owner, &project.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(previous_permission.role, ProjectUserRole::Member);
     }
 
     #[tokio::test]

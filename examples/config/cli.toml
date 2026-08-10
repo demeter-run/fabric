@@ -16,3 +16,7 @@ url = "https://txpipe.us.auth0.com"
 client_id=""
 client_secret=""
 audience="https://txpipe.us.auth0.com/api/v2/"
+
+[stripe]
+url = "https://api.stripe.com/v1"
+api_key = ""

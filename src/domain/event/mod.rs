@@ -51,6 +51,17 @@ pub struct ProjectDeleted {
 into_event!(ProjectDeleted);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectOwnerChanged {
+    pub id: String,
+    pub project_id: String,
+    pub previous_owner: String,
+    pub new_owner: String,
+    pub changed_by: String,
+    pub changed_at: DateTime<Utc>,
+}
+into_event!(ProjectOwnerChanged);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectSecretCreated {
     pub id: String,
     pub project_id: String,
@@ -180,6 +191,7 @@ pub enum Event {
     ProjectCreated(ProjectCreated),
     ProjectUpdated(ProjectUpdated),
     ProjectDeleted(ProjectDeleted),
+    ProjectOwnerChanged(ProjectOwnerChanged),
     ProjectSecretCreated(ProjectSecretCreated),
     ProjectSecretDeleted(ProjectSecretDeleted),
     ProjectUserInviteCreated(ProjectUserInviteCreated),
@@ -197,6 +209,7 @@ impl Event {
             Event::ProjectCreated(_) => "ProjectCreated".into(),
             Event::ProjectUpdated(_) => "ProjectUpdated".into(),
             Event::ProjectDeleted(_) => "ProjectDeleted".into(),
+            Event::ProjectOwnerChanged(_) => "ProjectOwnerChanged".into(),
             Event::ProjectSecretCreated(_) => "ProjectSecretCreated".into(),
             Event::ProjectSecretDeleted(_) => "ProjectSecretDeleted".into(),
             Event::ProjectUserInviteCreated(_) => "ProjectUserInviteCreated".into(),
@@ -214,6 +227,9 @@ impl Event {
             "ProjectCreated" => Ok(Self::ProjectCreated(serde_json::from_slice(payload)?)),
             "ProjectUpdated" => Ok(Self::ProjectUpdated(serde_json::from_slice(payload)?)),
             "ProjectDeleted" => Ok(Self::ProjectDeleted(serde_json::from_slice(payload)?)),
+            "ProjectOwnerChanged" => {
+                Ok(Self::ProjectOwnerChanged(serde_json::from_slice(payload)?))
+            }
             "ProjectSecretCreated" => {
                 Ok(Self::ProjectSecretCreated(serde_json::from_slice(payload)?))
             }
@@ -275,6 +291,18 @@ mod tests {
                 billing_subscription_id: None,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ProjectOwnerChanged {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                project_id: Uuid::new_v4().to_string(),
+                previous_owner: "user id".into(),
+                new_owner: "new user id".into(),
+                changed_by: "user id".into(),
+                changed_at: Utc::now(),
             }
         }
     }

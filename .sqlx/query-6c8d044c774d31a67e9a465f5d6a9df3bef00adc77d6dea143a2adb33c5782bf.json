@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                UPDATE project\n                SET owner = $1, updated_at = $2\n                WHERE id = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "6c8d044c774d31a67e9a465f5d6a9df3bef00adc77d6dea143a2adb33c5782bf"
+}
