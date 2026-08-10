@@ -15,7 +15,7 @@ use crate::{
         DEFAULT_CATEGORY, auth::{Auth0Driven, Auth0Profile}, event::{
             EventDrivenBridge, ProjectDeleted, ProjectUpdated, ResourceCreated, ResourceDeleted, ResourceUpdated
         }, metadata::{KnownField, MetadataDriven}, project::{
-            ProjectStatus, ProjectUserProject, cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice}
+            self, ProjectStatus, ProjectUserProject, StripeDriven, cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice}
         }, resource::{
             ResourceStatus, cache::{ResourceDrivenCache, ResourceDrivenCacheBackoffice}, cluster::ResourceDrivenClusterBackoffice, command::{build_key, encode_key}
         }, usage::{UsageReport, UsageReportImpl, cache::UsageDrivenCacheBackoffice}, utils::{self, get_schema_from_crd}
@@ -28,6 +28,7 @@ use crate::{
         k8s::K8sCluster,
         kafka::KafkaProducer,
         metadata::FileMetadata,
+        stripe::StripeDrivenImpl,
     },
 };
 
@@ -203,6 +204,66 @@ pub async fn rename_project(
     } else {
         event.dispatch(evt.into()).await?;
         info!(project = &id, "project updated");
+    }
+
+    Ok(())
+}
+
+pub async fn transfer_project(
+    config: BackofficeConfig,
+    id: String,
+    new_owner_email: String,
+    dry_run: bool,
+) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let cache: Arc<dyn ProjectDrivenCache> =
+        Arc::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+
+    let auth0: Arc<dyn Auth0Driven> = Arc::new(
+        Auth0DrivenImpl::try_new(
+            &config.auth_url,
+            &config.auth_client_id,
+            &config.auth_client_secret,
+            &config.auth_audience,
+        )
+        .await?,
+    );
+
+    let (Some(stripe_url), Some(stripe_api_key)) = (&config.stripe_url, &config.stripe_api_key)
+    else {
+        bail!("a [stripe] section is required in the cli config to transfer a project")
+    };
+
+    let stripe: Arc<dyn StripeDriven> = Arc::new(StripeDrivenImpl::new(stripe_url, stripe_api_key));
+
+    let event = Arc::new(KafkaProducer::new(
+        &config.topic_events,
+        &config.kafka_producer,
+    )?);
+
+    // The CLI takes an email; the domain command takes an auth0 user id.
+    let profile = auth0.find_info(&format!("email:{new_owner_email}")).await?;
+    if profile.is_empty() {
+        bail!("No one user was found")
+    }
+    let profile = profile.first().unwrap();
+
+    project::command::apply_ownership_transfer(
+        cache,
+        event,
+        auth0.clone(),
+        stripe,
+        &id,
+        &profile.user_id,
+        "backoffice",
+        dry_run,
+    )
+    .await?;
+
+    if !dry_run {
+        info!(project = &id, owner = &profile.email, "project transferred");
     }
 
     Ok(())
@@ -976,6 +1037,10 @@ pub struct BackofficeConfig {
     pub auth_client_id: String,
     pub auth_client_secret: String,
     pub auth_audience: String,
+
+    /// Only populated when the config carries a `[stripe]` section; required by `transfer_project`.
+    pub stripe_url: Option<String>,
+    pub stripe_api_key: Option<String>,
 
     pub topic_events: String,
     pub kafka_producer: HashMap<String, String>,

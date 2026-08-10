@@ -13,9 +13,9 @@ use crate::domain::{
     auth::{assert_permission, Auth0Driven, Credential, UserId},
     error::Error,
     event::{
-        EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectSecretCreated,
-        ProjectSecretDeleted, ProjectUpdated, ProjectUserDeleted, ProjectUserInviteAccepted,
-        ProjectUserInviteCreated, ProjectUserInviteDeleted,
+        EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectOwnerChanged,
+        ProjectSecretCreated, ProjectSecretDeleted, ProjectUpdated, ProjectUserDeleted,
+        ProjectUserInviteAccepted, ProjectUserInviteCreated, ProjectUserInviteDeleted,
     },
     project::{ProjectStatus, ProjectUserAggregated, ProjectUserInviteStatus},
     utils, Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
@@ -124,6 +124,118 @@ pub async fn update(
     };
 
     Ok(project)
+}
+
+/// Self-service entry point for an ownership transfer: only the current owner may transfer.
+///
+/// Not yet reachable over gRPC — transfers are run from the backoffice CLI, which calls
+/// `apply_ownership_transfer` directly. This exists so the authorization rule for the self-service
+/// path is settled and tested ahead of the RPC being added.
+#[allow(dead_code)]
+pub async fn transfer_ownership(
+    cache: Arc<dyn ProjectDrivenCache>,
+    event: Arc<dyn EventDrivenBridge>,
+    auth0: Arc<dyn Auth0Driven>,
+    stripe: Arc<dyn StripeDriven>,
+    cmd: TransferOwnershipCmd,
+) -> Result<()> {
+    let user_id = assert_credential(&cmd.credential)?;
+    assert_permission(
+        cache.clone(),
+        &cmd.credential,
+        &cmd.project_id,
+        Some(ProjectUserRole::Owner),
+    )
+    .await?;
+
+    apply_ownership_transfer(
+        cache,
+        event,
+        auth0,
+        stripe,
+        &cmd.project_id,
+        &cmd.new_owner,
+        &user_id,
+        false,
+    )
+    .await
+}
+
+/// Validates and performs an ownership transfer, with no authorization check of its own.
+///
+/// Callers are responsible for authorization: `transfer_ownership` asserts the caller holds the
+/// `Owner` role, while the backoffice driver is already privileged and passes `changed_by` to
+/// record who ran it.
+///
+/// With `dry_run`, every validation still runs but neither the Stripe update nor the event
+/// dispatch happens, so an operator can confirm a transfer is viable before committing to it.
+#[allow(clippy::too_many_arguments)]
+pub async fn apply_ownership_transfer(
+    cache: Arc<dyn ProjectDrivenCache>,
+    event: Arc<dyn EventDrivenBridge>,
+    auth0: Arc<dyn Auth0Driven>,
+    stripe: Arc<dyn StripeDriven>,
+    project_id: &str,
+    new_owner: &str,
+    changed_by: &str,
+    dry_run: bool,
+) -> Result<()> {
+    let Some(project) = cache.find_by_id(project_id).await? else {
+        return Err(Error::CommandMalformed("invalid project id".into()));
+    };
+
+    if project.owner == new_owner {
+        return Err(Error::CommandMalformed(
+            "user already is the project owner".into(),
+        ));
+    }
+
+    if cache
+        .find_user_permission(new_owner, project_id)
+        .await?
+        .is_none()
+    {
+        return Err(Error::CommandMalformed(
+            "new owner is not a member of the project".into(),
+        ));
+    }
+
+    let profile = auth0.find_info(&format!("user_id:{new_owner}")).await?;
+    if profile.is_empty() {
+        return Err(Error::Unexpected("Invalid user_id".into()));
+    }
+    let profile = profile.first().unwrap();
+
+    let evt = ProjectOwnerChanged {
+        id: Uuid::new_v4().to_string(),
+        project_id: project.id,
+        previous_owner: project.owner,
+        new_owner: new_owner.to_string(),
+        changed_by: changed_by.to_string(),
+        changed_at: Utc::now(),
+    };
+
+    if dry_run {
+        info!("event to dispath: {:?}", evt);
+        info!(
+            stripe_customer = &project.billing_provider_id,
+            name = &profile.name,
+            email = &profile.email,
+            "stripe customer to update"
+        );
+        return Ok(());
+    }
+
+    // The stripe call happens here, before dispatching, because projections are replayed in full
+    // whenever the cache is rebuilt. See `create` above for the same pattern.
+    stripe
+        .update_customer(&project.billing_provider_id, &profile.name, &profile.email)
+        .await?;
+
+    event.dispatch(evt.into()).await?;
+    info!(project = project_id, "project owner changed");
+
+    Ok(())
 }
 
 pub async fn delete(
@@ -843,6 +955,13 @@ impl FetchMeUserCmd {
 }
 
 #[derive(Debug, Clone)]
+pub struct TransferOwnershipCmd {
+    pub credential: Credential,
+    pub project_id: String,
+    pub new_owner: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct DeleteUserCmd {
     pub credential: Credential,
     pub project_id: String,
@@ -1117,6 +1236,15 @@ mod tests {
                 credential: Credential::Auth0("user id".into()),
                 id: "member user id".into(),
                 project_id: Uuid::new_v4().to_string(),
+            }
+        }
+    }
+    impl Default for TransferOwnershipCmd {
+        fn default() -> Self {
+            Self {
+                credential: Credential::Auth0("user id".into()),
+                project_id: Uuid::new_v4().to_string(),
+                new_owner: "member user id".into(),
             }
         }
     }
@@ -2056,6 +2184,239 @@ mod tests {
         let result = delete_user(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_ok());
     }
+
+    #[tokio::test]
+    async fn it_should_transfer_project_ownership() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .times(2)
+            .returning(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let mut auth0 = MockAuth0Driven::new();
+        auth0
+            .expect_find_info()
+            .return_once(|_| Ok(vec![Auth0Profile::default()]));
+
+        let mut stripe = MockStripeDriven::new();
+        stripe
+            .expect_update_customer()
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+
+        let mut event = MockEventDrivenBridge::new();
+        event.expect_dispatch().times(1).return_once(|_| Ok(()));
+
+        let cmd = TransferOwnershipCmd::default();
+
+        let result = transfer_ownership(
+            Arc::new(cache),
+            Arc::new(event),
+            Arc::new(auth0),
+            Arc::new(stripe),
+            cmd,
+        )
+        .await;
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_not_dispatch_transfer_ownership_on_dry_run() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .times(1)
+            .returning(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let mut auth0 = MockAuth0Driven::new();
+        auth0
+            .expect_find_info()
+            .return_once(|_| Ok(vec![Auth0Profile::default()]));
+
+        // Neither mock has an expectation: both panic if called during a dry run.
+        let stripe = MockStripeDriven::new();
+        let event = MockEventDrivenBridge::new();
+
+        let result = apply_ownership_transfer(
+            Arc::new(cache),
+            Arc::new(event),
+            Arc::new(auth0),
+            Arc::new(stripe),
+            "project id",
+            "member user id",
+            "backoffice",
+            true,
+        )
+        .await;
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_fail_transfer_ownership_on_dry_run_when_new_owner_is_not_a_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .times(1)
+            .returning(|_, _| Ok(None));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let auth0 = MockAuth0Driven::new();
+        let stripe = MockStripeDriven::new();
+        let event = MockEventDrivenBridge::new();
+
+        let result = apply_ownership_transfer(
+            Arc::new(cache),
+            Arc::new(event),
+            Arc::new(auth0),
+            Arc::new(stripe),
+            "project id",
+            "member user id",
+            "backoffice",
+            true,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::CommandMalformed(_))));
+    }
+    #[tokio::test]
+    async fn it_should_fail_transfer_ownership_when_invalid_permission_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_user_permission().return_once(|_, _| {
+            Ok(Some(ProjectUser {
+                role: ProjectUserRole::Member,
+                ..Default::default()
+            }))
+        });
+
+        let auth0 = MockAuth0Driven::new();
+        let stripe = MockStripeDriven::new();
+        let event = MockEventDrivenBridge::new();
+
+        let cmd = TransferOwnershipCmd::default();
+
+        let result = transfer_ownership(
+            Arc::new(cache),
+            Arc::new(event),
+            Arc::new(auth0),
+            Arc::new(stripe),
+            cmd,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
+    }
+    #[tokio::test]
+    async fn it_should_fail_transfer_ownership_when_the_user_is_already_the_owner() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .return_once(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let auth0 = MockAuth0Driven::new();
+        let stripe = MockStripeDriven::new();
+        let event = MockEventDrivenBridge::new();
+
+        // Project::default() is owned by "user id".
+        let cmd = TransferOwnershipCmd {
+            new_owner: "user id".into(),
+            ..Default::default()
+        };
+
+        let result = transfer_ownership(
+            Arc::new(cache),
+            Arc::new(event),
+            Arc::new(auth0),
+            Arc::new(stripe),
+            cmd,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::CommandMalformed(_))));
+    }
+    #[tokio::test]
+    async fn it_should_fail_transfer_ownership_when_new_owner_is_not_a_member() {
+        let mut cache = MockProjectDrivenCache::new();
+        // First call authorizes the caller, second looks up the new owner.
+        cache
+            .expect_find_user_permission()
+            .times(1)
+            .returning(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_user_permission()
+            .times(1)
+            .returning(|_, _| Ok(None));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let auth0 = MockAuth0Driven::new();
+        let stripe = MockStripeDriven::new();
+        let event = MockEventDrivenBridge::new();
+
+        let cmd = TransferOwnershipCmd::default();
+
+        let result = transfer_ownership(
+            Arc::new(cache),
+            Arc::new(event),
+            Arc::new(auth0),
+            Arc::new(stripe),
+            cmd,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(Error::CommandMalformed(_))));
+    }
+    #[tokio::test]
+    async fn it_should_not_dispatch_transfer_ownership_when_stripe_fails() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .times(2)
+            .returning(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let mut auth0 = MockAuth0Driven::new();
+        auth0
+            .expect_find_info()
+            .return_once(|_| Ok(vec![Auth0Profile::default()]));
+
+        let mut stripe = MockStripeDriven::new();
+        stripe
+            .expect_update_customer()
+            .returning(|_, _, _| Err(Error::Unexpected("stripe down".into())));
+
+        // No dispatch expectation: the mock panics if the event is dispatched anyway.
+        let event = MockEventDrivenBridge::new();
+
+        let cmd = TransferOwnershipCmd::default();
+
+        let result = transfer_ownership(
+            Arc::new(cache),
+            Arc::new(event),
+            Arc::new(auth0),
+            Arc::new(stripe),
+            cmd,
+        )
+        .await;
+
+        assert!(result.is_err());
+    }
+
     #[tokio::test]
     async fn it_should_fail_delete_project_user_when_invalid_permission_member() {
         let mut cache = MockProjectDrivenCache::new();

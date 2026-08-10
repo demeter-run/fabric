@@ -55,6 +55,33 @@ impl StripeDriven for StripeDrivenImpl {
 
         Ok(customer.id)
     }
+
+    async fn update_customer(&self, customer_id: &str, name: &str, email: &str) -> Result<()> {
+        let mut params = HashMap::new();
+        params.insert("name", name);
+        params.insert("email", email);
+
+        let response = self
+            .client
+            .post(format!("{}/customers/{}", &self.url, customer_id))
+            .basic_auth(&self.api_key, Some(""))
+            .form(&params)
+            .send()
+            .await?;
+
+        let status = response.status();
+        if status.is_client_error() || status.is_server_error() {
+            error!(
+                status = status.to_string(),
+                "request status code fail to update stripe customer"
+            );
+            return Err(Error::Unexpected(format!(
+                "stripe update customer request error. Status: {status}"
+            )));
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Deserialize)]

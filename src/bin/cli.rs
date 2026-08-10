@@ -67,6 +67,21 @@ pub struct RenameProjectArgs {
 }
 
 #[derive(Parser, Clone)]
+pub struct TransferProjectArgs {
+    /// Project id
+    #[arg(short, long)]
+    pub id: String,
+
+    /// Email of the new owner. Must already be a member of the project.
+    #[arg(short, long)]
+    pub new_owner_email: String,
+
+    // Dry run
+    #[arg(short, long, action)]
+    pub dry_run: bool,
+}
+
+#[derive(Parser, Clone)]
 pub struct DeleteProjectArgs {
     /// Project id
     #[arg(short, long)]
@@ -173,6 +188,9 @@ enum Commands {
 
     /// Get projects by user
     RenameProject(RenameProjectArgs),
+
+    /// Transfer a project to another member of the project
+    TransferProject(TransferProjectArgs),
 
     /// Get resource by project namespace
     Resource(ResourceArgs),
@@ -289,6 +307,15 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
+        Commands::TransferProject(args) => {
+            fabric::drivers::backoffice::transfer_project(
+                config.clone().into(),
+                args.id,
+                args.new_owner_email,
+                args.dry_run,
+            )
+            .await?;
+        }
         Commands::DeleteProject(args) => {
             fabric::drivers::backoffice::delete_project(
                 config.clone().into(),
@@ -337,6 +364,11 @@ struct AuthConfig {
     audience: String,
 }
 #[derive(Debug, Clone, Deserialize)]
+struct StripeConfig {
+    url: String,
+    api_key: String,
+}
+#[derive(Debug, Clone, Deserialize)]
 struct Config {
     db_path: String,
     topic_events: String,
@@ -344,6 +376,8 @@ struct Config {
     kafka_consumer: HashMap<String, String>,
     kafka_producer: HashMap<String, String>,
     auth: AuthConfig,
+    /// Only required by `transfer-project`; every other subcommand works without it.
+    stripe: Option<StripeConfig>,
     crds_path: PathBuf,
 }
 impl Config {
@@ -366,6 +400,8 @@ impl From<Config> for BackofficeConfig {
             auth_client_id: value.auth.client_id,
             auth_client_secret: value.auth.client_secret,
             auth_audience: value.auth.audience,
+            stripe_url: value.stripe.as_ref().map(|s| s.url.clone()),
+            stripe_api_key: value.stripe.as_ref().map(|s| s.api_key.clone()),
             topic_events: value.topic_events,
             kafka_producer: value.kafka_producer,
         }

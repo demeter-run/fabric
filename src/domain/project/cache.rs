@@ -2,14 +2,15 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
 use crate::domain::event::{
-    ProjectCreated, ProjectDeleted, ProjectSecretCreated, ProjectSecretDeleted, ProjectUpdated,
-    ProjectUserDeleted, ProjectUserInviteAccepted, ProjectUserInviteCreated,
-    ProjectUserInviteDeleted,
+    ProjectCreated, ProjectDeleted, ProjectOwnerChanged, ProjectSecretCreated,
+    ProjectSecretDeleted, ProjectUpdated, ProjectUserDeleted, ProjectUserInviteAccepted,
+    ProjectUserInviteCreated, ProjectUserInviteDeleted,
 };
 use crate::domain::Result;
 
 use super::{
-    Project, ProjectSecret, ProjectUpdate, ProjectUser, ProjectUserInvite, ProjectUserProject,
+    Project, ProjectOwnerChange, ProjectSecret, ProjectUpdate, ProjectUser, ProjectUserInvite,
+    ProjectUserProject,
 };
 
 #[cfg_attr(test, mockall::automock)]
@@ -20,6 +21,7 @@ pub trait ProjectDrivenCache: Send + Sync {
     async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
     async fn create(&self, project: &Project) -> Result<()>;
     async fn update(&self, project: &ProjectUpdate) -> Result<()>;
+    async fn change_owner(&self, change: &ProjectOwnerChange) -> Result<()>;
     async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
     async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
     async fn find_secrets(&self, project: &str) -> Result<Vec<ProjectSecret>>;
@@ -66,6 +68,13 @@ pub async fn create(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectCreated) -> 
 
 pub async fn update(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectUpdated) -> Result<()> {
     cache.update(&evt.try_into()?).await
+}
+
+pub async fn change_owner(
+    cache: Arc<dyn ProjectDrivenCache>,
+    evt: ProjectOwnerChanged,
+) -> Result<()> {
+    cache.change_owner(&evt.into()).await
 }
 
 pub async fn delete(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectDeleted) -> Result<()> {
@@ -127,6 +136,17 @@ mod tests {
         let evt = ProjectCreated::default();
 
         let result = create(Arc::new(cache), evt).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_change_project_owner_cache() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_change_owner().return_once(|_| Ok(()));
+
+        let evt = ProjectOwnerChanged::default();
+
+        let result = change_owner(Arc::new(cache), evt).await;
         assert!(result.is_ok());
     }
 
