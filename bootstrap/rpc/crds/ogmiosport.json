@@ -31,7 +31,7 @@
   },
   "options": [
     {
-      "description": "cardano-mainnet",
+      "description": "cardano-mainnet - v6",
       "spec": {
         "network": "cardano-mainnet",
         "throughputTier": "0",
@@ -39,7 +39,15 @@
       }
     },
     {
-      "description": "cardano-preprod",
+      "description": "cardano-mainnet - v7",
+      "spec": {
+        "network": "cardano-mainnet",
+        "throughputTier": "0",
+        "version": 7
+      }
+    },
+    {
+      "description": "cardano-preprod - v6",
       "spec": {
         "network": "cardano-preprod",
         "throughputTier": "0",
@@ -47,7 +55,15 @@
       }
     },
     {
-      "description": "cardano-preview",
+      "description": "cardano-preprod - v7",
+      "spec": {
+        "network": "cardano-preprod",
+        "throughputTier": "0",
+        "version": 7
+      }
+    },
+    {
+      "description": "cardano-preview - v6",
       "spec": {
         "network": "cardano-preview",
         "throughputTier": "0",
@@ -55,7 +71,15 @@
       }
     },
     {
-      "description": "vector-testnet",
+      "description": "cardano-preview - v7",
+      "spec": {
+        "network": "cardano-preview",
+        "throughputTier": "0",
+        "version": 7
+      }
+    },
+    {
+      "description": "vector-testnet - v6",
       "spec": {
         "network": "vector-testnet",
         "throughputTier": "0",
@@ -63,7 +87,7 @@
       }
     },
     {
-      "description": "prime-testnet",
+      "description": "prime-testnet - v6",
       "spec": {
         "network": "prime-testnet",
         "throughputTier": "0",
