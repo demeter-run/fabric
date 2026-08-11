@@ -91,7 +91,7 @@ pub struct InviteUserArgs {
     #[arg(short, long, default_value = "member")]
     pub role: String,
 
-    /// Minutes the invite code stays valid. Defaults to [email].invite_ttl_min, then to 15.
+    /// Minutes the invite code stays valid. Defaults to [email].invite_ttl_min, then to one week.
     #[arg(short, long)]
     pub ttl_min: Option<u64>,
 

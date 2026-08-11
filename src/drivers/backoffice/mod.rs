@@ -336,9 +336,14 @@ pub async fn transfer_project(
     Ok(())
 }
 
-/// Used when neither `--ttl-min` nor `[email].invite_ttl_min` says otherwise. Matches the RPC's
-/// own default, so an invite sent from the backoffice behaves like one sent from the Console.
-const DEFAULT_INVITE_TTL_MIN: u64 = 15;
+/// Used when neither `--ttl-min` nor `[email].invite_ttl_min` says otherwise.
+///
+/// A week rather than the RPC's 15 minutes. A Console invite is sent by someone watching the
+/// screen, who can resend on the spot; a backoffice invite goes out on an operator's schedule to
+/// someone who may not be expecting it, so the window has to survive a weekend. The cost of the
+/// longer window is a code that stays valid longer — it is single-use and bound to one address,
+/// and `--ttl-min` narrows it when that matters.
+const DEFAULT_INVITE_TTL_MIN: u64 = 7 * 24 * 60;
 
 pub async fn invite_user(
     config: BackofficeConfig,

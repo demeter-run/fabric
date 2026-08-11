@@ -23,7 +23,7 @@ api_key = ""
 
 # Only needed by invite-user
 [email]
-# Default invite lifetime in minutes; --ttl-min overrides it per invite. Omit for 15.
+# Default invite lifetime in minutes; --ttl-min overrides it per invite. Omit for one week.
 invite_ttl_min = 10080
 ses_access_key_id = "xxx"
 ses_secret_access_key = "xxx"
