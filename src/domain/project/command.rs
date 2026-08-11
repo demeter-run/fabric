@@ -624,23 +624,104 @@ pub async fn create_user_invite(
     )
     .await?;
 
-    let Some(project) = cache.find_by_id(&cmd.project_id).await? else {
+    apply_user_invite(
+        cache,
+        email,
+        event,
+        &cmd.id,
+        &cmd.project_id,
+        &cmd.email,
+        &cmd.role,
+        cmd.ttl,
+        false,
+    )
+    .await
+}
+
+/// Creates and sends a project invite on behalf of an operator, with no `Owner` check.
+///
+/// The sibling of `create_user_invite` for the backoffice, which holds no user credential — its
+/// authority is possession of the producer credentials, not a role on the project. Naming that
+/// bypass rather than letting a driver call into shared internals keeps the set of unauthenticated
+/// entry points greppable.
+///
+/// With `dry_run` the project is still resolved, but no mail is sent and no event is dispatched.
+#[allow(clippy::too_many_arguments)]
+pub async fn create_user_invite_from_backoffice(
+    cache: Arc<dyn ProjectDrivenCache>,
+    email: Arc<dyn ProjectEmailDriven>,
+    event: Arc<dyn EventDrivenBridge>,
+    project_id: &str,
+    invitee_email: &str,
+    role: &ProjectUserRole,
+    ttl: Duration,
+    dry_run: bool,
+) -> Result<()> {
+    apply_user_invite(
+        cache,
+        email,
+        event,
+        &Uuid::new_v4().to_string(),
+        project_id,
+        invitee_email,
+        role,
+        ttl,
+        dry_run,
+    )
+    .await
+}
+
+/// The body shared by `create_user_invite` and `create_user_invite_from_backoffice`.
+///
+/// Private on purpose: it performs no authorization, so every caller must be one of the two named
+/// entry points above, which document the authority they rely on.
+///
+/// With `dry_run` this returns before the send. The email is the irreversible half — an invite
+/// cannot be recalled — so it sits after the early return rather than before it, unlike the Stripe
+/// call in `apply_ownership_transfer`.
+#[allow(clippy::too_many_arguments)]
+async fn apply_user_invite(
+    cache: Arc<dyn ProjectDrivenCache>,
+    email: Arc<dyn ProjectEmailDriven>,
+    event: Arc<dyn EventDrivenBridge>,
+    id: &str,
+    project_id: &str,
+    invitee_email: &str,
+    role: &ProjectUserRole,
+    ttl: Duration,
+    dry_run: bool,
+) -> Result<()> {
+    let Some(project) = cache.find_by_id(project_id).await? else {
         return Err(Error::CommandMalformed("invalid project id".into()));
     };
 
     let code = Uuid::new_v4().to_string();
 
-    let expires_in = Utc::now() + cmd.ttl;
+    let expires_in = Utc::now() + ttl;
+
+    if dry_run {
+        // The code is deliberately not logged. It is the bearer token that grants membership, and
+        // this one is discarded unsent — but CLI output gets pasted around, and a code that looks
+        // live invites confusion.
+        info!(
+            project = &project.name,
+            email = invitee_email,
+            role = %role,
+            ?expires_in,
+            "invite to send"
+        );
+        return Ok(());
+    }
 
     email
-        .send_invite(&project.name, &cmd.email, &code, &expires_in)
+        .send_invite(&project.name, invitee_email, &code, &expires_in)
         .await?;
 
     let evt = ProjectUserInviteCreated {
-        id: cmd.id,
+        id: id.to_string(),
         project_id: project.id,
-        email: cmd.email,
-        role: cmd.role.to_string(),
+        email: invitee_email.to_string(),
+        role: role.to_string(),
         code,
         expires_in,
         created_at: Utc::now(),
@@ -1845,6 +1926,85 @@ mod tests {
 
         assert!(result.is_err());
         assert!(matches!(result, Err(Error::Unauthorized(_))));
+    }
+
+    #[tokio::test]
+    async fn it_should_create_project_user_invite_from_backoffice() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        // No `expect_find_user_permission`: the backoffice entry point must not consult a role,
+        // and mockall panics if it does.
+        let mut email = MockProjectEmailDriven::new();
+        email.expect_send_invite().return_once(|_, _, _, _| Ok(()));
+
+        let mut event = MockEventDrivenBridge::new();
+        event.expect_dispatch().return_once(|_| Ok(()));
+
+        let result = create_user_invite_from_backoffice(
+            Arc::new(cache),
+            Arc::new(email),
+            Arc::new(event),
+            "project id",
+            "new@user.io",
+            &ProjectUserRole::Member,
+            Duration::from_secs(900),
+            false,
+        )
+        .await;
+
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_not_send_mail_or_dispatch_on_a_dry_run_project_user_invite() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        // No expectations set: mockall panics on any call, so these assert the send and the
+        // dispatch never happen. An invite email is not recallable, which is the whole point of
+        // rehearsing one.
+        let email = MockProjectEmailDriven::new();
+        let event = MockEventDrivenBridge::new();
+
+        let result = create_user_invite_from_backoffice(
+            Arc::new(cache),
+            Arc::new(email),
+            Arc::new(event),
+            "project id",
+            "new@user.io",
+            &ProjectUserRole::Member,
+            Duration::from_secs(900),
+            true,
+        )
+        .await;
+
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_fail_create_project_user_invite_from_backoffice_when_project_doesnt_exist() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_by_id().return_once(|_| Ok(None));
+
+        let email = MockProjectEmailDriven::new();
+        let event = MockEventDrivenBridge::new();
+
+        let result = create_user_invite_from_backoffice(
+            Arc::new(cache),
+            Arc::new(email),
+            Arc::new(event),
+            "project id",
+            "new@user.io",
+            &ProjectUserRole::Member,
+            Duration::from_secs(900),
+            false,
+        )
+        .await;
+
+        assert!(result.is_err());
     }
 
     #[tokio::test]

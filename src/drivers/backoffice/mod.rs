@@ -7,7 +7,7 @@ use include_dir::{include_dir, Dir};
 use kube::ResourceExt;
 use serde_json::json;
 use uuid::Uuid;
-use std::{collections::HashMap, path::{Path, PathBuf}, sync::Arc};
+use std::{collections::HashMap, path::{Path, PathBuf}, sync::Arc, time::Duration};
 use tracing::{error, info};
 
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
         DEFAULT_CATEGORY, PAGE_SIZE_MAX, auth::{Auth0Driven, Auth0Profile}, event::{
             EventDrivenBridge, ProjectDeleted, ProjectUpdated, ResourceCreated, ResourceDeleted, ResourceUpdated
         }, metadata::{KnownField, MetadataDriven}, project::{
-            self, ProjectStatus, ProjectUserAggregated, ProjectUserProject, StripeDriven, cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice}
+            self, ProjectEmailDriven, ProjectStatus, ProjectUserAggregated, ProjectUserProject, ProjectUserRole, StripeDriven, cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice}
         }, resource::{
             ResourceStatus, cache::{ResourceDrivenCache, ResourceDrivenCacheBackoffice}, cluster::ResourceDrivenClusterBackoffice, command::{build_key, encode_key}
         }, usage::{UsageReport, UsageReportImpl, cache::UsageDrivenCacheBackoffice}, utils::{self, get_schema_from_crd}
@@ -28,6 +28,7 @@ use crate::{
         k8s::K8sCluster,
         kafka::KafkaProducer,
         metadata::FileMetadata,
+        ses::SESDrivenImpl,
         stripe::StripeDrivenImpl,
     },
 };
@@ -330,6 +331,98 @@ pub async fn transfer_project(
 
     if !dry_run {
         info!(project = &id, owner = &profile.email, "project transferred");
+    }
+
+    Ok(())
+}
+
+pub async fn invite_user(
+    config: BackofficeConfig,
+    project_id: String,
+    email: String,
+    role: String,
+    ttl_min: u64,
+    dry_run: bool,
+) -> Result<()> {
+    let role: ProjectUserRole = role.parse()?;
+
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let cache: Arc<dyn ProjectDrivenCache> =
+        Arc::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+
+    let auth0: Arc<dyn Auth0Driven> = Arc::new(
+        Auth0DrivenImpl::try_new(
+            &config.auth_url,
+            &config.auth_client_id,
+            &config.auth_client_secret,
+            &config.auth_audience,
+        )
+        .await?,
+    );
+
+    let (
+        Some(ses_access_key_id),
+        Some(ses_secret_access_key),
+        Some(ses_region),
+        Some(ses_verified_email),
+    ) = (
+        &config.ses_access_key_id,
+        &config.ses_secret_access_key,
+        &config.ses_region,
+        &config.ses_verified_email,
+    )
+    else {
+        bail!("an [email] section is required in the cli config to invite a user; the invite code only reaches the invitee by mail")
+    };
+
+    let email_driven: Arc<dyn ProjectEmailDriven> = Arc::new(SESDrivenImpl::new(
+        ses_access_key_id,
+        ses_secret_access_key,
+        ses_region,
+        ses_verified_email,
+    ));
+
+    let event = Arc::new(KafkaProducer::new(
+        &config.topic_events,
+        &config.kafka_producer,
+    )?);
+
+    if cache.find_by_id(&project_id).await?.is_none() {
+        bail!("Failed to locate project")
+    };
+
+    // An invite to someone who is already a member is a dead letter: `accept_user_invite` rejects
+    // it with "user already is in the project", so they would get mail they can never act on. An
+    // empty profile is not a problem — the invitee may have no account yet, which is the point.
+    let profile = auth0.find_info(&format!("email:{email}")).await?;
+    if let Some(profile) = profile.first() {
+        if let Some(permission) = cache
+            .find_user_permission(&profile.user_id, &project_id)
+            .await?
+        {
+            bail!(
+                "{email} is already a {} of this project; an invite would be rejected on acceptance",
+                permission.role
+            )
+        }
+    }
+
+    project::command::create_user_invite_from_backoffice(
+        cache,
+        email_driven,
+        event,
+        &project_id,
+        &email,
+        &role,
+        Duration::from_secs(ttl_min * 60),
+        dry_run,
+    )
+    .await?;
+
+    if !dry_run {
+        info!(project = &project_id, user = &email, "project user invited");
     }
 
     Ok(())
@@ -1164,6 +1257,12 @@ pub struct BackofficeConfig {
     /// Only populated when the config carries a `[stripe]` section; required by `transfer_project`.
     pub stripe_url: Option<String>,
     pub stripe_api_key: Option<String>,
+
+    /// Only populated when the config carries an `[email]` section; required by `invite_user`.
+    pub ses_access_key_id: Option<String>,
+    pub ses_secret_access_key: Option<String>,
+    pub ses_region: Option<String>,
+    pub ses_verified_email: Option<String>,
 
     pub topic_events: String,
     pub kafka_producer: HashMap<String, String>,
