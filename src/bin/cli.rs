@@ -78,6 +78,29 @@ pub struct ProjectUsersArgs {
 }
 
 #[derive(Parser, Clone)]
+pub struct InviteUserArgs {
+    /// Project id
+    #[arg(short, long)]
+    pub id: String,
+
+    /// Email to invite. The invitee must sign in with this exact address to accept.
+    #[arg(short, long)]
+    pub email: String,
+
+    /// Role to grant on acceptance: owner or member
+    #[arg(short, long, default_value = "member")]
+    pub role: String,
+
+    /// Minutes the invite code stays valid
+    #[arg(short, long, default_value_t = 15)]
+    pub ttl_min: u64,
+
+    // Dry run
+    #[arg(short, long, action)]
+    pub dry_run: bool,
+}
+
+#[derive(Parser, Clone)]
 pub struct TransferProjectArgs {
     /// Project id
     #[arg(short, long)]
@@ -207,6 +230,9 @@ enum Commands {
 
     /// Get projects by user
     RenameProject(RenameProjectArgs),
+
+    /// Invite a user to a project by email
+    InviteUser(InviteUserArgs),
 
     /// Transfer a project to another member of the project
     TransferProject(TransferProjectArgs),
@@ -343,6 +369,17 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
+        Commands::InviteUser(args) => {
+            fabric::drivers::backoffice::invite_user(
+                config.clone().into(),
+                args.id,
+                args.email,
+                args.role,
+                args.ttl_min,
+                args.dry_run,
+            )
+            .await?;
+        }
         Commands::TransferProject(args) => {
             fabric::drivers::backoffice::transfer_project(
                 config.clone().into(),
@@ -406,6 +443,13 @@ struct StripeConfig {
     api_key: String,
 }
 #[derive(Debug, Clone, Deserialize)]
+struct EmailConfig {
+    ses_access_key_id: String,
+    ses_secret_access_key: String,
+    ses_region: String,
+    ses_verified_email: String,
+}
+#[derive(Debug, Clone, Deserialize)]
 struct Config {
     db_path: String,
     topic_events: String,
@@ -415,6 +459,8 @@ struct Config {
     auth: AuthConfig,
     /// Only required by `transfer-project`; every other subcommand works without it.
     stripe: Option<StripeConfig>,
+    /// Only required by `invite-user`; every other subcommand works without it.
+    email: Option<EmailConfig>,
     crds_path: PathBuf,
 }
 impl Config {
@@ -439,6 +485,13 @@ impl From<Config> for BackofficeConfig {
             auth_audience: value.auth.audience,
             stripe_url: value.stripe.as_ref().map(|s| s.url.clone()),
             stripe_api_key: value.stripe.as_ref().map(|s| s.api_key.clone()),
+            ses_access_key_id: value.email.as_ref().map(|e| e.ses_access_key_id.clone()),
+            ses_secret_access_key: value
+                .email
+                .as_ref()
+                .map(|e| e.ses_secret_access_key.clone()),
+            ses_region: value.email.as_ref().map(|e| e.ses_region.clone()),
+            ses_verified_email: value.email.as_ref().map(|e| e.ses_verified_email.clone()),
             topic_events: value.topic_events,
             kafka_producer: value.kafka_producer,
         }

@@ -20,3 +20,10 @@ audience="https://txpipe.us.auth0.com/api/v2/"
 [stripe]
 url = "https://api.stripe.com/v1"
 api_key = ""
+
+# Only needed by invite-user
+[email]
+ses_access_key_id = "xxx"
+ses_secret_access_key = "xxx"
+ses_region = "us-west-2"
+ses_verified_email = "no-reply@demeter.run"
