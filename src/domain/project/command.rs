@@ -638,17 +638,49 @@ pub async fn create_user_invite(
     .await
 }
 
-/// Creates and sends a project invite, with no authorization check of its own.
+/// Creates and sends a project invite on behalf of an operator, with no `Owner` check.
 ///
-/// Callers are responsible for authorization: `create_user_invite` asserts the caller holds the
-/// `Owner` role, while the backoffice driver is already privileged. Mirrors the split between
-/// `transfer_ownership` and `apply_ownership_transfer`.
+/// The sibling of `create_user_invite` for the backoffice, which holds no user credential — its
+/// authority is possession of the producer credentials, not a role on the project. Naming that
+/// bypass rather than letting a driver call into shared internals keeps the set of unauthenticated
+/// entry points greppable.
 ///
 /// With `dry_run` the project is still resolved, but no mail is sent and no event is dispatched.
-/// The send is the irreversible half — an invite email cannot be recalled — so it sits after the
-/// early return rather than before it, unlike the Stripe call in `apply_ownership_transfer`.
 #[allow(clippy::too_many_arguments)]
-pub async fn apply_user_invite(
+pub async fn create_user_invite_from_backoffice(
+    cache: Arc<dyn ProjectDrivenCache>,
+    email: Arc<dyn ProjectEmailDriven>,
+    event: Arc<dyn EventDrivenBridge>,
+    project_id: &str,
+    invitee_email: &str,
+    role: &ProjectUserRole,
+    ttl: Duration,
+    dry_run: bool,
+) -> Result<()> {
+    apply_user_invite(
+        cache,
+        email,
+        event,
+        &Uuid::new_v4().to_string(),
+        project_id,
+        invitee_email,
+        role,
+        ttl,
+        dry_run,
+    )
+    .await
+}
+
+/// The body shared by `create_user_invite` and `create_user_invite_from_backoffice`.
+///
+/// Private on purpose: it performs no authorization, so every caller must be one of the two named
+/// entry points above, which document the authority they rely on.
+///
+/// With `dry_run` this returns before the send. The email is the irreversible half — an invite
+/// cannot be recalled — so it sits after the early return rather than before it, unlike the Stripe
+/// call in `apply_ownership_transfer`.
+#[allow(clippy::too_many_arguments)]
+async fn apply_user_invite(
     cache: Arc<dyn ProjectDrivenCache>,
     email: Arc<dyn ProjectEmailDriven>,
     event: Arc<dyn EventDrivenBridge>,
@@ -1897,23 +1929,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_should_apply_project_user_invite_without_a_credential() {
+    async fn it_should_create_project_user_invite_from_backoffice() {
         let mut cache = MockProjectDrivenCache::new();
         cache
             .expect_find_by_id()
             .return_once(|_| Ok(Some(Project::default())));
 
+        // No `expect_find_user_permission`: the backoffice entry point must not consult a role,
+        // and mockall panics if it does.
         let mut email = MockProjectEmailDriven::new();
         email.expect_send_invite().return_once(|_, _, _, _| Ok(()));
 
         let mut event = MockEventDrivenBridge::new();
         event.expect_dispatch().return_once(|_| Ok(()));
 
-        let result = apply_user_invite(
+        let result = create_user_invite_from_backoffice(
             Arc::new(cache),
             Arc::new(email),
             Arc::new(event),
-            "invite id",
             "project id",
             "new@user.io",
             &ProjectUserRole::Member,
@@ -1937,11 +1970,10 @@ mod tests {
         let email = MockProjectEmailDriven::new();
         let event = MockEventDrivenBridge::new();
 
-        let result = apply_user_invite(
+        let result = create_user_invite_from_backoffice(
             Arc::new(cache),
             Arc::new(email),
             Arc::new(event),
-            "invite id",
             "project id",
             "new@user.io",
             &ProjectUserRole::Member,
@@ -1953,18 +1985,17 @@ mod tests {
         assert!(result.is_ok());
     }
     #[tokio::test]
-    async fn it_should_fail_apply_project_user_invite_when_project_doesnt_exist() {
+    async fn it_should_fail_create_project_user_invite_from_backoffice_when_project_doesnt_exist() {
         let mut cache = MockProjectDrivenCache::new();
         cache.expect_find_by_id().return_once(|_| Ok(None));
 
         let email = MockProjectEmailDriven::new();
         let event = MockEventDrivenBridge::new();
 
-        let result = apply_user_invite(
+        let result = create_user_invite_from_backoffice(
             Arc::new(cache),
             Arc::new(email),
             Arc::new(event),
-            "invite id",
             "project id",
             "new@user.io",
             &ProjectUserRole::Member,

@@ -409,11 +409,10 @@ pub async fn invite_user(
         }
     }
 
-    project::command::apply_user_invite(
+    project::command::create_user_invite_from_backoffice(
         cache,
         email_driven,
         event,
-        &Uuid::new_v4().to_string(),
         &project_id,
         &email,
         &role,
