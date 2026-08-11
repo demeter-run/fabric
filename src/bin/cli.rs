@@ -91,9 +91,9 @@ pub struct InviteUserArgs {
     #[arg(short, long, default_value = "member")]
     pub role: String,
 
-    /// Minutes the invite code stays valid
-    #[arg(short, long, default_value_t = 15)]
-    pub ttl_min: u64,
+    /// Minutes the invite code stays valid. Defaults to [email].invite_ttl_min, then to one week.
+    #[arg(short, long)]
+    pub ttl_min: Option<u64>,
 
     // Dry run
     #[arg(short, long, action)]
@@ -448,6 +448,8 @@ struct EmailConfig {
     ses_secret_access_key: String,
     ses_region: String,
     ses_verified_email: String,
+    /// Default lifetime for `invite-user`, in minutes. Optional; `--ttl-min` wins when given.
+    invite_ttl_min: Option<u64>,
 }
 #[derive(Debug, Clone, Deserialize)]
 struct Config {
@@ -492,6 +494,7 @@ impl From<Config> for BackofficeConfig {
                 .map(|e| e.ses_secret_access_key.clone()),
             ses_region: value.email.as_ref().map(|e| e.ses_region.clone()),
             ses_verified_email: value.email.as_ref().map(|e| e.ses_verified_email.clone()),
+            invite_ttl_min: value.email.as_ref().and_then(|e| e.invite_ttl_min),
             topic_events: value.topic_events,
             kafka_producer: value.kafka_producer,
         }
