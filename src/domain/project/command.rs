@@ -152,7 +152,7 @@ pub async fn transfer_ownership(
         cache,
         event,
         auth0,
-        stripe,
+        Some(stripe),
         &cmd.project_id,
         &cmd.new_owner,
         &user_id,
@@ -169,12 +169,17 @@ pub async fn transfer_ownership(
 ///
 /// With `dry_run`, every validation still runs but neither the Stripe update nor the event
 /// dispatch happens, so an operator can confirm a transfer is viable before committing to it.
+///
+/// `stripe` is `None` when the caller wants the billing contact left alone. The customer's `name`
+/// and `email` are overwritten wholesale when it is `Some`, which destroys a billing address that
+/// was curated rather than tracking the owner — so an operator who knows that is the case passes
+/// `None`. `billing_provider_id` is never touched either way, so billing continuity is unaffected.
 #[allow(clippy::too_many_arguments)]
 pub async fn apply_ownership_transfer(
     cache: Arc<dyn ProjectDrivenCache>,
     event: Arc<dyn EventDrivenBridge>,
     auth0: Arc<dyn Auth0Driven>,
-    stripe: Arc<dyn StripeDriven>,
+    stripe: Option<Arc<dyn StripeDriven>>,
     project_id: &str,
     new_owner: &str,
     changed_by: &str,
@@ -217,20 +222,34 @@ pub async fn apply_ownership_transfer(
 
     if dry_run {
         info!("event to dispath: {:?}", evt);
-        info!(
-            stripe_customer = &project.billing_provider_id,
-            name = &profile.name,
-            email = &profile.email,
-            "stripe customer to update"
-        );
+        match &stripe {
+            Some(_) => info!(
+                stripe_customer = &project.billing_provider_id,
+                name = &profile.name,
+                email = &profile.email,
+                "stripe customer to update"
+            ),
+            None => info!(
+                stripe_customer = &project.billing_provider_id,
+                "stripe customer left unchanged"
+            ),
+        }
         return Ok(());
     }
 
     // The stripe call happens here, before dispatching, because projections are replayed in full
     // whenever the cache is rebuilt. See `create` above for the same pattern.
-    stripe
-        .update_customer(&project.billing_provider_id, &profile.name, &profile.email)
-        .await?;
+    match &stripe {
+        Some(stripe) => {
+            stripe
+                .update_customer(&project.billing_provider_id, &profile.name, &profile.email)
+                .await?
+        }
+        None => info!(
+            stripe_customer = &project.billing_provider_id,
+            "stripe customer left unchanged"
+        ),
+    }
 
     event.dispatch(evt.into()).await?;
     info!(project = project_id, "project owner changed");
@@ -2246,11 +2265,44 @@ mod tests {
             Arc::new(cache),
             Arc::new(event),
             Arc::new(auth0),
-            Arc::new(stripe),
+            Some(Arc::new(stripe)),
             "project id",
             "member user id",
             "backoffice",
             true,
+        )
+        .await;
+        assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_transfer_ownership_without_touching_stripe_when_stripe_is_none() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_user_permission()
+            .times(1)
+            .returning(|_, _| Ok(Some(ProjectUser::default())));
+        cache
+            .expect_find_by_id()
+            .return_once(|_| Ok(Some(Project::default())));
+
+        let mut auth0 = MockAuth0Driven::new();
+        auth0
+            .expect_find_info()
+            .return_once(|_| Ok(vec![Auth0Profile::default()]));
+
+        // The event must still be dispatched — only the billing contact is left alone.
+        let mut event = MockEventDrivenBridge::new();
+        event.expect_dispatch().times(1).return_once(|_| Ok(()));
+
+        let result = apply_ownership_transfer(
+            Arc::new(cache),
+            Arc::new(event),
+            Arc::new(auth0),
+            None,
+            "project id",
+            "member user id",
+            "backoffice",
+            false,
         )
         .await;
         assert!(result.is_ok());
@@ -2274,7 +2326,7 @@ mod tests {
             Arc::new(cache),
             Arc::new(event),
             Arc::new(auth0),
-            Arc::new(stripe),
+            Some(Arc::new(stripe)),
             "project id",
             "member user id",
             "backoffice",

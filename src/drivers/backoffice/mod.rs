@@ -214,6 +214,7 @@ pub async fn transfer_project(
     id: String,
     new_owner_email: String,
     dry_run: bool,
+    skip_stripe: bool,
 ) -> Result<()> {
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     sqlite_cache.migrate().await?;
@@ -231,12 +232,18 @@ pub async fn transfer_project(
         .await?,
     );
 
-    let (Some(stripe_url), Some(stripe_api_key)) = (&config.stripe_url, &config.stripe_api_key)
-    else {
-        bail!("a [stripe] section is required in the cli config to transfer a project")
-    };
+    // With --skip-stripe the billing contact is left alone, so the config section is not needed.
+    let stripe: Option<Arc<dyn StripeDriven>> = if skip_stripe {
+        info!("--skip-stripe: the stripe customer will not be modified");
+        None
+    } else {
+        let (Some(stripe_url), Some(stripe_api_key)) = (&config.stripe_url, &config.stripe_api_key)
+        else {
+            bail!("a [stripe] section is required in the cli config to transfer a project (or pass --skip-stripe to leave the billing contact unchanged)")
+        };
 
-    let stripe: Arc<dyn StripeDriven> = Arc::new(StripeDrivenImpl::new(stripe_url, stripe_api_key));
+        Some(Arc::new(StripeDrivenImpl::new(stripe_url, stripe_api_key)))
+    };
 
     let event = Arc::new(KafkaProducer::new(
         &config.topic_events,

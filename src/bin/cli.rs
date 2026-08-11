@@ -76,6 +76,11 @@ pub struct TransferProjectArgs {
     #[arg(short, long)]
     pub new_owner_email: String,
 
+    /// Leave the Stripe customer untouched. Use when the billing contact was set deliberately
+    /// rather than tracking the project owner, since the update overwrites name and email.
+    #[arg(short, long, action)]
+    pub skip_stripe: bool,
+
     // Dry run
     #[arg(short, long, action)]
     pub dry_run: bool,
@@ -313,6 +318,7 @@ async fn main() -> Result<()> {
                 args.id,
                 args.new_owner_email,
                 args.dry_run,
+                args.skip_stripe,
             )
             .await?;
         }
