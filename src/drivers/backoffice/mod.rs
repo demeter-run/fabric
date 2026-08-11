@@ -336,15 +336,29 @@ pub async fn transfer_project(
     Ok(())
 }
 
+/// Used when neither `--ttl-min` nor `[email].invite_ttl_min` says otherwise. Matches the RPC's
+/// own default, so an invite sent from the backoffice behaves like one sent from the Console.
+const DEFAULT_INVITE_TTL_MIN: u64 = 15;
+
 pub async fn invite_user(
     config: BackofficeConfig,
     project_id: String,
     email: String,
     role: String,
-    ttl_min: u64,
+    ttl_min: Option<u64>,
     dry_run: bool,
 ) -> Result<()> {
     let role: ProjectUserRole = role.parse()?;
+
+    let ttl_min = ttl_min
+        .or(config.invite_ttl_min)
+        .unwrap_or(DEFAULT_INVITE_TTL_MIN);
+
+    // A zero ttl mails a code that has already expired, and the failure only shows up when the
+    // invitee clicks it. Refuse before spending the send.
+    if ttl_min == 0 {
+        bail!("--ttl-min must be greater than zero; the invite would expire before it was read")
+    }
 
     let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
     sqlite_cache.migrate().await?;
@@ -1263,6 +1277,8 @@ pub struct BackofficeConfig {
     pub ses_secret_access_key: Option<String>,
     pub ses_region: Option<String>,
     pub ses_verified_email: Option<String>,
+    /// Default invite lifetime, overridden per invite by `--ttl-min`.
+    pub invite_ttl_min: Option<u64>,
 
     pub topic_events: String,
     pub kafka_producer: HashMap<String, String>,
