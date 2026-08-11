@@ -67,6 +67,17 @@ pub struct RenameProjectArgs {
 }
 
 #[derive(Parser, Clone)]
+pub struct ProjectUsersArgs {
+    /// Project id
+    #[arg(short, long)]
+    pub id: String,
+
+    /// table(log in terminal), csv(save a file project-users.csv)
+    #[arg(short, long)]
+    pub output: Option<String>,
+}
+
+#[derive(Parser, Clone)]
 pub struct TransferProjectArgs {
     /// Project id
     #[arg(short, long)]
@@ -191,6 +202,9 @@ enum Commands {
     /// Get projects by user
     Project(ProjectArgs),
 
+    /// List the users of a project with their roles
+    ProjectUsers(ProjectUsersArgs),
+
     /// Get projects by user
     RenameProject(RenameProjectArgs),
 
@@ -309,6 +323,23 @@ async fn main() -> Result<()> {
                 args.id,
                 args.new_name,
                 args.dry_run,
+            )
+            .await?;
+        }
+        Commands::ProjectUsers(args) => {
+            let output = match args.output {
+                Some(output) => match output.as_str() {
+                    "table" => OutputFormat::Table,
+                    "csv" => OutputFormat::Csv,
+                    _ => bail!("invalid output format"),
+                },
+                None => OutputFormat::Table,
+            };
+
+            fabric::drivers::backoffice::fetch_project_users(
+                config.clone().into(),
+                args.id,
+                output,
             )
             .await?;
         }

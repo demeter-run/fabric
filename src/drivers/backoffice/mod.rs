@@ -12,10 +12,10 @@ use tracing::{error, info};
 
 use crate::{
     domain::{
-        DEFAULT_CATEGORY, auth::{Auth0Driven, Auth0Profile}, event::{
+        DEFAULT_CATEGORY, PAGE_SIZE_MAX, auth::{Auth0Driven, Auth0Profile}, event::{
             EventDrivenBridge, ProjectDeleted, ProjectUpdated, ResourceCreated, ResourceDeleted, ResourceUpdated
         }, metadata::{KnownField, MetadataDriven}, project::{
-            self, ProjectStatus, ProjectUserProject, StripeDriven, cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice}
+            self, ProjectStatus, ProjectUserAggregated, ProjectUserProject, StripeDriven, cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice}
         }, resource::{
             ResourceStatus, cache::{ResourceDrivenCache, ResourceDrivenCacheBackoffice}, cluster::ResourceDrivenClusterBackoffice, command::{build_key, encode_key}
         }, usage::{UsageReport, UsageReportImpl, cache::UsageDrivenCacheBackoffice}, utils::{self, get_schema_from_crd}
@@ -205,6 +205,65 @@ pub async fn rename_project(
         event.dispatch(evt.into()).await?;
         info!(project = &id, "project updated");
     }
+
+    Ok(())
+}
+
+pub async fn fetch_project_users(
+    config: BackofficeConfig,
+    project_id: String,
+    output: OutputFormat,
+) -> Result<()> {
+    let sqlite_cache = Arc::new(SqliteCache::new(Path::new(&config.db_path)).await?);
+    sqlite_cache.migrate().await?;
+
+    let cache: Arc<dyn ProjectDrivenCache> =
+        Arc::new(SqliteProjectDrivenCache::new(sqlite_cache.clone()));
+
+    let auth0: Arc<dyn Auth0Driven> = Arc::new(
+        Auth0DrivenImpl::try_new(
+            &config.auth_url,
+            &config.auth_client_id,
+            &config.auth_client_secret,
+            &config.auth_audience,
+        )
+        .await?,
+    );
+
+    if cache.find_by_id(&project_id).await?.is_none() {
+        bail!("Failed to locate project")
+    };
+
+    // Page to the end rather than taking the first page: this is the whole membership or it is
+    // misleading, and a caller cannot tell a short list from a truncated one.
+    let mut project_users = Vec::new();
+    let mut page = 1;
+    loop {
+        let batch = project::command::list_users(
+            cache.clone(),
+            auth0.clone(),
+            &project_id,
+            &page,
+            &PAGE_SIZE_MAX,
+        )
+        .await?;
+        let is_last = (batch.len() as u32) < PAGE_SIZE_MAX;
+        project_users.extend(batch);
+        if is_last {
+            break;
+        }
+        page += 1;
+    }
+
+    if project_users.is_empty() {
+        bail!("No one user was found")
+    }
+
+    match output {
+        OutputFormat::Table => output_table_project_users(project_users),
+        OutputFormat::Csv => output_csv_project_users(project_users),
+        OutputFormat::Json => todo!("not implemented"),
+    };
 
     Ok(())
 }
@@ -925,6 +984,63 @@ fn output_csv_diff(report: Vec<(String, (bool, bool))>) {
     }
 
     println!("File {path} created")
+}
+
+fn output_table_project_users(project_users: Vec<ProjectUserAggregated>) {
+    let mut table = Table::new();
+    table.set_header(vec!["", "id", "name", "email", "role", "createdAt"]);
+
+    for (i, u) in project_users.iter().enumerate() {
+        table.add_row(vec![
+            &(i + 1).to_string(),
+            &u.user_id,
+            &u.name,
+            &u.email,
+            &u.role.to_string(),
+            &u.created_at.to_rfc3339(),
+        ]);
+    }
+
+    println!("{table}");
+}
+
+fn output_csv_project_users(project_users: Vec<ProjectUserAggregated>) {
+    let path = "project-users.csv";
+    let result = csv::Writer::from_path(path);
+    if let Err(error) = result {
+        error!(?error);
+        return;
+    }
+
+    let mut wtr = result.unwrap();
+
+    let result = wtr.write_record(["", "id", "name", "email", "role", "createdAt"]);
+    if let Err(error) = result {
+        error!(?error);
+        return;
+    }
+
+    for (i, u) in project_users.iter().enumerate() {
+        let result = wtr.write_record([
+            &(i + 1).to_string(),
+            &u.user_id,
+            &u.name,
+            &u.email,
+            &u.role.to_string(),
+            &u.created_at.to_rfc3339(),
+        ]);
+        if let Err(error) = result {
+            error!(?error);
+            return;
+        }
+    }
+
+    if let Err(error) = wtr.flush() {
+        error!(?error);
+        return;
+    }
+
+    info!("File {} created", path)
 }
 
 fn output_table_new_users(project_users: Vec<ProjectUserProject>, profiles: Vec<Auth0Profile>) {

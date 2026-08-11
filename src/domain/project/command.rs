@@ -462,9 +462,27 @@ pub async fn fetch_user(
     )
     .await?;
 
-    let project_users = cache
-        .find_users(&cmd.project_id, &cmd.page, &cmd.page_size)
-        .await?;
+    list_users(cache, auth0, &cmd.project_id, &cmd.page, &cmd.page_size).await
+}
+
+/// Lists a project's users with their roles, enriched with their Auth0 profiles.
+///
+/// No authorization check of its own — `fetch_user` asserts the caller holds the `Owner` role
+/// before delegating here, and the backoffice driver is already privileged.
+pub async fn list_users(
+    cache: Arc<dyn ProjectDrivenCache>,
+    auth0: Arc<dyn Auth0Driven>,
+    project_id: &str,
+    page: &u32,
+    page_size: &u32,
+) -> Result<Vec<ProjectUserAggregated>> {
+    let project_users = cache.find_users(project_id, page, page_size).await?;
+
+    // An empty page would otherwise build an empty Auth0 query, which is not a search for nothing
+    // — it returns every user in the tenant.
+    if project_users.is_empty() {
+        return Ok(Vec::new());
+    }
 
     let ids: Vec<String> = project_users
         .iter()
@@ -2163,6 +2181,35 @@ mod tests {
 
         let result = fetch_user(Arc::new(cache), Arc::new(auth0), cmd).await;
         assert!(result.is_ok());
+    }
+    #[tokio::test]
+    async fn it_should_list_project_users() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_users()
+            .return_once(|_, _, _| Ok(vec![ProjectUser::default()]));
+
+        let mut auth0 = MockAuth0Driven::new();
+        auth0
+            .expect_find_info()
+            .return_once(|_| Ok(vec![Auth0Profile::default()]));
+
+        let result = list_users(Arc::new(cache), Arc::new(auth0), "project id", &1, &12).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 1);
+    }
+    #[tokio::test]
+    async fn it_should_not_query_auth0_when_the_page_has_no_users() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache.expect_find_users().return_once(|_, _, _| Ok(vec![]));
+
+        // No expectation: an empty page must not reach Auth0 at all. An empty `q` is not a search
+        // for nothing — it matches every user in the tenant.
+        let auth0 = MockAuth0Driven::new();
+
+        let result = list_users(Arc::new(cache), Arc::new(auth0), "project id", &9, &12).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
     }
     #[tokio::test]
     async fn it_should_fail_fetch_project_users_when_invalid_permission_member() {
