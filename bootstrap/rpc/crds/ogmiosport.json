@@ -27,6 +27,9 @@
         "minimum": 150,
         "delta": 0.0000023
       }
+    },
+    "4": {
+      "dns": "dmtr.host"
     }
   },
   "options": [

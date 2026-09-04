@@ -165,3 +165,69 @@ impl MetadataDriven for FileMetadata<'_> {
         Ok(value.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+
+    /// The metadata that actually ships: the RPC reads this directory from
+    /// disk and the backoffice embeds it with `include_dir!`.
+    fn shipped_metadata() -> FileMetadata<'static> {
+        FileMetadata::new(&Path::new(env!("CARGO_MANIFEST_DIR")).join("bootstrap/rpc/crds"))
+            .expect("the shipped crds directory failed to load")
+    }
+
+    fn ogmios_port_at_tier(tier: &str) -> Resource {
+        Resource {
+            kind: "OgmiosPort".into(),
+            spec: format!(
+                r#"{{"network":"cardano-mainnet","version":7,"throughputTier":"{tier}","authToken":"authtoken"}}"#
+            ),
+            ..Default::default()
+        }
+    }
+
+    /// A tier with no `plan` entry gets no `dns`, and handlebars renders a
+    /// missing value as empty rather than failing -- so the port would come
+    /// back with a truncated hostname instead of an error. The internal
+    /// enterprise tier is assignable through the backoffice, so it needs the
+    /// entry even though it carries no price.
+    #[test]
+    fn the_enterprise_tier_renders_the_same_endpoints_as_a_self_serve_tier() {
+        let metadata = shipped_metadata();
+
+        let enterprise = metadata.render_hbs(&ogmios_port_at_tier("4")).unwrap();
+        let self_serve = metadata.render_hbs(&ogmios_port_at_tier("3")).unwrap();
+
+        assert_eq!(enterprise, self_serve);
+        assert!(
+            enterprise.contains("cardano-mainnet-v7.ogmios-m1.dmtr.host"),
+            "enterprise tier rendered a hostname without its dns: {enterprise}"
+        );
+    }
+
+    /// The enterprise tier is invoiced by an explicit adjustment, not by the
+    /// automatic per-unit calculation, so it must carry no cost -- while the
+    /// self-serve tiers still do.
+    #[test]
+    fn the_enterprise_tier_has_no_automatic_price() {
+        let metadata = shipped_metadata();
+        let ogmios = metadata
+            .find_by_kind("OgmiosPort")
+            .unwrap()
+            .expect("OgmiosPort metadata missing");
+
+        let enterprise = ogmios
+            .plan
+            .get("4")
+            .expect("tier 4 missing from the ogmios plan");
+
+        assert!(enterprise.cost.is_none());
+        assert!(
+            ogmios.plan.get("3").unwrap().cost.is_some(),
+            "the self-serve tiers keep their automatic price"
+        );
+    }
+}
