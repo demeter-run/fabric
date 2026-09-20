@@ -168,7 +168,8 @@ pub struct PatchResourceArgs {
     pub project_id: String,
 
     /// JSON patch of the resource spec.
-    #[arg(short, long)]
+    /// No short form: -p is --project-id, as in delete-resource and create-resource.
+    #[arg(long)]
     pub patch: String,
 
     // Dry run
