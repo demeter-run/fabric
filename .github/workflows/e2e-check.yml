@@ -14,7 +14,7 @@ jobs:
 
       - name: Run Integration Tests
         env:
-          OPSGENIE_KEY: ${{ secrets.OPSGENIE_KEY }}
+          IRM_E2E_WEBHOOK_URL: ${{ secrets.IRM_E2E_WEBHOOK_URL }}
 
           TEST_KEY_MAINNET_CARDANO_NODE_PORT: ${{ secrets.TEST_KEY_MAINNET_CARDANO_NODE_PORT }}
           TEST_KEY_MAINNET_BLOCKFROST_PORT: ${{ secrets.TEST_KEY_MAINNET_BLOCKFROST_PORT }}
