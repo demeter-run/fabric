@@ -23,6 +23,9 @@ jobs:
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
 
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install
+
       - name: Clippy check lints
         run: cargo clippy -- -D warnings
 

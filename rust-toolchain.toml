@@ -1,0 +1,6 @@
+# Pin the toolchain so a local `cargo clippy` and CI's agree on which lints
+# exist. Bump deliberately, together with any lint fixes the new version needs.
+[toolchain]
+channel = "1.99.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"
