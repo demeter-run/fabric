@@ -25,7 +25,7 @@ impl UsageDrivenCluster for PrometheusUsageDriven {
     ) -> Result<Vec<UsageResourceUnit>> {
         let url = format!(
                 "{}/query_range?query=round(usage{{project=\"{project_name}\",resource_name=\"{resource_name}\"}})",
-                &self.url
+                self.url
             );
 
         debug!(?url, "collecting usage metrics on prometheus");

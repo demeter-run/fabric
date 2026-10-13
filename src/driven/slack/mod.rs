@@ -34,7 +34,7 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
         let data: Option<String> = match evt {
             Event::ProjectCreated(payload) => {
                 match auth_driven
-                    .find_info(&format!("user_id:{}", &payload.owner))
+                    .find_info(&format!("user_id:{}", payload.owner))
                     .await
                 {
                     Ok(profile) => {
@@ -66,7 +66,7 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
             Event::ProjectDeleted(payload) => match project_cache.find_by_id(&payload.id).await {
                 Ok(Some(project)) => {
                     match auth_driven
-                        .find_info(&format!("user_id:{}", &project.owner))
+                        .find_info(&format!("user_id:{}", project.owner))
                         .await
                     {
                         Ok(profile) => {
@@ -100,7 +100,7 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
                 Ok(Some(resource)) => match project_cache.find_by_id(&resource.project_id).await {
                     Ok(Some(project)) => {
                         match auth_driven
-                            .find_info(&format!("user_id:{}", &project.owner))
+                            .find_info(&format!("user_id:{}", project.owner))
                             .await
                         {
                             Ok(profile) => {
@@ -138,7 +138,7 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
                 Ok(Some(resource)) => match project_cache.find_by_id(&resource.project_id).await {
                     Ok(Some(project)) => {
                         match auth_driven
-                            .find_info(&format!("user_id:{}", &project.owner))
+                            .find_info(&format!("user_id:{}", project.owner))
                             .await
                         {
                             Ok(profile) => {
