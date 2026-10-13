@@ -58,7 +58,7 @@ impl Auth0DrivenImpl {
         // TODO: consider token expiration
         let access_token_response = self
             .client
-            .post(format!("{}/oauth/token", &self.url))
+            .post(format!("{}/oauth/token", self.url))
             .json(&request_payload)
             .send()
             .await?;
@@ -125,7 +125,7 @@ impl Auth0Driven for Auth0DrivenImpl {
 
         let profile_response = self
             .client
-            .get(format!("{}/api/v2/users", &self.url))
+            .get(format!("{}/api/v2/users", self.url))
             .query(&[("q", query)])
             .header(
                 AUTHORIZATION,

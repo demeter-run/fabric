@@ -34,7 +34,7 @@ impl StripeDriven for StripeDrivenImpl {
 
         let response = self
             .client
-            .post(format!("{}/customers", &self.url))
+            .post(format!("{}/customers", self.url))
             .basic_auth(&self.api_key, Some(""))
             .form(&params)
             .send()
@@ -63,7 +63,7 @@ impl StripeDriven for StripeDrivenImpl {
 
         let response = self
             .client
-            .post(format!("{}/customers/{}", &self.url, customer_id))
+            .post(format!("{}/customers/{}", self.url, customer_id))
             .basic_auth(&self.api_key, Some(""))
             .form(&params)
             .send()

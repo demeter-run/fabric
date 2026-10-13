@@ -29,12 +29,8 @@ impl ProjectDrivenCluster for K8sCluster {
         let api: Api<Namespace> = Api::all(self.client.clone());
         if let Err(err) = api.create(&PostParams::default(), namespace).await {
             match &err {
-                Error::Api(error_response) => {
-                    if error_response.reason == "AlreadyExists" {
-                        info!("Resource already exists, skipping.")
-                    } else {
-                        return Err(err.into());
-                    }
+                Error::Api(error_response) if error_response.reason == "AlreadyExists" => {
+                    info!("Resource already exists, skipping.")
                 }
                 _ => return Err(err.into()),
             }
@@ -50,12 +46,8 @@ impl ProjectDrivenCluster for K8sCluster {
             .await
         {
             match &err {
-                Error::Api(error_response) => {
-                    if error_response.reason == "NotFound" {
-                        info!("Resource not found in cluster, skipping.")
-                    } else {
-                        return Err(err.into());
-                    }
+                Error::Api(error_response) if error_response.reason == "NotFound" => {
+                    info!("Resource not found in cluster, skipping.")
                 }
                 _ => return Err(err.into()),
             }
@@ -83,12 +75,8 @@ impl ResourceDrivenCluster for K8sCluster {
 
         if let Err(err) = api.create(&PostParams::default(), obj).await {
             match &err {
-                Error::Api(error_response) => {
-                    if error_response.reason == "AlreadyExists" {
-                        info!("Resource already exists, skipping.")
-                    } else {
-                        return Err(err.into());
-                    }
+                Error::Api(error_response) if error_response.reason == "AlreadyExists" => {
+                    info!("Resource already exists, skipping.")
                 }
                 _ => return Err(err.into()),
             }
@@ -136,12 +124,8 @@ impl ResourceDrivenCluster for K8sCluster {
 
         if let Err(err) = api.delete(&obj.name_any(), &DeleteParams::default()).await {
             match &err {
-                Error::Api(error_response) => {
-                    if error_response.reason == "NotFound" {
-                        info!("Resource not found in cluster, skipping.")
-                    } else {
-                        return Err(err.into());
-                    }
+                Error::Api(error_response) if error_response.reason == "NotFound" => {
+                    info!("Resource not found in cluster, skipping.")
                 }
                 _ => return Err(err.into()),
             }

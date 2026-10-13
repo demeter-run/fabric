@@ -39,6 +39,9 @@ fn extract_metadata_string(request: &tonic::Request<()>, key: &str) -> Option<St
 }
 
 impl tonic::service::Interceptor for AuthenticatorImpl {
+    // tonic's Interceptor fixes the error type to `tonic::Status`, so it
+    // cannot be boxed here.
+    #[allow(clippy::result_large_err)]
     fn call(
         &mut self,
         mut request: tonic::Request<()>,
