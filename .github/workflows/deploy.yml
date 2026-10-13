@@ -8,6 +8,8 @@ on:
 
 jobs:
   apply:
+    # Only deploy images a Build run actually published.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     env:
        TF_VAR_rpc_image: ghcr.io/demeter-run/fabric-rpc:${{ github.sha }}
