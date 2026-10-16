@@ -2,15 +2,15 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
 use crate::domain::event::{
-    ProjectCreated, ProjectDeleted, ProjectOwnerChanged, ProjectSecretCreated,
+    ProjectCreated, ProjectDeleted, ProjectExpired, ProjectOwnerChanged, ProjectSecretCreated,
     ProjectSecretDeleted, ProjectUpdated, ProjectUserDeleted, ProjectUserInviteAccepted,
-    ProjectUserInviteCreated, ProjectUserInviteDeleted,
+    ProjectUserInviteCreated, ProjectUserInviteDeleted, ProvisionalProjectCreated,
 };
 use crate::domain::Result;
 
 use super::{
     Project, ProjectOwnerChange, ProjectSecret, ProjectUpdate, ProjectUser, ProjectUserInvite,
-    ProjectUserProject,
+    ProjectUserProject, ProvisionalProject,
 };
 
 #[cfg_attr(test, mockall::automock)]
@@ -20,9 +20,19 @@ pub trait ProjectDrivenCache: Send + Sync {
     async fn find_by_namespace(&self, namespace: &str) -> Result<Option<Project>>;
     async fn find_by_id(&self, id: &str) -> Result<Option<Project>>;
     async fn create(&self, project: &Project) -> Result<()>;
+    async fn create_provisional(&self, project: &ProvisionalProject) -> Result<()>;
     async fn update(&self, project: &ProjectUpdate) -> Result<()>;
     async fn change_owner(&self, change: &ProjectOwnerChange) -> Result<()>;
     async fn delete(&self, id: &str, deleted_at: &DateTime<Utc>) -> Result<()>;
+    async fn expire(&self, id: &str, expired_at: &DateTime<Utc>) -> Result<()>;
+    async fn find_expired_provisional(&self, now: &DateTime<Utc>) -> Result<Vec<Project>>;
+    async fn count_live_provisional(&self) -> Result<u32>;
+    async fn count_registrations_by_source(
+        &self,
+        source_ip_hash: &str,
+        since: &DateTime<Utc>,
+    ) -> Result<u32>;
+    async fn exists_user_code(&self, user_code: &str) -> Result<bool>;
     async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
     async fn find_secrets(&self, project: &str) -> Result<Vec<ProjectSecret>>;
     async fn find_secret_by_id(&self, id: &str) -> Result<Option<ProjectSecret>>;
@@ -66,6 +76,13 @@ pub async fn create(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectCreated) -> 
     cache.create(&evt.try_into()?).await
 }
 
+pub async fn create_provisional(
+    cache: Arc<dyn ProjectDrivenCache>,
+    evt: ProvisionalProjectCreated,
+) -> Result<()> {
+    cache.create_provisional(&evt.try_into()?).await
+}
+
 pub async fn update(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectUpdated) -> Result<()> {
     cache.update(&evt.try_into()?).await
 }
@@ -79,6 +96,10 @@ pub async fn change_owner(
 
 pub async fn delete(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectDeleted) -> Result<()> {
     cache.delete(&evt.id, &evt.deleted_at).await
+}
+
+pub async fn expire(cache: Arc<dyn ProjectDrivenCache>, evt: ProjectExpired) -> Result<()> {
+    cache.expire(&evt.id, &evt.expired_at).await
 }
 
 pub async fn create_secret(
@@ -136,6 +157,35 @@ mod tests {
         let evt = ProjectCreated::default();
 
         let result = create(Arc::new(cache), evt).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_create_provisional_project_cache() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_create_provisional()
+            .withf(|p| p.project.owner.is_none() && p.project.agent_provisioned)
+            .return_once(|_| Ok(()));
+
+        let evt = ProvisionalProjectCreated::default();
+
+        let result = create_provisional(Arc::new(cache), evt).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_expire_project_cache() {
+        let evt = ProjectExpired::default();
+        let id = evt.id.clone();
+
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_expire()
+            .withf(move |project_id, _| project_id == id)
+            .return_once(|_, _| Ok(()));
+
+        let result = expire(Arc::new(cache), evt).await;
         assert!(result.is_ok());
     }
 

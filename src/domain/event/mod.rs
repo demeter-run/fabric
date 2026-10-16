@@ -61,6 +61,58 @@ pub struct ProjectOwnerChanged {
 }
 into_event!(ProjectOwnerChanged);
 
+/// A project registered by an agent, with no owner until a person claims it.
+///
+/// `Debug` is written by hand so the user code, which grants the claim as the claim token does,
+/// stays out of the logs that print every event they handle.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ProvisionalProjectCreated {
+    pub id: String,
+    pub name: String,
+    pub namespace: String,
+    pub status: String,
+    pub agent_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_url: Option<String>,
+    pub expires_at: DateTime<Utc>,
+    pub claim_token_hash: String,
+    pub user_code: String,
+    pub source_ip_hash: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+into_event!(ProvisionalProjectCreated);
+impl std::fmt::Debug for ProvisionalProjectCreated {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProvisionalProjectCreated")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("namespace", &self.namespace)
+            .field("status", &self.status)
+            .field("agent_name", &self.agent_name)
+            .field("agent_version", &self.agent_version)
+            .field("agent_url", &self.agent_url)
+            .field("expires_at", &self.expires_at)
+            .field("claim_token_hash", &self.claim_token_hash)
+            .field("user_code", &"<redacted>")
+            .field("source_ip_hash", &self.source_ip_hash)
+            .field("created_at", &self.created_at)
+            .field("updated_at", &self.updated_at)
+            .finish()
+    }
+}
+
+/// A provisional project that reached its expiry unclaimed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectExpired {
+    pub id: String,
+    pub namespace: String,
+    pub expired_at: DateTime<Utc>,
+}
+into_event!(ProjectExpired);
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectSecretCreated {
     pub id: String,
@@ -192,6 +244,8 @@ pub enum Event {
     ProjectUpdated(ProjectUpdated),
     ProjectDeleted(ProjectDeleted),
     ProjectOwnerChanged(ProjectOwnerChanged),
+    ProvisionalProjectCreated(ProvisionalProjectCreated),
+    ProjectExpired(ProjectExpired),
     ProjectSecretCreated(ProjectSecretCreated),
     ProjectSecretDeleted(ProjectSecretDeleted),
     ProjectUserInviteCreated(ProjectUserInviteCreated),
@@ -210,6 +264,8 @@ impl Event {
             Event::ProjectUpdated(_) => "ProjectUpdated".into(),
             Event::ProjectDeleted(_) => "ProjectDeleted".into(),
             Event::ProjectOwnerChanged(_) => "ProjectOwnerChanged".into(),
+            Event::ProvisionalProjectCreated(_) => "ProvisionalProjectCreated".into(),
+            Event::ProjectExpired(_) => "ProjectExpired".into(),
             Event::ProjectSecretCreated(_) => "ProjectSecretCreated".into(),
             Event::ProjectSecretDeleted(_) => "ProjectSecretDeleted".into(),
             Event::ProjectUserInviteCreated(_) => "ProjectUserInviteCreated".into(),
@@ -230,6 +286,10 @@ impl Event {
             "ProjectOwnerChanged" => {
                 Ok(Self::ProjectOwnerChanged(serde_json::from_slice(payload)?))
             }
+            "ProvisionalProjectCreated" => Ok(Self::ProvisionalProjectCreated(
+                serde_json::from_slice(payload)?,
+            )),
+            "ProjectExpired" => Ok(Self::ProjectExpired(serde_json::from_slice(payload)?)),
             "ProjectSecretCreated" => {
                 Ok(Self::ProjectSecretCreated(serde_json::from_slice(payload)?))
             }
@@ -303,6 +363,34 @@ mod tests {
                 new_owner: "new user id".into(),
                 changed_by: "user id".into(),
                 changed_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ProvisionalProjectCreated {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                name: "sonic-vegas-abc123".into(),
+                namespace: "sonic-vegas-abc123".into(),
+                status: ProjectStatus::Provisional.to_string(),
+                agent_name: "claude-code".into(),
+                agent_version: Some("2.1.0".into()),
+                agent_url: None,
+                expires_at: Utc::now() + Duration::from_secs(7 * 24 * 60 * 60),
+                claim_token_hash: "claim token hash".into(),
+                user_code: "ABCD2345".into(),
+                source_ip_hash: "source ip hash".into(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            }
+        }
+    }
+    impl Default for ProjectExpired {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                namespace: "sonic-vegas-abc123".into(),
+                expired_at: Utc::now(),
             }
         }
     }
@@ -391,6 +479,27 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn it_should_round_trip_the_provisional_events_by_key() {
+        let created: Event = ProvisionalProjectCreated::default().into();
+        let expired: Event = ProjectExpired::default().into();
+
+        for event in [created, expired] {
+            let payload = serde_json::to_vec(&event).unwrap();
+            let decoded = Event::from_key(&event.key(), &payload).unwrap();
+            assert_eq!(decoded.key(), event.key());
+        }
+    }
+
+    #[test]
+    fn it_should_keep_the_user_code_out_of_the_debug_output() {
+        let evt = ProvisionalProjectCreated::default();
+        let event: Event = evt.clone().into();
+
+        assert!(!format!("{evt:?}").contains(&evt.user_code));
+        assert!(!format!("{event:?}").contains(&evt.user_code));
+    }
+
     impl Default for UsageCreated {
         fn default() -> Self {
             Self {

@@ -109,22 +109,31 @@ pub async fn fetch_projects(
             bail!("No one project was found")
         }
 
+        // A provisional project has no owner to look up. An empty query is not a search for
+        // nothing, it returns every user in the tenant, so it is never sent.
         let query = projects
             .iter()
-            .map(|p| format!("user_id:{}", p.owner))
+            .filter_map(|p| p.owner.as_ref().map(|owner| format!("user_id:{owner}")))
             .collect::<Vec<String>>()
             .join(" OR ");
 
-        let profiles = auth0.find_info(&query).await?;
+        let profiles = if query.is_empty() {
+            Vec::new()
+        } else {
+            auth0.find_info(&query).await?
+        };
 
         let projects = projects
             .into_iter()
             .map(|p| {
-                let email = profiles
-                    .iter()
-                    .find(|a| a.user_id == p.owner)
-                    .map(|a| a.email.clone())
-                    .unwrap_or("unknown".into());
+                let email = match &p.owner {
+                    Some(owner) => profiles
+                        .iter()
+                        .find(|a| &a.user_id == owner)
+                        .map(|a| a.email.clone())
+                        .unwrap_or("unknown".into()),
+                    None => "provisional".into(),
+                };
 
                 ProjectTable {
                     id: p.id,

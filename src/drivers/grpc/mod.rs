@@ -2,6 +2,7 @@ use anyhow::Result;
 use dmtri::demeter::ops::v1alpha::key_value_service_server::KeyValueServiceServer;
 use dmtri::demeter::ops::v1alpha::logs_service_server::LogsServiceServer;
 use dmtri::demeter::ops::v1alpha::metadata_service_server::MetadataServiceServer;
+use dmtri::demeter::ops::v1alpha::provisional_service_server::ProvisionalServiceServer;
 use dmtri::demeter::ops::v1alpha::resource_service_server::ResourceServiceServer;
 use dmtri::demeter::ops::v1alpha::signer_service_server::SignerServiceServer;
 use dmtri::demeter::ops::v1alpha::usage_service_server::UsageServiceServer;
@@ -22,6 +23,7 @@ use tracing::{error, info};
 use dmtri::demeter::ops::v1alpha::project_service_server::ProjectServiceServer;
 
 use crate::domain::error::Error;
+pub use crate::domain::provisional::ProvisionalConfig;
 use crate::driven::auth0::Auth0DrivenImpl;
 use crate::driven::cache::project::SqliteProjectDrivenCache;
 use crate::driven::cache::resource::SqliteResourceDrivenCache;
@@ -40,6 +42,7 @@ use crate::driven::worker::storage::PostgresStorage;
 mod metadata;
 mod middlewares;
 mod project;
+mod provisional;
 mod resource;
 mod usage;
 mod worker;
@@ -103,6 +106,7 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
         event_bridge.clone(),
         metadata.clone(),
         metrics.clone(),
+        config.provisional.port_cap,
     );
     let resource_service =
         ResourceServiceServer::with_interceptor(resource_inner, auth_interceptor.clone());
@@ -111,6 +115,17 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
     let metadata_inner = metadata::MetadataServiceImpl::new(metadata.clone(), metrics.clone());
     let metadata_service = MetadataServiceServer::new(metadata_inner);
     let metadata_service = tonic_web::enable(metadata_service);
+
+    // Without the user interceptor, as metadata: the gateway token authorizes the caller.
+    let provisional_inner = provisional::ProvisionalServiceImpl::new(
+        project_cache.clone(),
+        event_bridge.clone(),
+        metrics.clone(),
+        config.provisional.clone(),
+        config.secret.clone(),
+    );
+    let provisional_service = ProvisionalServiceServer::new(provisional_inner);
+    let provisional_service = tonic_web::enable(provisional_service);
 
     let usage_inner = usage::UsageServiceImpl::new(
         project_cache.clone(),
@@ -191,6 +206,7 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
         .add_service(resource_service)
         .add_service(usage_service)
         .add_service(metadata_service)
+        .add_service(provisional_service)
         .add_service(reflection)
         .add_optional_service(worker_kv_service)
         .add_optional_service(worker_logs_service)
@@ -228,6 +244,7 @@ pub struct GrpcConfig {
     pub balius_pg_url: Option<String>,
     pub balius_vault_token: Option<String>,
     pub balius_vault_address: Option<String>,
+    pub provisional: ProvisionalConfig,
 }
 
 impl From<Error> for Status {
@@ -240,6 +257,11 @@ impl From<Error> for Status {
                 error!(err);
                 Status::internal("internal error")
             }
+            Error::Unauthenticated(err) => Status::unauthenticated(err),
+            Error::InvalidArgument(err) => Status::invalid_argument(err),
+            Error::NotFound(err) => Status::not_found(err),
+            Error::ResourceExhausted(err) => Status::resource_exhausted(err),
+            Error::Unavailable(err) => Status::unavailable(err),
         }
     }
 }

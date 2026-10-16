@@ -1415,7 +1415,7 @@ dependencies = [
 [[package]]
 name = "dmtri"
 version = "0.1.0"
-source = "git+https://github.com/demeter-run/specs.git?rev=8e90dbc6d58ce84025a3eaa9a5fdcab126af3099#8e90dbc6d58ce84025a3eaa9a5fdcab126af3099"
+source = "git+https://github.com/demeter-run/specs.git?rev=998e25a17263992ef55d2f2ecda57ac8d286f400#998e25a17263992ef55d2f2ecda57ac8d286f400"
 dependencies = [
  "bytes 1.10.1",
  "futures-core",
@@ -1599,8 +1599,10 @@ dependencies = [
  "rustls 0.23.28",
  "serde",
  "serde_json",
+ "sha2",
  "slack-hook",
  "sqlx",
+ "subtle",
  "thiserror 1.0.69",
  "tokio 1.45.1",
  "tonic",

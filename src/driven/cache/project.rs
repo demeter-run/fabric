@@ -8,6 +8,7 @@ use crate::domain::{
         cache::{ProjectDrivenCache, ProjectDrivenCacheBackoffice},
         Project, ProjectOwnerChange, ProjectSecret, ProjectStatus, ProjectUpdate, ProjectUser,
         ProjectUserInvite, ProjectUserInviteStatus, ProjectUserProject, ProjectUserRole,
+        ProvisionalProject,
     },
     resource::ResourceStatus,
     Result,
@@ -38,6 +39,11 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     p.status, p.billing_provider,
                     p.billing_provider_id,
                     p.billing_subscription_id,
+                    p.agent_provisioned,
+                    p.agent_name,
+                    p.agent_version,
+                    p.agent_url,
+                    p.expires_at,
                     p.created_at, 
                     p.updated_at
                 FROM project_user pu 
@@ -69,6 +75,11 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     p.billing_provider,
                     p.billing_provider_id,
                     p.billing_subscription_id,
+                    p.agent_provisioned,
+                    p.agent_name,
+                    p.agent_version,
+                    p.agent_url,
+                    p.expires_at,
                     p.created_at, 
                     p.updated_at
                 FROM project p
@@ -94,6 +105,11 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
                     p.billing_provider,
                     p.billing_provider_id,
                     p.billing_subscription_id,
+                    p.agent_provisioned,
+                    p.agent_name,
+                    p.agent_version,
+                    p.agent_url,
+                    p.expires_at,
                     p.created_at, 
                     p.updated_at
                 FROM project p 
@@ -163,6 +179,58 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         .await?;
 
         tx.commit().await?;
+
+        Ok(())
+    }
+
+    async fn create_provisional(&self, provisional: &ProvisionalProject) -> Result<()> {
+        let project = &provisional.project;
+        let status = project.status.to_string();
+
+        // No `project_user` row: nobody is a member until the project is claimed.
+        sqlx::query!(
+            r#"
+                INSERT INTO project (
+                    id,
+                    namespace,
+                    name,
+                    owner,
+                    status,
+                    billing_provider,
+                    billing_provider_id,
+                    billing_subscription_id,
+                    agent_provisioned,
+                    agent_name,
+                    agent_version,
+                    agent_url,
+                    expires_at,
+                    claim_token_hash,
+                    user_code,
+                    source_ip_hash,
+                    created_at,
+                    updated_at
+                )
+                VALUES ($1, $2, $3, NULL, $4, $5, $6, $7, 1, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            "#,
+            project.id,
+            project.namespace,
+            project.name,
+            status,
+            project.billing_provider,
+            project.billing_provider_id,
+            project.billing_subscription_id,
+            project.agent_name,
+            project.agent_version,
+            project.agent_url,
+            project.expires_at,
+            provisional.claim_token_hash,
+            provisional.user_code,
+            provisional.source_ip_hash,
+            project.created_at,
+            project.updated_at
+        )
+        .execute(&self.sqlite.db)
+        .await?;
 
         Ok(())
     }
@@ -306,6 +374,126 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
 
         tx.commit().await?;
         Ok(())
+    }
+
+    async fn expire(&self, id: &str, expired_at: &DateTime<Utc>) -> Result<()> {
+        let expired = ProjectStatus::Expired.to_string();
+        let provisional = ProjectStatus::Provisional.to_string();
+
+        let mut tx = self.sqlite.db.begin().await?;
+
+        // Only a provisional project expires, so a duplicate event, or one that lost a race with
+        // the claim, changes nothing.
+        let result = sqlx::query!(
+            r#"
+                UPDATE project
+                SET status = $1, claim_token_hash = NULL, user_code = NULL, updated_at = $2
+                WHERE id = $3 AND status = $4;
+            "#,
+            expired,
+            expired_at,
+            id,
+            provisional
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        if result.rows_affected() > 0 {
+            let status = ResourceStatus::Deleted.to_string();
+            sqlx::query!(
+                r#"
+                    UPDATE resource
+                    SET status = $2, updated_at = $3
+                    WHERE project_id = $1;
+                "#,
+                id,
+                status,
+                expired_at
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn find_expired_provisional(&self, now: &DateTime<Utc>) -> Result<Vec<Project>> {
+        let projects = sqlx::query_as::<_, Project>(
+            r#"
+                SELECT
+                    p.id,
+                    p.namespace,
+                    p.name,
+                    p.owner,
+                    p.status,
+                    p.billing_provider,
+                    p.billing_provider_id,
+                    p.billing_subscription_id,
+                    p.agent_provisioned,
+                    p.agent_name,
+                    p.agent_version,
+                    p.agent_url,
+                    p.expires_at,
+                    p.created_at,
+                    p.updated_at
+                FROM project p
+                WHERE p.status = $1 AND DATETIME(p.expires_at) < DATETIME($2);
+            "#,
+        )
+        .bind(ProjectStatus::Provisional.to_string())
+        .bind(now)
+        .fetch_all(&self.sqlite.db)
+        .await?;
+
+        Ok(projects)
+    }
+
+    async fn count_live_provisional(&self) -> Result<u32> {
+        let count: i64 = sqlx::query_scalar(
+            r#"
+                SELECT COUNT(*) FROM project p WHERE p.status = $1;
+            "#,
+        )
+        .bind(ProjectStatus::Provisional.to_string())
+        .fetch_one(&self.sqlite.db)
+        .await?;
+
+        Ok(count as u32)
+    }
+
+    async fn count_registrations_by_source(
+        &self,
+        source_ip_hash: &str,
+        since: &DateTime<Utc>,
+    ) -> Result<u32> {
+        // Every registration counts, whatever became of its project since.
+        let count: i64 = sqlx::query_scalar(
+            r#"
+                SELECT COUNT(*) FROM project p
+                WHERE p.source_ip_hash = $1 AND DATETIME(p.created_at) >= DATETIME($2);
+            "#,
+        )
+        .bind(source_ip_hash)
+        .bind(since)
+        .fetch_one(&self.sqlite.db)
+        .await?;
+
+        Ok(count as u32)
+    }
+
+    async fn exists_user_code(&self, user_code: &str) -> Result<bool> {
+        // The claim and the expiry clear the code, so any row still holding it is live.
+        let count: i64 = sqlx::query_scalar(
+            r#"
+                SELECT COUNT(*) FROM project p WHERE p.user_code = $1;
+            "#,
+        )
+        .bind(user_code)
+        .fetch_one(&self.sqlite.db)
+        .await?;
+
+        Ok(count > 0)
     }
 
     async fn create_secret(&self, secret: &ProjectSecret) -> Result<()> {
@@ -654,6 +842,11 @@ impl ProjectDrivenCacheBackoffice for SqliteProjectDrivenCache {
                     p.billing_provider,
                     p.billing_provider_id,
                     p.billing_subscription_id,
+                    p.agent_provisioned,
+                    p.agent_name,
+                    p.agent_version,
+                    p.agent_url,
+                    p.expires_at,
                     p.created_at,
                     p.updated_at
                 FROM 
@@ -683,6 +876,11 @@ impl ProjectDrivenCacheBackoffice for SqliteProjectDrivenCache {
                     p.billing_provider,
                     p.billing_provider_id,
                     p.billing_subscription_id,
+                    p.agent_provisioned,
+                    p.agent_name,
+                    p.agent_version,
+                    p.agent_url,
+                    p.expires_at,
                     p.created_at,
                     p.updated_at
                 FROM 
@@ -710,6 +908,11 @@ impl ProjectDrivenCacheBackoffice for SqliteProjectDrivenCache {
 	                  p.billing_provider,
 	                  p.billing_provider_id,
 	                  p.billing_subscription_id,
+	                  p.agent_provisioned,
+	                  p.agent_name,
+	                  p.agent_version,
+	                  p.agent_url,
+	                  p.expires_at,
 	                  p.created_at,
 	                  p.updated_at
                 FROM
@@ -737,6 +940,11 @@ impl ProjectDrivenCacheBackoffice for SqliteProjectDrivenCache {
 	                  p.billing_provider,
 	                  p.billing_provider_id,
 	                  p.billing_subscription_id,
+	                  p.agent_provisioned,
+	                  p.agent_name,
+	                  p.agent_version,
+	                  p.agent_url,
+	                  p.expires_at,
 	                  p.created_at,
 	                  p.updated_at
                 FROM
@@ -805,6 +1013,11 @@ impl FromRow<'_, SqliteRow> for Project {
             billing_provider: row.try_get("billing_provider")?,
             billing_provider_id: row.try_get("billing_provider_id")?,
             billing_subscription_id: row.try_get("billing_subscription_id")?,
+            agent_provisioned: row.try_get("agent_provisioned")?,
+            agent_name: row.try_get("agent_name")?,
+            agent_version: row.try_get("agent_version")?,
+            agent_url: row.try_get("agent_url")?,
+            expires_at: row.try_get("expires_at")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         })
@@ -889,6 +1102,10 @@ impl FromRow<'_, SqliteRow> for ProjectUserProject {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        domain::{event::ProvisionalProjectCreated, resource::cache::ResourceDrivenCache},
+        driven::cache::{resource::SqliteResourceDrivenCache, tests::mock_resource},
+    };
 
     async fn get_cache() -> SqliteProjectDrivenCache {
         let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
@@ -910,7 +1127,7 @@ mod tests {
         let project = Project::default();
 
         cache.create(&project).await.unwrap();
-        let result = cache.find(&project.owner, &1, &12).await;
+        let result = cache.find(project.owner.as_deref().unwrap(), &1, &12).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 1);
@@ -921,7 +1138,7 @@ mod tests {
         let project = Project::default();
 
         cache.create(&project).await.unwrap();
-        let result = cache.find(&project.owner, &2, &12).await;
+        let result = cache.find(project.owner.as_deref().unwrap(), &2, &12).await;
 
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -955,7 +1172,7 @@ mod tests {
 
         let change = ProjectOwnerChange {
             project_id: project.id.clone(),
-            previous_owner: project.owner.clone(),
+            previous_owner: project.owner.clone().unwrap(),
             new_owner: new_owner.user_id.clone(),
             changed_at: Utc::now(),
         };
@@ -963,7 +1180,7 @@ mod tests {
         assert!(result.is_ok());
 
         let updated = cache.find_by_id(&project.id).await.unwrap().unwrap();
-        assert_eq!(updated.owner, new_owner.user_id);
+        assert_eq!(updated.owner, Some(new_owner.user_id.clone()));
 
         let new_permission = cache
             .find_user_permission(&new_owner.user_id, &project.id)
@@ -973,7 +1190,7 @@ mod tests {
         assert_eq!(new_permission.role, ProjectUserRole::Owner);
 
         let previous_permission = cache
-            .find_user_permission(&project.owner, &project.id)
+            .find_user_permission(project.owner.as_deref().unwrap(), &project.id)
             .await
             .unwrap()
             .unwrap();
@@ -999,7 +1216,7 @@ mod tests {
 
         let change = ProjectOwnerChange {
             project_id: project.id.clone(),
-            previous_owner: project.owner.clone(),
+            previous_owner: project.owner.clone().unwrap(),
             new_owner: new_owner.user_id.clone(),
             changed_at: Utc::now(),
         };
@@ -1009,7 +1226,7 @@ mod tests {
         cache.change_owner(&change).await.unwrap();
 
         let updated = cache.find_by_id(&project.id).await.unwrap().unwrap();
-        assert_eq!(updated.owner, new_owner.user_id);
+        assert_eq!(updated.owner, Some(new_owner.user_id.clone()));
 
         let new_permission = cache
             .find_user_permission(&new_owner.user_id, &project.id)
@@ -1019,7 +1236,7 @@ mod tests {
         assert_eq!(new_permission.role, ProjectUserRole::Owner);
 
         let previous_permission = cache
-            .find_user_permission(&project.owner, &project.id)
+            .find_user_permission(project.owner.as_deref().unwrap(), &project.id)
             .await
             .unwrap()
             .unwrap();
@@ -1132,7 +1349,7 @@ mod tests {
         cache.create(&project).await.unwrap();
 
         let result = cache
-            .find_user_permission(&project.owner, &project.id)
+            .find_user_permission(project.owner.as_deref().unwrap(), &project.id)
             .await;
 
         assert!(result.is_ok());
@@ -1145,7 +1362,7 @@ mod tests {
         let project = Project::default();
 
         let result = cache
-            .find_user_permission(&project.owner, &project.id)
+            .find_user_permission(project.owner.as_deref().unwrap(), &project.id)
             .await;
 
         assert!(result.is_ok());
@@ -1354,5 +1571,189 @@ mod tests {
         let result = cache.delete_user(&project.id, &project_user.user_id).await;
 
         assert!(result.is_ok());
+    }
+
+    async fn get_sqlite() -> Arc<SqliteCache> {
+        Arc::new(SqliteCache::ephemeral().await.unwrap())
+    }
+
+    fn provisional(expires_at: DateTime<Utc>) -> ProvisionalProject {
+        ProvisionalProjectCreated {
+            namespace: crate::domain::utils::get_random_name(),
+            user_code: crate::domain::provisional::generate_user_code(),
+            expires_at,
+            ..Default::default()
+        }
+        .try_into()
+        .unwrap()
+    }
+
+    async fn claim_columns(
+        sqlite: &SqliteCache,
+        id: &str,
+    ) -> (Option<String>, Option<String>, Option<String>, i64) {
+        sqlx::query_as(
+            "SELECT claim_token_hash, user_code, source_ip_hash, agent_provisioned FROM project WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_one(&sqlite.db)
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn it_should_store_a_provisional_project_with_no_owner_and_no_member() {
+        let sqlite = get_sqlite().await;
+        let cache = SqliteProjectDrivenCache::new(sqlite.clone());
+        let created = provisional(Utc::now() + chrono::Duration::days(7));
+
+        cache.create_provisional(&created).await.unwrap();
+
+        let project = cache
+            .find_by_id(&created.project.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(project.owner, None);
+        assert_eq!(project.status, ProjectStatus::Provisional);
+        assert!(project.agent_provisioned);
+        assert_eq!(project.agent_name.as_deref(), Some("claude-code"));
+        assert_eq!(project.agent_version.as_deref(), Some("2.1.0"));
+        assert_eq!(project.expires_at, created.project.expires_at);
+        assert!(cache
+            .find_users(&project.id, &1, &12)
+            .await
+            .unwrap()
+            .is_empty());
+
+        let (claim_token_hash, user_code, source_ip_hash, agent_provisioned) =
+            claim_columns(&sqlite, &project.id).await;
+        assert_eq!(claim_token_hash, Some(created.claim_token_hash));
+        assert_eq!(user_code, Some(created.user_code.clone()));
+        assert_eq!(source_ip_hash, Some(created.source_ip_hash));
+        assert_eq!(agent_provisioned, 1);
+        assert!(cache.exists_user_code(&created.user_code).await.unwrap());
+
+        // An owned project keeps its owner and is not agent-provisioned.
+        let owned = Project::default();
+        cache.create(&owned).await.unwrap();
+        let owned = cache.find_by_id(&owned.id).await.unwrap().unwrap();
+        assert_eq!(owned.owner.as_deref(), Some("user id"));
+        assert!(!owned.agent_provisioned);
+        assert_eq!(owned.expires_at, None);
+    }
+
+    #[tokio::test]
+    async fn it_should_expire_a_provisional_project_and_delete_its_resources() {
+        let sqlite = get_sqlite().await;
+        let cache = SqliteProjectDrivenCache::new(sqlite.clone());
+        let resources = SqliteResourceDrivenCache::new(sqlite.clone());
+        let created = provisional(Utc::now() - chrono::Duration::hours(1));
+        cache.create_provisional(&created).await.unwrap();
+        let resource = mock_resource(sqlite.clone(), &created.project.id).await;
+
+        let expired_at = Utc::now();
+        cache
+            .expire(&created.project.id, &expired_at)
+            .await
+            .unwrap();
+
+        let project = cache
+            .find_by_id(&created.project.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(project.status, ProjectStatus::Expired);
+        assert_eq!(project.updated_at, expired_at);
+        let (claim_token_hash, user_code, source_ip_hash, _) =
+            claim_columns(&sqlite, &project.id).await;
+        assert_eq!(claim_token_hash, None);
+        assert_eq!(user_code, None);
+        assert!(source_ip_hash.is_some(), "the IP cap still counts it");
+        assert!(resources.find_by_id(&resource.id).await.unwrap().is_none());
+        assert_eq!(resources.count_live(&project.id).await.unwrap(), 0);
+
+        // A duplicate changes nothing.
+        cache
+            .expire(
+                &created.project.id,
+                &(expired_at + chrono::Duration::minutes(10)),
+            )
+            .await
+            .unwrap();
+        let again = cache
+            .find_by_id(&created.project.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(again.updated_at, expired_at);
+    }
+
+    #[tokio::test]
+    async fn it_should_not_expire_an_owned_project() {
+        let sqlite = get_sqlite().await;
+        let cache = SqliteProjectDrivenCache::new(sqlite.clone());
+        let project = Project::default();
+        cache.create(&project).await.unwrap();
+        let resource = mock_resource(sqlite.clone(), &project.id).await;
+
+        cache.expire(&project.id, &Utc::now()).await.unwrap();
+
+        let project = cache.find_by_id(&project.id).await.unwrap().unwrap();
+        assert_eq!(project.status, ProjectStatus::Active);
+        let resources = SqliteResourceDrivenCache::new(sqlite);
+        assert!(resources.find_by_id(&resource.id).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn it_should_find_only_provisional_projects_past_their_expiry() {
+        let cache = get_cache().await;
+        let now = Utc::now();
+
+        let past = provisional(now - chrono::Duration::minutes(1));
+        let future = provisional(now + chrono::Duration::minutes(1));
+        let already = provisional(now - chrono::Duration::days(1));
+        for p in [&past, &future, &already] {
+            cache.create_provisional(p).await.unwrap();
+        }
+        cache.expire(&already.project.id, &now).await.unwrap();
+        cache.create(&Project::default()).await.unwrap();
+
+        let found = cache.find_expired_provisional(&now).await.unwrap();
+        let ids: Vec<&str> = found.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, vec![past.project.id.as_str()]);
+    }
+
+    #[tokio::test]
+    async fn it_should_count_live_provisional_projects_and_registrations_by_source() {
+        let cache = get_cache().await;
+        let now = Utc::now();
+
+        let live = provisional(now + chrono::Duration::days(7));
+        let expired = provisional(now - chrono::Duration::days(1));
+        let mut old = provisional(now + chrono::Duration::days(7));
+        old.project.created_at = now - chrono::Duration::hours(25);
+        let mut elsewhere = provisional(now + chrono::Duration::days(7));
+        elsewhere.source_ip_hash = "another hash".into();
+        for p in [&live, &expired, &old, &elsewhere] {
+            cache.create_provisional(p).await.unwrap();
+        }
+        cache.expire(&expired.project.id, &now).await.unwrap();
+        cache.create(&Project::default()).await.unwrap();
+
+        assert_eq!(cache.count_live_provisional().await.unwrap(), 3);
+
+        let since = now - chrono::Duration::hours(24);
+        // The expired registration still counts; the one from 25 hours ago does not.
+        let count = cache
+            .count_registrations_by_source(&live.source_ip_hash, &since)
+            .await
+            .unwrap();
+        assert_eq!(count, 2);
+        let count = cache
+            .count_registrations_by_source("another hash", &since)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
     }
 }

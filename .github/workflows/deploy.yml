@@ -27,6 +27,9 @@ jobs:
        TF_VAR_balius_pg_url: ${{ secrets.BALIUS_PG_URL }}
        TF_VAR_balius_vault_token: ${{ secrets.BALIUS_VAULT_TOKEN }}
        TF_VAR_balius_vault_address: ${{ secrets.BALIUS_VAULT_ADDRESS }}
+       # Anonymous registration stays off unless the repository variable turns it on.
+       TF_VAR_provisional_enabled: ${{ vars.PROVISIONAL_ENABLED || 'false' }}
+       TF_VAR_provisional_gateway_token: ${{ secrets.PROVISIONAL_GATEWAY_TOKEN }}
     steps:
       - uses: actions/checkout@v2
 

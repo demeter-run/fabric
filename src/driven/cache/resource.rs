@@ -105,6 +105,20 @@ impl ResourceDrivenCache for SqliteResourceDrivenCache {
         Ok(resource)
     }
 
+    async fn count_live(&self, project_id: &str) -> Result<u32> {
+        let count: i64 = sqlx::query_scalar(
+            r#"
+                SELECT COUNT(*) FROM resource r WHERE r.project_id = $1 AND r.status != $2;
+            "#,
+        )
+        .bind(project_id)
+        .bind(ResourceStatus::Deleted.to_string())
+        .fetch_one(&self.sqlite.db)
+        .await?;
+
+        Ok(count as u32)
+    }
+
     async fn create(&self, resource: &Resource) -> Result<()> {
         let status = resource.status.to_string();
 
@@ -357,6 +371,33 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().len() == 1);
+    }
+    #[tokio::test]
+    async fn it_should_count_only_live_resources_of_every_category() {
+        let sqlite_cache = Arc::new(SqliteCache::ephemeral().await.unwrap());
+        let cache = SqliteResourceDrivenCache::new(sqlite_cache.clone());
+
+        let project = mock_project(sqlite_cache.clone()).await;
+
+        let port = Resource {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        let worker = Resource {
+            project_id: project.id.clone(),
+            category: "demeter-worker".into(),
+            ..Default::default()
+        };
+        let deleted = Resource {
+            project_id: project.id.clone(),
+            ..Default::default()
+        };
+        for resource in [&port, &worker, &deleted] {
+            cache.create(resource).await.unwrap();
+        }
+        cache.delete(&deleted.id, &Utc::now()).await.unwrap();
+
+        assert_eq!(cache.count_live(&project.id).await.unwrap(), 2);
     }
     #[tokio::test]
     async fn it_should_return_none_find_project_resources_when_resource_was_deleted() {

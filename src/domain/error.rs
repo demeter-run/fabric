@@ -10,6 +10,16 @@ pub enum Error {
     SecretExceeded(String),
     #[error("{0}")]
     Unexpected(String),
+    #[error("{0}")]
+    Unauthenticated(String),
+    #[error("{0}")]
+    InvalidArgument(String),
+    #[error("{0}")]
+    NotFound(String),
+    #[error("{0}")]
+    ResourceExhausted(String),
+    #[error("{0}")]
+    Unavailable(String),
 }
 
 impl From<argon2::password_hash::Error> for Error {

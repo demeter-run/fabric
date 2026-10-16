@@ -38,6 +38,14 @@ variable "email_ses_secret_access_key" {}
 variable "balius_pg_url" {}
 variable "balius_vault_token" {}
 variable "balius_vault_address" {}
+variable "provisional_enabled" {
+  type    = bool
+  default = false
+}
+variable "provisional_gateway_token" {
+  type    = string
+  default = ""
+}
 
 
 locals {
@@ -92,6 +100,8 @@ module "fabric_rpc" {
   balius_pg_url               = local.balius_pg_url
   balius_vault_token          = local.balius_vault_token
   balius_vault_address        = local.balius_vault_address
+  provisional_enabled         = var.provisional_enabled
+  provisional_gateway_token   = var.provisional_gateway_token
 }
 
 module "fabric_daemon" {

@@ -189,7 +189,7 @@ pub async fn apply_ownership_transfer(
         return Err(Error::CommandMalformed("invalid project id".into()));
     };
 
-    if project.owner == new_owner {
+    if project.owner.as_deref() == Some(new_owner) {
         return Err(Error::CommandMalformed(
             "user already is the project owner".into(),
         ));
@@ -211,10 +211,17 @@ pub async fn apply_ownership_transfer(
     }
     let profile = profile.first().unwrap();
 
+    // A provisional project has no owner to hand over; the claim gives it one.
+    let Some(previous_owner) = project.owner else {
+        return Err(Error::CommandMalformed(
+            "project has no owner to transfer from".into(),
+        ));
+    };
+
     let evt = ProjectOwnerChanged {
         id: Uuid::new_v4().to_string(),
         project_id: project.id,
-        previous_owner: project.owner,
+        previous_owner,
         new_owner: new_owner.to_string(),
         changed_by: changed_by.to_string(),
         changed_at: Utc::now(),
@@ -276,7 +283,7 @@ pub async fn delete(
         None => return Err(Error::Unexpected("Failed to locate project.".into())),
     };
 
-    if user_id != project.owner {
+    if project.owner.as_deref() != Some(user_id.as_str()) {
         return Err(Error::CommandMalformed(
             "Just the creator can delete the project".into(),
         ));
@@ -335,9 +342,49 @@ pub async fn create_secret(
         )));
     }
 
+    apply_secret(event, &cmd.id, &project.id, &cmd.name, cmd.secret).await
+}
+
+/// The name of the API key a registration mints for its provisional project.
+pub const PRE_CLAIM_SECRET_NAME: &str = "pre-claim";
+
+/// Mints the pre-claim API key of a provisional project, with no `Owner` check.
+///
+/// The sibling of `create_secret` for `provisional::command::register`, which holds no user
+/// credential: a provisional project has no owner yet, and its authority is the gateway token.
+/// It reads nothing from the cache either, because the project it is called for was dispatched a
+/// moment earlier and the projection may not have caught up. A project starts with no keys, so
+/// `MAX_SECRET` cannot be reached here.
+pub async fn create_pre_claim_secret(
+    event: Arc<dyn EventDrivenBridge>,
+    project_id: &str,
+    secret: String,
+) -> Result<String> {
+    apply_secret(
+        event,
+        &Uuid::new_v4().to_string(),
+        project_id,
+        PRE_CLAIM_SECRET_NAME,
+        secret,
+    )
+    .await
+}
+
+/// The body shared by `create_secret` and `create_pre_claim_secret`: mints a key, dispatches its
+/// hash and returns the plaintext.
+///
+/// Private on purpose: it performs no authorization, so every caller must be one of the two named
+/// entry points above.
+async fn apply_secret(
+    event: Arc<dyn EventDrivenBridge>,
+    id: &str,
+    project_id: &str,
+    name: &str,
+    secret: String,
+) -> Result<String> {
     let key = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
     let salt_string = SaltString::generate(&mut OsRng);
-    let secret = cmd.secret.into_bytes();
+    let secret = secret.into_bytes();
 
     let argon2 = match Argon2::new_with_secret(
         &secret,
@@ -360,9 +407,9 @@ pub async fn create_secret(
     let key = bech32::encode::<Bech32m>(hrp, &key_bytes)?;
 
     let evt = ProjectSecretCreated {
-        id: cmd.id,
-        project_id: project.id,
-        name: cmd.name,
+        id: id.to_string(),
+        project_id: project_id.to_string(),
+        name: name.to_string(),
         phc: password_hash.to_string(),
         secret: secret.to_vec(),
         created_at: Utc::now(),
@@ -568,7 +615,7 @@ pub async fn delete_user(
         return Err(Error::CommandMalformed("invalid project id".into()));
     };
 
-    if project.owner == cmd.id {
+    if project.owner.as_deref() == Some(cmd.id.as_str()) {
         return Err(Error::CommandMalformed("owner can not be deleted".into()));
     }
 
@@ -1620,6 +1667,27 @@ mod tests {
         let result = create_secret(Arc::new(cache), Arc::new(event), cmd).await;
         assert!(result.is_ok());
     }
+    #[tokio::test]
+    async fn it_should_create_pre_claim_secret_without_reading_the_cache() {
+        let project_id = Uuid::new_v4().to_string();
+
+        let expected_project_id = project_id.clone();
+        let mut event = MockEventDrivenBridge::new();
+        event
+            .expect_dispatch()
+            .withf(move |evt| match evt {
+                crate::domain::event::Event::ProjectSecretCreated(secret) => {
+                    secret.project_id == expected_project_id && secret.name == PRE_CLAIM_SECRET_NAME
+                }
+                _ => false,
+            })
+            .times(1)
+            .return_once(|_| Ok(()));
+
+        let result = create_pre_claim_secret(Arc::new(event), &project_id, SECRET.into()).await;
+        assert!(result.unwrap().starts_with("dmtr_apikey1"));
+    }
+
     #[tokio::test]
     async fn it_should_fail_create_project_secret_when_project_doesnt_exists() {
         let mut cache = MockProjectDrivenCache::new();
@@ -2726,7 +2794,7 @@ mod tests {
 
         cache.expect_find_by_id().return_once(|_| {
             Ok(Some(Project {
-                owner: "user id".into(),
+                owner: Some("user id".into()),
                 ..Default::default()
             }))
         });
@@ -2770,7 +2838,7 @@ mod tests {
 
         cache.expect_find_by_id().return_once(|_| {
             Ok(Some(Project {
-                owner: "user id".into(),
+                owner: Some("user id".into()),
                 ..Default::default()
             }))
         });

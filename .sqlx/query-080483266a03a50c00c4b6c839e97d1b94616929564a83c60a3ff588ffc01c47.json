@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                    UPDATE resource\n                    SET status = $2, updated_at = $3\n                    WHERE project_id = $1;\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "080483266a03a50c00c4b6c839e97d1b94616929564a83c60a3ff588ffc01c47"
+}
