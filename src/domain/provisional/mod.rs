@@ -118,6 +118,21 @@ pub fn display_user_code(code: &str) -> String {
     format!("{head}-{tail}")
 }
 
+/// A user code as typed, in its stored form: case-insensitive, hyphen optional. `None` when it
+/// cannot be a user code at all, so the caller answers as for an unknown one without a lookup.
+pub fn normalize_user_code(input: &str) -> Option<String> {
+    let code: String = input
+        .trim()
+        .chars()
+        .filter(|c| *c != '-')
+        .map(|c| c.to_ascii_uppercase())
+        .collect();
+
+    let valid =
+        code.len() == USER_CODE_LEN && code.bytes().all(|c| USER_CODE_ALPHABET.contains(&c));
+    valid.then_some(code)
+}
+
 /// The salted hash the IP cap counts by, so fabric never stores the client IP itself.
 pub fn hash_source_ip(client_ip: &str, secret: &str) -> String {
     let mut hasher = Sha256::new();
@@ -204,6 +219,33 @@ mod tests {
             assert!(code.bytes().all(|c| USER_CODE_ALPHABET.contains(&c)));
         }
         assert_eq!(display_user_code("ABCD2345"), "ABCD-2345");
+    }
+
+    #[test]
+    fn it_should_normalize_a_typed_user_code() {
+        for typed in [
+            "ABCD-2345",
+            "abcd-2345",
+            "ABCD2345",
+            "abcd2345",
+            " AbCd-2345 ",
+        ] {
+            assert_eq!(
+                normalize_user_code(typed).as_deref(),
+                Some("ABCD2345"),
+                "{typed}"
+            );
+        }
+        for typed in [
+            "",
+            "ABCD-234",
+            "ABCD-23456",
+            "ABCD-2341",
+            "ABCO-2345",
+            "ABCD_2345",
+        ] {
+            assert_eq!(normalize_user_code(typed), None, "{typed}");
+        }
     }
 
     #[test]

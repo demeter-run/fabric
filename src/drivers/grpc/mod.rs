@@ -88,6 +88,7 @@ pub async fn server(config: GrpcConfig, metrics: Arc<MetricsDriven>) -> Result<(
 
     let project_inner = project::ProjectServiceImpl::new(
         project_cache.clone(),
+        resource_cache.clone(),
         event_bridge.clone(),
         auth0.clone(),
         stripe.clone(),

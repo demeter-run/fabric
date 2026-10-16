@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use super::{
     error::Error,
     event::{
-        ProjectCreated, ProjectOwnerChanged, ProjectSecretCreated, ProjectUpdated,
+        ProjectClaimed, ProjectCreated, ProjectOwnerChanged, ProjectSecretCreated, ProjectUpdated,
         ProjectUserInviteAccepted, ProjectUserInviteCreated, ProvisionalProjectCreated,
     },
     Result,
@@ -158,6 +158,59 @@ impl From<ProjectOwnerChanged> for ProjectOwnerChange {
             changed_at: value.changed_at,
         }
     }
+}
+
+/// What a claim changes on a provisional project: its owner, its name and its billing.
+#[derive(Debug, Clone)]
+pub struct ProjectClaim {
+    pub project_id: String,
+    pub owner: String,
+    pub name: String,
+    pub billing_provider: String,
+    pub billing_provider_id: String,
+    pub claimed_at: DateTime<Utc>,
+}
+impl From<ProjectClaimed> for ProjectClaim {
+    fn from(value: ProjectClaimed) -> Self {
+        Self {
+            project_id: value.id,
+            owner: value.owner,
+            name: value.name,
+            billing_provider: value.billing_provider,
+            billing_provider_id: value.billing_provider_id,
+            claimed_at: value.claimed_at,
+        }
+    }
+}
+
+/// How a person names the provisional project they claim: the token in the claim URL, or the
+/// user code they type at `/activate`. Both grant the same power.
+#[derive(Clone)]
+pub enum ClaimKey {
+    Token(String),
+    UserCode(String),
+}
+impl std::fmt::Debug for ClaimKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClaimKey::Token(_) => write!(f, "Token(<redacted>)"),
+            ClaimKey::UserCode(_) => write!(f, "UserCode(<redacted>)"),
+        }
+    }
+}
+
+/// What a person sees before claiming: the project, who registered it, and its ports with no key.
+#[derive(Debug, Clone)]
+pub struct ProjectClaimPreview {
+    pub project: Project,
+    pub ports: Vec<ClaimPort>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaimPort {
+    pub id: String,
+    pub kind: String,
+    pub network: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

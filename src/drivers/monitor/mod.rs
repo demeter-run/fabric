@@ -127,7 +127,7 @@ mod tests {
 
     use super::*;
     use crate::domain::{
-        event::{ProjectExpired, ProvisionalProjectCreated},
+        event::{ProjectClaimed, ProjectExpired, ProvisionalProjectCreated},
         project::cluster::MockProjectDrivenCluster,
         resource::cluster::MockResourceDrivenCluster,
     };
@@ -178,5 +178,19 @@ mod tests {
         .await;
 
         assert!(matches!(result, Some(("project", Ok(())))));
+    }
+
+    #[tokio::test]
+    async fn it_should_bypass_a_claim() {
+        // The claim changes who owns the project, not its namespace or anything in it, so the
+        // mocks expect no call at all.
+        let result = apply_event(
+            Arc::new(MockProjectDrivenCluster::new()),
+            Arc::new(MockResourceDrivenCluster::new()),
+            &ProjectClaimed::default().into(),
+        )
+        .await;
+
+        assert!(result.is_none());
     }
 }

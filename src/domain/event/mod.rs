@@ -113,6 +113,20 @@ pub struct ProjectExpired {
 }
 into_event!(ProjectExpired);
 
+/// A provisional project a person claimed: they own it, and it is billed as any other project.
+///
+/// Carries no claim token, user code or hash; the projection clears those itself.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectClaimed {
+    pub id: String,
+    pub owner: String,
+    pub name: String,
+    pub billing_provider: String,
+    pub billing_provider_id: String,
+    pub claimed_at: DateTime<Utc>,
+}
+into_event!(ProjectClaimed);
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectSecretCreated {
     pub id: String,
@@ -246,6 +260,7 @@ pub enum Event {
     ProjectOwnerChanged(ProjectOwnerChanged),
     ProvisionalProjectCreated(ProvisionalProjectCreated),
     ProjectExpired(ProjectExpired),
+    ProjectClaimed(ProjectClaimed),
     ProjectSecretCreated(ProjectSecretCreated),
     ProjectSecretDeleted(ProjectSecretDeleted),
     ProjectUserInviteCreated(ProjectUserInviteCreated),
@@ -266,6 +281,7 @@ impl Event {
             Event::ProjectOwnerChanged(_) => "ProjectOwnerChanged".into(),
             Event::ProvisionalProjectCreated(_) => "ProvisionalProjectCreated".into(),
             Event::ProjectExpired(_) => "ProjectExpired".into(),
+            Event::ProjectClaimed(_) => "ProjectClaimed".into(),
             Event::ProjectSecretCreated(_) => "ProjectSecretCreated".into(),
             Event::ProjectSecretDeleted(_) => "ProjectSecretDeleted".into(),
             Event::ProjectUserInviteCreated(_) => "ProjectUserInviteCreated".into(),
@@ -290,6 +306,7 @@ impl Event {
                 serde_json::from_slice(payload)?,
             )),
             "ProjectExpired" => Ok(Self::ProjectExpired(serde_json::from_slice(payload)?)),
+            "ProjectClaimed" => Ok(Self::ProjectClaimed(serde_json::from_slice(payload)?)),
             "ProjectSecretCreated" => {
                 Ok(Self::ProjectSecretCreated(serde_json::from_slice(payload)?))
             }
@@ -394,6 +411,18 @@ mod tests {
             }
         }
     }
+    impl Default for ProjectClaimed {
+        fn default() -> Self {
+            Self {
+                id: Uuid::new_v4().to_string(),
+                owner: "user id".into(),
+                name: "My Project".into(),
+                billing_provider: "stripe".into(),
+                billing_provider_id: "stripe id".into(),
+                claimed_at: Utc::now(),
+            }
+        }
+    }
     impl Default for ProjectSecretCreated {
         fn default() -> Self {
             Self {
@@ -483,8 +512,9 @@ mod tests {
     fn it_should_round_trip_the_provisional_events_by_key() {
         let created: Event = ProvisionalProjectCreated::default().into();
         let expired: Event = ProjectExpired::default().into();
+        let claimed: Event = ProjectClaimed::default().into();
 
-        for event in [created, expired] {
+        for event in [created, expired, claimed] {
             let payload = serde_json::to_vec(&event).unwrap();
             let decoded = Event::from_key(&event.key(), &payload).unwrap();
             assert_eq!(decoded.key(), event.key());

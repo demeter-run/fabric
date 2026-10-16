@@ -13,18 +13,24 @@ use crate::domain::{
     auth::{assert_permission, Auth0Driven, Credential, UserId},
     error::Error,
     event::{
-        EventDrivenBridge, ProjectCreated, ProjectDeleted, ProjectOwnerChanged,
+        EventDrivenBridge, ProjectClaimed, ProjectCreated, ProjectDeleted, ProjectOwnerChanged,
         ProjectSecretCreated, ProjectSecretDeleted, ProjectUpdated, ProjectUserDeleted,
         ProjectUserInviteAccepted, ProjectUserInviteCreated, ProjectUserInviteDeleted,
     },
     project::{ProjectStatus, ProjectUserAggregated, ProjectUserInviteStatus},
-    utils, Result, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
+    provisional::{hash_claim_token, normalize_user_code},
+    resource::cache::ResourceDrivenCache,
+    utils, Result, DEFAULT_CATEGORY, MAX_SECRET, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX,
 };
 
 use super::{
-    cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret, ProjectUserInvite,
-    ProjectUserRole, StripeDriven,
+    cache::ProjectDrivenCache, ClaimKey, ClaimPort, Project, ProjectClaimPreview,
+    ProjectEmailDriven, ProjectSecret, ProjectUserInvite, ProjectUserRole, StripeDriven,
 };
+
+/// The one answer to a claim key that names nothing claimable: unknown, used or expired alike, so
+/// a caller cannot tell which.
+pub const CLAIM_NOT_FOUND: &str = "claim not found";
 
 pub async fn fetch(cache: Arc<dyn ProjectDrivenCache>, cmd: FetchCmd) -> Result<Vec<Project>> {
     let user_id = assert_credential(&cmd.credential)?;
@@ -93,6 +99,118 @@ pub async fn create(
     info!(project = cmd.namespace, "new project created");
 
     Ok(())
+}
+
+/// Shows a signed-in person the provisional project a claim key names, before they claim it.
+///
+/// The ports carry their kind and network only: no key, no spec and no annotation, because the
+/// person does not own the project yet.
+pub async fn fetch_claim(
+    cache: Arc<dyn ProjectDrivenCache>,
+    resource_cache: Arc<dyn ResourceDrivenCache>,
+    cmd: FetchClaimCmd,
+) -> Result<ProjectClaimPreview> {
+    assert_credential(&cmd.credential)?;
+
+    let project = find_claimable(cache, &cmd.key).await?;
+
+    // A provisional project holds at most a few ports, well inside one page.
+    let ports = resource_cache
+        .find(&project.id, &1, &PAGE_SIZE_DEFAULT, DEFAULT_CATEGORY)
+        .await?
+        .into_iter()
+        .map(|resource| ClaimPort {
+            network: serde_json::from_str::<serde_json::Value>(&resource.spec)
+                .ok()
+                .and_then(|spec| spec.get("network")?.as_str().map(String::from))
+                .unwrap_or_default(),
+            id: resource.id,
+            kind: resource.kind,
+        })
+        .collect();
+
+    Ok(ProjectClaimPreview { project, ports })
+}
+
+/// Makes the signed-in caller the owner of the provisional project a claim key names.
+///
+/// The Stripe customer is created here, as `create` does, before dispatching, because the
+/// projection is replayed whenever the cache is rebuilt. Resources, their keys and the pre-claim
+/// API key are not touched: the claim changes who owns the project, not what is in it.
+pub async fn claim(
+    cache: Arc<dyn ProjectDrivenCache>,
+    event: Arc<dyn EventDrivenBridge>,
+    auth0: Arc<dyn Auth0Driven>,
+    stripe: Arc<dyn StripeDriven>,
+    cmd: ClaimCmd,
+) -> Result<Project> {
+    let user_id = assert_credential(&cmd.credential)?;
+
+    let project = find_claimable(cache, &cmd.key).await?;
+
+    let profile = auth0.find_info(&format!("user_id:{user_id}")).await?;
+    if profile.is_empty() {
+        return Err(Error::Unexpected("Invalid user_id".into()));
+    }
+    let profile = profile.first().unwrap();
+
+    let billing_provider_id = stripe
+        .create_customer(&profile.name, &profile.email)
+        .await?;
+
+    let name = match cmd.name.trim() {
+        "" => project.namespace.clone(),
+        name => name.to_string(),
+    };
+
+    let evt = ProjectClaimed {
+        id: project.id.clone(),
+        owner: user_id,
+        name,
+        billing_provider: "stripe".into(),
+        billing_provider_id,
+        claimed_at: Utc::now(),
+    };
+
+    event.dispatch(evt.clone().into()).await?;
+    info!(project = &project.namespace, "provisional project claimed");
+
+    // Built from the event rather than read back, so the caller does not race the projection.
+    Ok(Project {
+        owner: Some(evt.owner),
+        name: evt.name,
+        status: ProjectStatus::Active,
+        billing_provider: evt.billing_provider,
+        billing_provider_id: evt.billing_provider_id,
+        expires_at: None,
+        updated_at: evt.claimed_at,
+        ..project
+    })
+}
+
+/// The provisional project a claim key names, while it can still be claimed.
+async fn find_claimable(cache: Arc<dyn ProjectDrivenCache>, key: &ClaimKey) -> Result<Project> {
+    let project = match key {
+        ClaimKey::Token(token) => {
+            cache
+                .find_by_claim_token_hash(&hash_claim_token(token))
+                .await?
+        }
+        ClaimKey::UserCode(code) => match normalize_user_code(code) {
+            Some(code) => cache.find_by_user_code(&code).await?,
+            None => None,
+        },
+    };
+
+    match project {
+        Some(project)
+            if project.status == ProjectStatus::Provisional
+                && project.expires_at.is_some_and(|at| at > Utc::now()) =>
+        {
+            Ok(project)
+        }
+        _ => Err(Error::NotFound(CLAIM_NOT_FOUND.into())),
+    }
 }
 
 pub async fn update(
@@ -995,6 +1113,34 @@ impl CreateCmd {
 }
 
 #[derive(Debug, Clone)]
+pub struct FetchClaimCmd {
+    pub credential: Credential,
+    pub key: ClaimKey,
+}
+impl FetchClaimCmd {
+    pub fn new(credential: Credential, key: ClaimKey) -> Self {
+        Self { credential, key }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ClaimCmd {
+    pub credential: Credential,
+    pub key: ClaimKey,
+    /// The project's name once claimed; empty keeps the namespace.
+    pub name: String,
+}
+impl ClaimCmd {
+    pub fn new(credential: Credential, key: ClaimKey, name: String) -> Self {
+        Self {
+            credential,
+            key,
+            name,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct UpdateCmd {
     pub credential: Credential,
     pub id: String,
@@ -1249,6 +1395,7 @@ mod tests {
             cache::MockProjectDrivenCache, MockProjectEmailDriven, MockStripeDriven, ProjectUser,
             ProjectUserInvite,
         },
+        resource::cache::MockResourceDrivenCache,
         tests::{INVALID_HRP_KEY, INVALID_KEY, KEY, SECRET},
     };
 
@@ -2870,5 +3017,268 @@ mod tests {
 
         let result = fetch_me_user(Arc::new(cache), Arc::new(auth0), cmd).await;
         assert!(result.is_ok());
+    }
+
+    const CLAIM_TOKEN: &str = "a claim token";
+    const AUTH_TOKEN: &str = "dmtr_ogmios1secretauthtoken";
+
+    fn provisional_project(expires_at: chrono::DateTime<Utc>) -> Project {
+        Project {
+            name: "sonic-vegas-abc123".into(),
+            namespace: "sonic-vegas-abc123".into(),
+            owner: None,
+            status: ProjectStatus::Provisional,
+            billing_provider: super::super::UNBILLED_PROVIDER.into(),
+            billing_provider_id: String::new(),
+            agent_provisioned: true,
+            agent_name: Some("claude-code".into()),
+            agent_version: Some("2.1.0".into()),
+            expires_at: Some(expires_at),
+            ..Default::default()
+        }
+    }
+
+    fn live_provisional_project() -> Project {
+        provisional_project(Utc::now() + chrono::Duration::days(7))
+    }
+
+    /// A cache that resolves the test claim token, and nothing else, to `project`.
+    fn cache_with_token(project: Option<Project>) -> MockProjectDrivenCache {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_find_by_claim_token_hash()
+            .withf(|hash| hash == hash_claim_token(CLAIM_TOKEN))
+            .return_once(move |_| Ok(project));
+        cache
+    }
+
+    fn port(project_id: &str) -> crate::domain::resource::Resource {
+        crate::domain::resource::Resource {
+            project_id: project_id.into(),
+            kind: "OgmiosPort".into(),
+            spec: format!(
+                r#"{{"network":"cardano-preprod","throughputTier":"0","authToken":"{AUTH_TOKEN}"}}"#
+            ),
+            annotations: Some(format!(r#"{{"endpoint":"{AUTH_TOKEN}.example"}}"#)),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn it_should_fetch_a_claim_by_token_with_no_secret() {
+        let project = live_provisional_project();
+        let resource = port(&project.id);
+        let (project_id, resource_id) = (project.id.clone(), resource.id.clone());
+
+        let cache = cache_with_token(Some(project));
+        let mut resource_cache = MockResourceDrivenCache::new();
+        resource_cache
+            .expect_find()
+            .withf(move |id, _, _, category| id == project_id && category == DEFAULT_CATEGORY)
+            .return_once(move |_, _, _, _| Ok(vec![resource]));
+
+        let cmd = FetchClaimCmd::new(
+            Credential::Auth0("user id".into()),
+            ClaimKey::Token(CLAIM_TOKEN.into()),
+        );
+        let preview = fetch_claim(Arc::new(cache), Arc::new(resource_cache), cmd)
+            .await
+            .unwrap();
+
+        assert_eq!(preview.project.agent_name.as_deref(), Some("claude-code"));
+        assert_eq!(
+            preview.ports,
+            vec![ClaimPort {
+                id: resource_id,
+                kind: "OgmiosPort".into(),
+                network: "cardano-preprod".into(),
+            }]
+        );
+        assert!(!format!("{preview:?}").contains(AUTH_TOKEN));
+    }
+
+    #[tokio::test]
+    async fn it_should_fetch_a_claim_by_user_code_as_typed() {
+        for typed in ["ABCD-2345", "abcd-2345", "abcd2345"] {
+            let mut cache = MockProjectDrivenCache::new();
+            cache
+                .expect_find_by_user_code()
+                .withf(|code| code == "ABCD2345")
+                .times(1)
+                .return_once(|_| Ok(Some(live_provisional_project())));
+            let mut resource_cache = MockResourceDrivenCache::new();
+            resource_cache
+                .expect_find()
+                .return_once(|_, _, _, _| Ok(vec![]));
+
+            let cmd = FetchClaimCmd::new(
+                Credential::Auth0("user id".into()),
+                ClaimKey::UserCode(typed.into()),
+            );
+            let result = fetch_claim(Arc::new(cache), Arc::new(resource_cache), cmd).await;
+            assert!(result.is_ok(), "{typed}");
+        }
+    }
+
+    #[tokio::test]
+    async fn it_should_not_find_an_unknown_expired_or_claimed_claim() {
+        let past = provisional_project(Utc::now() - chrono::Duration::minutes(1));
+        let expired = Project {
+            status: ProjectStatus::Expired,
+            ..live_provisional_project()
+        };
+        let claimed = Project {
+            owner: Some("someone".into()),
+            status: ProjectStatus::Active,
+            expires_at: None,
+            ..live_provisional_project()
+        };
+
+        for project in [None, Some(past), Some(expired), Some(claimed)] {
+            let cmd = FetchClaimCmd::new(
+                Credential::Auth0("user id".into()),
+                ClaimKey::Token(CLAIM_TOKEN.into()),
+            );
+            let result = fetch_claim(
+                Arc::new(cache_with_token(project)),
+                Arc::new(MockResourceDrivenCache::new()),
+                cmd,
+            )
+            .await;
+            assert!(matches!(result, Err(Error::NotFound(_))));
+        }
+
+        // Not a user code at all: answered the same, with no lookup.
+        let cmd = FetchClaimCmd::new(
+            Credential::Auth0("user id".into()),
+            ClaimKey::UserCode("ABCD-0000".into()),
+        );
+        let result = fetch_claim(
+            Arc::new(MockProjectDrivenCache::new()),
+            Arc::new(MockResourceDrivenCache::new()),
+            cmd,
+        )
+        .await;
+        assert!(matches!(result, Err(Error::NotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn it_should_refuse_an_api_key_on_the_claim_rpcs() {
+        let cmd = FetchClaimCmd::new(
+            Credential::ApiKey("project id".into()),
+            ClaimKey::Token(CLAIM_TOKEN.into()),
+        );
+        let result = fetch_claim(
+            Arc::new(MockProjectDrivenCache::new()),
+            Arc::new(MockResourceDrivenCache::new()),
+            cmd,
+        )
+        .await;
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
+
+        let cmd = ClaimCmd::new(
+            Credential::ApiKey("project id".into()),
+            ClaimKey::Token(CLAIM_TOKEN.into()),
+            String::new(),
+        );
+        let result = claim(
+            Arc::new(MockProjectDrivenCache::new()),
+            Arc::new(MockEventDrivenBridge::new()),
+            Arc::new(MockAuth0Driven::new()),
+            Arc::new(MockStripeDriven::new()),
+            cmd,
+        )
+        .await;
+        assert!(matches!(result, Err(Error::Unauthorized(_))));
+    }
+
+    #[tokio::test]
+    async fn it_should_claim_a_provisional_project() {
+        for (requested, expected) in [("My Project", "My Project"), ("  ", "sonic-vegas-abc123")] {
+            let project = live_provisional_project();
+            let project_id = project.id.clone();
+
+            let mut auth0 = MockAuth0Driven::new();
+            auth0
+                .expect_find_info()
+                .withf(|query| query == "user_id:user id")
+                .times(1)
+                .return_once(|_| Ok(vec![Auth0Profile::default()]));
+
+            let mut stripe = MockStripeDriven::new();
+            stripe
+                .expect_create_customer()
+                .withf(|name, email| name == "user name" && email == "user email")
+                .times(1)
+                .return_once(|_, _| Ok("cus_123".into()));
+
+            let mut event = MockEventDrivenBridge::new();
+            let expected_name = expected.to_string();
+            event
+                .expect_dispatch()
+                .withf(move |event| match event {
+                    crate::domain::event::Event::ProjectClaimed(claimed) => {
+                        claimed.id == project_id
+                            && claimed.owner == "user id"
+                            && claimed.name == expected_name
+                            && claimed.billing_provider == "stripe"
+                            && claimed.billing_provider_id == "cus_123"
+                    }
+                    _ => false,
+                })
+                .times(1)
+                .return_once(|_| Ok(()));
+
+            let cmd = ClaimCmd::new(
+                Credential::Auth0("user id".into()),
+                ClaimKey::Token(CLAIM_TOKEN.into()),
+                requested.into(),
+            );
+            let claimed = claim(
+                Arc::new(cache_with_token(Some(project))),
+                Arc::new(event),
+                Arc::new(auth0),
+                Arc::new(stripe),
+                cmd,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(claimed.owner.as_deref(), Some("user id"));
+            assert_eq!(claimed.name, expected);
+            assert_eq!(claimed.status, ProjectStatus::Active);
+            assert_eq!(claimed.billing_provider_id, "cus_123");
+            assert_eq!(claimed.expires_at, None);
+            assert!(claimed.agent_provisioned);
+        }
+    }
+
+    #[tokio::test]
+    async fn it_should_not_claim_twice() {
+        // After the claim the projection clears the token, and the project is no longer
+        // provisional; either way a second claim finds nothing, and bills nobody.
+        let claimed = Project {
+            owner: Some("someone".into()),
+            status: ProjectStatus::Active,
+            expires_at: None,
+            ..live_provisional_project()
+        };
+
+        for project in [None, Some(claimed)] {
+            let cmd = ClaimCmd::new(
+                Credential::Auth0("user id".into()),
+                ClaimKey::Token(CLAIM_TOKEN.into()),
+                String::new(),
+            );
+            let result = claim(
+                Arc::new(cache_with_token(project)),
+                Arc::new(MockEventDrivenBridge::new()),
+                Arc::new(MockAuth0Driven::new()),
+                Arc::new(MockStripeDriven::new()),
+                cmd,
+            )
+            .await;
+            assert!(matches!(result, Err(Error::NotFound(_))));
+        }
     }
 }
