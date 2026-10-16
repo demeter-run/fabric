@@ -31,3 +31,10 @@ ses_verified_email = "no-reply@demeter.run"
 
 [prometheus]
 addr="0.0.0.0:9946"
+
+# Anonymous registration of provisional projects. Off unless enabled, and an
+# empty gateway token refuses every call. The caps, the expiry and the sweep
+# interval default to 3 per IP per day, 200 live, 3 ports, 7 days and 600 s.
+[provisional]
+enabled = false
+gateway_token = ""

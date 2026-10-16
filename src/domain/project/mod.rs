@@ -6,7 +6,7 @@ use super::{
     error::Error,
     event::{
         ProjectCreated, ProjectOwnerChanged, ProjectSecretCreated, ProjectUpdated,
-        ProjectUserInviteAccepted, ProjectUserInviteCreated,
+        ProjectUserInviteAccepted, ProjectUserInviteCreated, ProvisionalProjectCreated,
     },
     Result,
 };
@@ -34,16 +34,26 @@ pub trait ProjectEmailDriven: Send + Sync {
     ) -> Result<()>;
 }
 
+/// The billing provider of a project nobody owns yet. The claim creates the Stripe customer.
+pub const UNBILLED_PROVIDER: &str = "none";
+
 #[derive(Debug, Clone)]
 pub struct Project {
     pub id: String,
     pub name: String,
     pub namespace: String,
-    pub owner: String,
+    /// `None` for a provisional project, which has no owner until it is claimed.
+    pub owner: Option<String>,
     pub status: ProjectStatus,
     pub billing_provider: String,
     pub billing_provider_id: String,
     pub billing_subscription_id: Option<String>,
+    /// Set when an agent registered the project, and never cleared.
+    pub agent_provisioned: bool,
+    pub agent_name: Option<String>,
+    pub agent_version: Option<String>,
+    pub agent_url: Option<String>,
+    pub expires_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -55,13 +65,56 @@ impl TryFrom<ProjectCreated> for Project {
             id: value.id,
             namespace: value.namespace,
             name: value.name,
-            owner: value.owner,
+            owner: Some(value.owner),
             status: value.status.parse()?,
             billing_provider: value.billing_provider,
             billing_provider_id: value.billing_provider_id,
             billing_subscription_id: value.billing_subscription_id,
+            agent_provisioned: false,
+            agent_name: None,
+            agent_version: None,
+            agent_url: None,
+            expires_at: None,
             created_at: value.created_at,
             updated_at: value.updated_at,
+        })
+    }
+}
+
+/// A provisional project together with what only the projection keeps about it: the hashes and
+/// the user code that let a person claim it, and the hash the registration cap counts by.
+#[derive(Clone)]
+pub struct ProvisionalProject {
+    pub project: Project,
+    pub claim_token_hash: String,
+    pub user_code: String,
+    pub source_ip_hash: String,
+}
+impl TryFrom<ProvisionalProjectCreated> for ProvisionalProject {
+    type Error = Error;
+
+    fn try_from(value: ProvisionalProjectCreated) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
+            project: Project {
+                id: value.id,
+                namespace: value.namespace,
+                name: value.name,
+                owner: None,
+                status: value.status.parse()?,
+                billing_provider: UNBILLED_PROVIDER.into(),
+                billing_provider_id: String::new(),
+                billing_subscription_id: None,
+                agent_provisioned: true,
+                agent_name: Some(value.agent_name),
+                agent_version: value.agent_version,
+                agent_url: value.agent_url,
+                expires_at: Some(value.expires_at),
+                created_at: value.created_at,
+                updated_at: value.updated_at,
+            },
+            claim_token_hash: value.claim_token_hash,
+            user_code: value.user_code,
+            source_ip_hash: value.source_ip_hash,
         })
     }
 }
@@ -107,11 +160,15 @@ impl From<ProjectOwnerChanged> for ProjectOwnerChange {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectStatus {
     Active,
     Deleted,
     PaymentMethodFailed,
+    /// Registered by an agent and not claimed yet.
+    Provisional,
+    /// A provisional project that reached its expiry unclaimed.
+    Expired,
 }
 impl FromStr for ProjectStatus {
     type Err = Error;
@@ -122,6 +179,8 @@ impl FromStr for ProjectStatus {
             "dcu-consumed" => Ok(ProjectStatus::Active),
             "pm-failed" => Ok(ProjectStatus::PaymentMethodFailed),
             "deleted" => Ok(ProjectStatus::Deleted),
+            "provisional" => Ok(ProjectStatus::Provisional),
+            "expired" => Ok(ProjectStatus::Expired),
             _ => Err(Error::Unexpected(format!(
                 "project status not supported: {s}"
             ))),
@@ -134,6 +193,8 @@ impl Display for ProjectStatus {
             ProjectStatus::Active => write!(f, "active"),
             ProjectStatus::Deleted => write!(f, "deleted"),
             ProjectStatus::PaymentMethodFailed => write!(f, "pm-failed"),
+            ProjectStatus::Provisional => write!(f, "provisional"),
+            ProjectStatus::Expired => write!(f, "expired"),
         }
     }
 }
@@ -282,7 +343,7 @@ pub struct ProjectUserProject {
     pub project_id: String,
     pub project_name: String,
     pub project_namespace: String,
-    pub project_owner: String,
+    pub project_owner: Option<String>,
     pub project_status: ProjectStatus,
     pub project_billing_provider: String,
     pub project_billing_provider_id: String,
@@ -304,11 +365,16 @@ mod tests {
                 id: Uuid::new_v4().to_string(),
                 name: "New Project".into(),
                 namespace: "sonic-vegas".into(),
-                owner: "user id".into(),
+                owner: Some("user id".into()),
                 status: ProjectStatus::Active,
                 billing_provider: "stripe".into(),
                 billing_provider_id: "stripe id".into(),
                 billing_subscription_id: None,
+                agent_provisioned: false,
+                agent_name: None,
+                agent_version: None,
+                agent_url: None,
+                expires_at: None,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             }

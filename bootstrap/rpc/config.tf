@@ -33,6 +33,8 @@ resource "kubernetes_config_map_v1" "fabric_rpc_config" {
         balius_pg_url               = var.balius_pg_url
         balius_vault_token          = var.balius_vault_token
         balius_vault_address        = var.balius_vault_address
+        provisional_enabled         = var.provisional_enabled
+        provisional_gateway_token   = var.provisional_gateway_token
       }
     )}"
   }

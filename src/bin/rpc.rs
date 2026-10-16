@@ -6,7 +6,8 @@ use dotenv::dotenv;
 use fabric::driven::prometheus::metrics::MetricsDriven;
 use fabric::drivers::{
     cache::{CacheConfig, CacheNotifyConfig},
-    grpc::{GrpcConfig, GrpcTlsConfig},
+    grpc::{GrpcConfig, GrpcTlsConfig, ProvisionalConfig},
+    provisional::SweepConfig,
 };
 use serde::{de::Visitor, Deserialize, Deserializer};
 use tokio::try_join;
@@ -37,8 +38,9 @@ async fn main() -> Result<()> {
     let grpc = fabric::drivers::grpc::server(config.clone().into(), metrics_driven.clone());
     let subscribe = fabric::drivers::cache::subscribe(config.clone().into());
     let metrics = fabric::drivers::metrics::server(&config.prometheus.addr, metrics_driven.clone());
+    let sweep = fabric::drivers::provisional::sweep(config.clone().into());
 
-    try_join!(grpc, subscribe, metrics)?;
+    try_join!(grpc, subscribe, metrics, sweep)?;
 
     Ok(())
 }
@@ -97,6 +99,10 @@ struct Config {
     kafka_consumer: HashMap<String, String>,
     prometheus: PrometheusConfig,
     balius: Option<BaliusConfig>,
+    /// Anonymous registration. Every field defaults to a value that is safe to deploy, the kill
+    /// switch included, so a config without the table keeps registration off.
+    #[serde(default)]
+    provisional: ProvisionalConfig,
 }
 impl Config {
     pub fn new() -> Result<Self> {
@@ -140,6 +146,19 @@ impl From<Config> for GrpcConfig {
             balius_pg_url: value.balius.as_ref().map(|b| b.pg_url.clone()),
             balius_vault_address: value.balius.as_ref().map(|b| b.vault_address.clone()),
             balius_vault_token: value.balius.as_ref().map(|b| b.vault_token.clone()),
+            provisional: value.provisional,
+        }
+    }
+}
+
+impl From<Config> for SweepConfig {
+    fn from(value: Config) -> Self {
+        Self {
+            db_path: value.db_path,
+            topic: value.topic_events,
+            kafka: value.kafka_producer,
+            // tokio refuses a zero period.
+            interval: Duration::from_secs(value.provisional.sweep_interval_secs.max(1)),
         }
     }
 }

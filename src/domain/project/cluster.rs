@@ -5,7 +5,7 @@ use kube::{api::ObjectMeta, ResourceExt};
 use tracing::info;
 
 use crate::domain::{
-    event::{ProjectCreated, ProjectDeleted},
+    event::{ProjectCreated, ProjectDeleted, ProjectExpired, ProvisionalProjectCreated},
     utils::cluster_namespace,
     Result,
 };
@@ -21,9 +21,36 @@ pub async fn apply_manifest(
     cluster: Arc<dyn ProjectDrivenCluster>,
     evt: ProjectCreated,
 ) -> Result<()> {
+    create_namespace(cluster, &evt.namespace).await
+}
+
+/// A provisional project gets its namespace exactly as an owned one does.
+pub async fn apply_provisional_manifest(
+    cluster: Arc<dyn ProjectDrivenCluster>,
+    evt: ProvisionalProjectCreated,
+) -> Result<()> {
+    create_namespace(cluster, &evt.namespace).await
+}
+
+pub async fn delete_manifest(
+    cluster: Arc<dyn ProjectDrivenCluster>,
+    evt: ProjectDeleted,
+) -> Result<()> {
+    delete_namespace(cluster, &evt.namespace).await
+}
+
+/// An expired project loses its namespace, and every port in it, as a deleted one does.
+pub async fn expire_manifest(
+    cluster: Arc<dyn ProjectDrivenCluster>,
+    evt: ProjectExpired,
+) -> Result<()> {
+    delete_namespace(cluster, &evt.namespace).await
+}
+
+async fn create_namespace(cluster: Arc<dyn ProjectDrivenCluster>, namespace: &str) -> Result<()> {
     let namespace = Namespace {
         metadata: ObjectMeta {
-            name: Some(cluster_namespace(&evt.namespace)),
+            name: Some(cluster_namespace(namespace)),
             ..Default::default()
         },
         ..Default::default()
@@ -36,13 +63,10 @@ pub async fn apply_manifest(
     Ok(())
 }
 
-pub async fn delete_manifest(
-    cluster: Arc<dyn ProjectDrivenCluster>,
-    evt: ProjectDeleted,
-) -> Result<()> {
+async fn delete_namespace(cluster: Arc<dyn ProjectDrivenCluster>, namespace: &str) -> Result<()> {
     let namespace = Namespace {
         metadata: ObjectMeta {
-            name: Some(cluster_namespace(&evt.namespace)),
+            name: Some(cluster_namespace(namespace)),
             ..Default::default()
         },
         ..Default::default()
@@ -50,7 +74,7 @@ pub async fn delete_manifest(
     cluster.delete(&namespace).await?;
 
     //TODO: create event to update cache
-    info!(namespace = namespace.name_any(), "new namespace created");
+    info!(namespace = namespace.name_any(), "namespace deleted");
 
     Ok(())
 }

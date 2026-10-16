@@ -4,11 +4,50 @@ use std::sync::Arc;
 use tracing::error;
 
 use crate::domain::{
-    auth::Auth0Driven, event::Event, notify::NotifyDriven, project::cache::ProjectDrivenCache,
-    resource::cache::ResourceDrivenCache, Result,
+    auth::Auth0Driven,
+    event::{Event, ProvisionalProjectCreated},
+    notify::NotifyDriven,
+    project::{cache::ProjectDrivenCache, Project},
+    resource::cache::ResourceDrivenCache,
+    Result,
 };
 
 static E2E_EMAIL: &str = "e2e@txpipe.io";
+
+/// Who a notification names for a project that has no owner yet.
+fn provisional_user(agent_name: &str) -> String {
+    format!("provisional, agent {agent_name}")
+}
+
+/// The notification of an event on a provisional project, which has no owner to look up.
+fn provisional_message(payload: &impl serde::Serialize, project: &Project) -> String {
+    let mut value = serde_json::to_value(payload).unwrap();
+    value.as_object_mut().unwrap().insert(
+        "user".to_string(),
+        serde_json::json!(provisional_user(
+            project.agent_name.as_deref().unwrap_or("unknown")
+        )),
+    );
+    to_string_pretty(&value).unwrap()
+}
+
+/// The notification of a registration. Built field by field so the user code, which grants the
+/// claim, and the hashes never reach the channel.
+fn registration_message(payload: &ProvisionalProjectCreated) -> String {
+    to_string_pretty(&serde_json::json!({
+        "id": payload.id,
+        "namespace": payload.namespace,
+        "status": payload.status,
+        "agent": {
+            "name": payload.agent_name,
+            "version": payload.agent_version,
+            "url": payload.agent_url,
+        },
+        "expires_at": payload.expires_at,
+        "user": provisional_user(&payload.agent_name),
+    }))
+    .unwrap()
+}
 
 pub struct SlackNotifyDrivenImpl {
     pub client: Slack,
@@ -63,12 +102,11 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
                     Err(_) => Some(to_string_pretty(&payload).unwrap()),
                 }
             }
+            Event::ProvisionalProjectCreated(payload) => Some(registration_message(&payload)),
             Event::ProjectDeleted(payload) => match project_cache.find_by_id(&payload.id).await {
-                Ok(Some(project)) => {
-                    match auth_driven
-                        .find_info(&format!("user_id:{}", project.owner))
-                        .await
-                    {
+                Ok(Some(project)) => match &project.owner {
+                    None => Some(provisional_message(&payload, &project)),
+                    Some(owner) => match auth_driven.find_info(&format!("user_id:{owner}")).await {
                         Ok(profile) => {
                             if profile.is_empty() {
                                 Some(to_string_pretty(&payload).unwrap())
@@ -92,43 +130,43 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
                             }
                         }
                         Err(_) => Some(to_string_pretty(&payload).unwrap()),
-                    }
-                }
+                    },
+                },
                 _ => None,
             },
             Event::ResourceCreated(payload) => match resource_cache.find_by_id(&payload.id).await {
                 Ok(Some(resource)) => match project_cache.find_by_id(&resource.project_id).await {
-                    Ok(Some(project)) => {
-                        match auth_driven
-                            .find_info(&format!("user_id:{}", project.owner))
-                            .await
-                        {
-                            Ok(profile) => {
-                                if profile.is_empty() {
-                                    Some(to_string_pretty(&payload).unwrap())
-                                } else {
-                                    let profile = profile.first().unwrap();
-                                    if profile.email == E2E_EMAIL {
-                                        None
+                    Ok(Some(project)) => match &project.owner {
+                        None => Some(provisional_message(&payload, &project)),
+                        Some(owner) => {
+                            match auth_driven.find_info(&format!("user_id:{owner}")).await {
+                                Ok(profile) => {
+                                    if profile.is_empty() {
+                                        Some(to_string_pretty(&payload).unwrap())
                                     } else {
-                                        let mut new_paload_as_value =
-                                            serde_json::to_value(payload).unwrap();
-                                        let new_payload =
-                                            new_paload_as_value.as_object_mut().unwrap();
-                                        new_payload.insert(
-                                            "user".to_string(),
-                                            serde_json::json!({
-                                                "name": profile.name,
-                                                "email": profile.email
-                                            }),
-                                        );
-                                        Some(to_string_pretty(&new_payload).unwrap())
+                                        let profile = profile.first().unwrap();
+                                        if profile.email == E2E_EMAIL {
+                                            None
+                                        } else {
+                                            let mut new_paload_as_value =
+                                                serde_json::to_value(payload).unwrap();
+                                            let new_payload =
+                                                new_paload_as_value.as_object_mut().unwrap();
+                                            new_payload.insert(
+                                                "user".to_string(),
+                                                serde_json::json!({
+                                                    "name": profile.name,
+                                                    "email": profile.email
+                                                }),
+                                            );
+                                            Some(to_string_pretty(&new_payload).unwrap())
+                                        }
                                     }
                                 }
+                                Err(_) => Some(to_string_pretty(&payload).unwrap()),
                             }
-                            Err(_) => Some(to_string_pretty(&payload).unwrap()),
                         }
-                    }
+                    },
                     _ => None,
                 },
                 _ => None,
@@ -136,37 +174,37 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
             Event::ResourceUpdated(payload) => Some(to_string_pretty(&payload).unwrap()),
             Event::ResourceDeleted(payload) => match resource_cache.find_by_id(&payload.id).await {
                 Ok(Some(resource)) => match project_cache.find_by_id(&resource.project_id).await {
-                    Ok(Some(project)) => {
-                        match auth_driven
-                            .find_info(&format!("user_id:{}", project.owner))
-                            .await
-                        {
-                            Ok(profile) => {
-                                if profile.is_empty() {
-                                    Some(to_string_pretty(&payload).unwrap())
-                                } else {
-                                    let profile = profile.first().unwrap();
-                                    if profile.email == E2E_EMAIL {
-                                        None
+                    Ok(Some(project)) => match &project.owner {
+                        None => Some(provisional_message(&payload, &project)),
+                        Some(owner) => {
+                            match auth_driven.find_info(&format!("user_id:{owner}")).await {
+                                Ok(profile) => {
+                                    if profile.is_empty() {
+                                        Some(to_string_pretty(&payload).unwrap())
                                     } else {
-                                        let mut new_paload_as_value =
-                                            serde_json::to_value(payload).unwrap();
-                                        let new_payload =
-                                            new_paload_as_value.as_object_mut().unwrap();
-                                        new_payload.insert(
-                                            "user".to_string(),
-                                            serde_json::json!({
-                                                "name": profile.name,
-                                                "email": profile.email
-                                            }),
-                                        );
-                                        Some(to_string_pretty(&new_payload).unwrap())
+                                        let profile = profile.first().unwrap();
+                                        if profile.email == E2E_EMAIL {
+                                            None
+                                        } else {
+                                            let mut new_paload_as_value =
+                                                serde_json::to_value(payload).unwrap();
+                                            let new_payload =
+                                                new_paload_as_value.as_object_mut().unwrap();
+                                            new_payload.insert(
+                                                "user".to_string(),
+                                                serde_json::json!({
+                                                    "name": profile.name,
+                                                    "email": profile.email
+                                                }),
+                                            );
+                                            Some(to_string_pretty(&new_payload).unwrap())
+                                        }
                                     }
                                 }
+                                Err(_) => Some(to_string_pretty(&payload).unwrap()),
                             }
-                            Err(_) => Some(to_string_pretty(&payload).unwrap()),
                         }
-                    }
+                    },
                     _ => None,
                 },
                 _ => None,
@@ -182,5 +220,35 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_should_keep_secrets_out_of_the_registration_message() {
+        let payload = ProvisionalProjectCreated::default();
+
+        let message = registration_message(&payload);
+
+        assert!(message.contains("provisional, agent claude-code"));
+        assert!(message.contains(&payload.namespace));
+        assert!(!message.contains(&payload.user_code));
+        assert!(!message.contains(&payload.claim_token_hash));
+        assert!(!message.contains(&payload.source_ip_hash));
+    }
+
+    #[test]
+    fn it_should_name_the_agent_for_a_project_with_no_owner() {
+        let project = Project {
+            owner: None,
+            agent_name: Some("claude-code".into()),
+            ..Default::default()
+        };
+
+        let message = provisional_message(&serde_json::json!({"id": "x"}), &project);
+        assert!(message.contains("provisional, agent claude-code"));
     }
 }

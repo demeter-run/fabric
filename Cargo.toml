@@ -5,7 +5,7 @@ edition = "2021"
 repository = "https://github.com/demeter-run/fabric"
 
 [dependencies]
-dmtri = { git = "https://github.com/demeter-run/specs.git", rev = "8e90dbc6d58ce84025a3eaa9a5fdcab126af3099" }
+dmtri = { git = "https://github.com/demeter-run/specs.git", rev = "998e25a17263992ef55d2f2ecda57ac8d286f400" }
 # dmtri = { version = "0.1.0", path = "../specs/gen/rust" }
 # dmtri = { version = "0.1.0", path = "../fabric-specs/gen/rust" }
 
@@ -41,8 +41,10 @@ reqwest = { version = "0.12.5", features = ["json", "rustls-tls-webpki-roots"] }
 rustls = "0.23.25"
 serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0.117"
+sha2 = "0.10.9"
 slack-hook = "0.8.0"
 sqlx = { version = "0.7.4", features = ["runtime-tokio-rustls", "sqlite", "postgres", "chrono"] }
+subtle = "2.6.1"
 thiserror = "1.0.63"
 tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread", "time"] }
 tracing = "0.1.40"

@@ -482,6 +482,26 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
 
         Ok(tonic::Response::new(message))
     }
+
+    // The claim RPCs belong to the claim piece of the claimable-ports work; until it lands they
+    // answer UNIMPLEMENTED rather than claiming anything.
+    async fn fetch_claim(
+        &self,
+        _request: tonic::Request<proto::FetchClaimRequest>,
+    ) -> Result<tonic::Response<proto::FetchClaimResponse>, tonic::Status> {
+        Err(Status::unimplemented(
+            "project claims are not available yet",
+        ))
+    }
+
+    async fn claim_project(
+        &self,
+        _request: tonic::Request<proto::ClaimProjectRequest>,
+    ) -> Result<tonic::Response<proto::ClaimProjectResponse>, tonic::Status> {
+        Err(Status::unimplemented(
+            "project claims are not available yet",
+        ))
+    }
 }
 
 impl From<Project> for proto::Project {

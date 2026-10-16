@@ -6,6 +6,7 @@ pub mod event;
 pub mod metadata;
 pub mod notify;
 pub mod project;
+pub mod provisional;
 pub mod resource;
 pub mod usage;
 pub mod utils;

@@ -21,6 +21,7 @@ pub struct ResourceServiceImpl {
     event: Arc<dyn EventDrivenBridge>,
     metadata: Arc<dyn MetadataDriven>,
     metrics: Arc<MetricsDriven>,
+    port_cap: u32,
 }
 impl ResourceServiceImpl {
     pub fn new(
@@ -29,6 +30,7 @@ impl ResourceServiceImpl {
         event: Arc<dyn EventDrivenBridge>,
         metadata: Arc<dyn MetadataDriven>,
         metrics: Arc<MetricsDriven>,
+        port_cap: u32,
     ) -> Self {
         Self {
             project_cache,
@@ -36,6 +38,7 @@ impl ResourceServiceImpl {
             event,
             metadata,
             metrics,
+            port_cap,
         }
     }
 }
@@ -115,20 +118,23 @@ impl proto::resource_service_server::ResourceService for ResourceServiceImpl {
         let cmd = command::CreateCmd::new(credential, req.project_id, req.kind, req.spec)
             .inspect_err(|err| handle_error_metric(self.metrics.clone(), "resource", err))?;
 
-        command::create(
+        let created = command::create(
             self.resource_cache.clone(),
             self.project_cache.clone(),
             self.metadata.clone(),
             self.event.clone(),
-            cmd.clone(),
+            self.port_cap,
+            cmd,
         )
         .await
         .inspect_err(|err| handle_error_metric(self.metrics.clone(), "resource", err))?;
 
         let message = proto::CreateResourceResponse {
-            id: cmd.id,
-            name: cmd.name,
-            kind: cmd.kind,
+            id: created.id,
+            name: created.name,
+            kind: created.kind,
+            annotations: created.annotations.unwrap_or_default(),
+            spec: created.spec,
         };
 
         Ok(tonic::Response::new(message))

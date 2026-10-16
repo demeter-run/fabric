@@ -100,6 +100,18 @@ variable "balius_vault_address" {
   type = string
 }
 
+// The kill switch for anonymous registration. Off unless a deployment turns it on.
+variable "provisional_enabled" {
+  type    = bool
+  default = false
+}
+
+// The token the Console presents to register provisional projects. Empty refuses every call.
+variable "provisional_gateway_token" {
+  type    = string
+  default = ""
+}
+
 variable "url_prefix" {
   type    = string
   default = "rpc"
