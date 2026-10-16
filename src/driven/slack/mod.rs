@@ -5,7 +5,7 @@ use tracing::error;
 
 use crate::domain::{
     auth::Auth0Driven,
-    event::{Event, ProvisionalProjectCreated},
+    event::{Event, ProjectClaimed, ProvisionalProjectCreated},
     notify::NotifyDriven,
     project::{cache::ProjectDrivenCache, Project},
     resource::cache::ResourceDrivenCache,
@@ -47,6 +47,19 @@ fn registration_message(payload: &ProvisionalProjectCreated) -> String {
         "user": provisional_user(&payload.agent_name),
     }))
     .unwrap()
+}
+
+/// The notification of a claim: who claimed the project, and which agent had registered it.
+fn claim_message(payload: &ProjectClaimed, user: &str, agent_name: Option<&str>) -> String {
+    let mut value = serde_json::to_value(payload).unwrap();
+    value.as_object_mut().unwrap().insert(
+        "user".to_string(),
+        serde_json::json!(format!(
+            "claimed by {user} (agent {})",
+            agent_name.unwrap_or("unknown")
+        )),
+    );
+    to_string_pretty(&value).unwrap()
 }
 
 pub struct SlackNotifyDrivenImpl {
@@ -103,6 +116,35 @@ impl NotifyDriven for SlackNotifyDrivenImpl {
                 }
             }
             Event::ProvisionalProjectCreated(payload) => Some(registration_message(&payload)),
+            Event::ProjectClaimed(payload) => {
+                let agent_name = match project_cache.find_by_id(&payload.id).await {
+                    Ok(Some(project)) => project.agent_name,
+                    _ => None,
+                };
+                match auth_driven
+                    .find_info(&format!("user_id:{}", payload.owner))
+                    .await
+                {
+                    Ok(profile) => match profile.first() {
+                        Some(profile) if profile.email == E2E_EMAIL => None,
+                        Some(profile) => Some(claim_message(
+                            &payload,
+                            &format!("{} <{}>", profile.name, profile.email),
+                            agent_name.as_deref(),
+                        )),
+                        None => Some(claim_message(
+                            &payload,
+                            &payload.owner,
+                            agent_name.as_deref(),
+                        )),
+                    },
+                    Err(_) => Some(claim_message(
+                        &payload,
+                        &payload.owner,
+                        agent_name.as_deref(),
+                    )),
+                }
+            }
             Event::ProjectDeleted(payload) => match project_cache.find_by_id(&payload.id).await {
                 Ok(Some(project)) => match &project.owner {
                     None => Some(provisional_message(&payload, &project)),
@@ -238,6 +280,18 @@ mod tests {
         assert!(!message.contains(&payload.user_code));
         assert!(!message.contains(&payload.claim_token_hash));
         assert!(!message.contains(&payload.source_ip_hash));
+    }
+
+    #[test]
+    fn it_should_name_the_claimer_and_the_agent_in_the_claim_message() {
+        let payload = ProjectClaimed::default();
+
+        let message = claim_message(&payload, "Jane <jane@example.com>", Some("claude-code"));
+        assert!(message.contains("claimed by Jane <jane@example.com> (agent claude-code)"));
+        assert!(message.contains(&payload.id));
+
+        let message = claim_message(&payload, "user id", None);
+        assert!(message.contains("claimed by user id (agent unknown)"));
     }
 
     #[test]

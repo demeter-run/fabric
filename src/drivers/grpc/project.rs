@@ -8,9 +8,11 @@ use crate::{
         auth::{Auth0Driven, Credential},
         event::EventDrivenBridge,
         project::{
-            self, cache::ProjectDrivenCache, Project, ProjectEmailDriven, ProjectSecret,
-            ProjectUserAggregated, ProjectUserInvite, StripeDriven,
+            self, cache::ProjectDrivenCache, ClaimKey, ClaimPort, Project, ProjectClaimPreview,
+            ProjectEmailDriven, ProjectSecret, ProjectUserAggregated, ProjectUserInvite,
+            StripeDriven,
         },
+        resource::cache::ResourceDrivenCache,
     },
     driven::prometheus::metrics::MetricsDriven,
 };
@@ -19,6 +21,7 @@ use super::handle_error_metric;
 
 pub struct ProjectServiceImpl {
     cache: Arc<dyn ProjectDrivenCache>,
+    resource_cache: Arc<dyn ResourceDrivenCache>,
     event: Arc<dyn EventDrivenBridge>,
     auth0: Arc<dyn Auth0Driven>,
     stripe: Arc<dyn StripeDriven>,
@@ -32,6 +35,7 @@ pub struct ProjectServiceImpl {
 impl ProjectServiceImpl {
     pub fn new(
         cache: Arc<dyn ProjectDrivenCache>,
+        resource_cache: Arc<dyn ResourceDrivenCache>,
         event: Arc<dyn EventDrivenBridge>,
         auth0: Arc<dyn Auth0Driven>,
         stripe: Arc<dyn StripeDriven>,
@@ -42,6 +46,7 @@ impl ProjectServiceImpl {
     ) -> Self {
         Self {
             cache,
+            resource_cache,
             event,
             auth0,
             stripe,
@@ -483,24 +488,100 @@ impl proto::project_service_server::ProjectService for ProjectServiceImpl {
         Ok(tonic::Response::new(message))
     }
 
-    // The claim RPCs belong to the claim piece of the claimable-ports work; until it lands they
-    // answer UNIMPLEMENTED rather than claiming anything.
     async fn fetch_claim(
         &self,
-        _request: tonic::Request<proto::FetchClaimRequest>,
+        request: tonic::Request<proto::FetchClaimRequest>,
     ) -> Result<tonic::Response<proto::FetchClaimResponse>, tonic::Status> {
-        Err(Status::unimplemented(
-            "project claims are not available yet",
-        ))
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+        let key = match req.key {
+            Some(proto::fetch_claim_request::Key::ClaimToken(token)) => ClaimKey::Token(token),
+            Some(proto::fetch_claim_request::Key::UserCode(code)) => ClaimKey::UserCode(code),
+            None => {
+                return Err(Status::invalid_argument(
+                    "claim_token or user_code is required",
+                ))
+            }
+        };
+
+        let cmd = project::command::FetchClaimCmd::new(credential, key);
+
+        let preview =
+            project::command::fetch_claim(self.cache.clone(), self.resource_cache.clone(), cmd)
+                .await
+                .inspect_err(|err| handle_error_metric(self.metrics.clone(), "project", err))?;
+
+        Ok(tonic::Response::new(preview.into()))
     }
 
     async fn claim_project(
         &self,
-        _request: tonic::Request<proto::ClaimProjectRequest>,
+        request: tonic::Request<proto::ClaimProjectRequest>,
     ) -> Result<tonic::Response<proto::ClaimProjectResponse>, tonic::Status> {
-        Err(Status::unimplemented(
-            "project claims are not available yet",
-        ))
+        let credential = match request.extensions().get::<Credential>() {
+            Some(credential) => credential.clone(),
+            None => return Err(Status::unauthenticated("invalid credential")),
+        };
+
+        let req = request.into_inner();
+        let key = match req.key {
+            Some(proto::claim_project_request::Key::ClaimToken(token)) => ClaimKey::Token(token),
+            Some(proto::claim_project_request::Key::UserCode(code)) => ClaimKey::UserCode(code),
+            None => {
+                return Err(Status::invalid_argument(
+                    "claim_token or user_code is required",
+                ))
+            }
+        };
+
+        let cmd = project::command::ClaimCmd::new(credential, key, req.name);
+
+        let project = project::command::claim(
+            self.cache.clone(),
+            self.event.clone(),
+            self.auth0.clone(),
+            self.stripe.clone(),
+            cmd,
+        )
+        .await
+        .inspect_err(|err| handle_error_metric(self.metrics.clone(), "project", err))?;
+
+        let message = proto::ClaimProjectResponse {
+            project: Some(project.into()),
+        };
+
+        Ok(tonic::Response::new(message))
+    }
+}
+
+impl From<ProjectClaimPreview> for proto::FetchClaimResponse {
+    fn from(value: ProjectClaimPreview) -> Self {
+        Self {
+            project_id: value.project.id,
+            project_namespace: value.project.namespace,
+            agent_name: value.project.agent_name.unwrap_or_default(),
+            agent_version: value.project.agent_version,
+            expires_at: value
+                .project
+                .expires_at
+                .map(|at| at.to_rfc3339())
+                .unwrap_or_default(),
+            ports: value.ports.into_iter().map(|port| port.into()).collect(),
+        }
+    }
+}
+
+impl From<ClaimPort> for proto::ClaimPort {
+    fn from(value: ClaimPort) -> Self {
+        Self {
+            id: value.id,
+            kind: value.kind,
+            network: value.network,
+        }
     }
 }
 
