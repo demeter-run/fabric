@@ -601,6 +601,30 @@ impl ProjectDrivenCache for SqliteProjectDrivenCache {
         Ok(count as u32)
     }
 
+    async fn find_registration_created_at_by_source(
+        &self,
+        source_ip_hash: &str,
+        since: &DateTime<Utc>,
+        offset: u32,
+    ) -> Result<Option<DateTime<Utc>>> {
+        // The same rows `count_registrations_by_source` counts, oldest first.
+        let created_at: Option<DateTime<Utc>> = sqlx::query_scalar(
+            r#"
+                SELECT p.created_at FROM project p
+                WHERE p.source_ip_hash = $1 AND DATETIME(p.created_at) >= DATETIME($2)
+                ORDER BY DATETIME(p.created_at) ASC, p.created_at ASC
+                LIMIT 1 OFFSET $3;
+            "#,
+        )
+        .bind(source_ip_hash)
+        .bind(since)
+        .bind(offset)
+        .fetch_optional(&self.sqlite.db)
+        .await?;
+
+        Ok(created_at)
+    }
+
     async fn exists_user_code(&self, user_code: &str) -> Result<bool> {
         // The claim and the expiry clear the code, so any row still holding it is live.
         let count: i64 = sqlx::query_scalar(
@@ -1874,6 +1898,42 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn it_should_find_registration_times_by_source_oldest_first() {
+        let cache = get_cache().await;
+        let now = Utc::now();
+        let since = now - chrono::Duration::hours(24);
+
+        let mut created = Vec::new();
+        for hours in [25, 1, 23, 12] {
+            let mut p = provisional(now + chrono::Duration::days(7));
+            p.project.created_at = now - chrono::Duration::hours(hours);
+            cache.create_provisional(&p).await.unwrap();
+            created.push(p);
+        }
+        // An expired registration still counts, as it does for the cap.
+        cache.expire(&created[2].project.id, &now).await.unwrap();
+        let mut elsewhere = provisional(now + chrono::Duration::days(7));
+        elsewhere.source_ip_hash = "another hash".into();
+        elsewhere.project.created_at =
+            now - chrono::Duration::hours(23) - chrono::Duration::minutes(30);
+        cache.create_provisional(&elsewhere).await.unwrap();
+
+        let hash = &created[0].source_ip_hash;
+        let found = |offset| cache.find_registration_created_at_by_source(hash, &since, offset);
+        // The one from 25 hours ago is outside the window; the rest come oldest first.
+        assert_eq!(found(0).await.unwrap(), Some(created[2].project.created_at));
+        assert_eq!(found(1).await.unwrap(), Some(created[3].project.created_at));
+        assert_eq!(found(2).await.unwrap(), Some(created[1].project.created_at));
+        assert_eq!(found(3).await.unwrap(), None);
+
+        let none = cache
+            .find_registration_created_at_by_source("no such hash", &since, 0)
+            .await
+            .unwrap();
+        assert_eq!(none, None);
     }
 
     /// Every column of every row of `table` that belongs to the project, as raw bytes.

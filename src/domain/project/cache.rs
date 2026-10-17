@@ -36,6 +36,14 @@ pub trait ProjectDrivenCache: Send + Sync {
         source_ip_hash: &str,
         since: &DateTime<Utc>,
     ) -> Result<u32>;
+    /// When the registration from `source_ip_hash` at position `offset`, oldest first, among
+    /// those created at or after `since`, was created. `None` when there are not that many.
+    async fn find_registration_created_at_by_source(
+        &self,
+        source_ip_hash: &str,
+        since: &DateTime<Utc>,
+        offset: u32,
+    ) -> Result<Option<DateTime<Utc>>>;
     async fn exists_user_code(&self, user_code: &str) -> Result<bool>;
     async fn create_secret(&self, secret: &ProjectSecret) -> Result<()>;
     async fn find_secrets(&self, project: &str) -> Result<Vec<ProjectSecret>>;
