@@ -14,8 +14,9 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
 use tonic::{
+    metadata::MetadataMap,
     transport::{Identity, Server, ServerTlsConfig},
-    Status,
+    Code, Status,
 };
 use tower_http::cors::CorsLayer;
 use tracing::{error, info};
@@ -248,6 +249,9 @@ pub struct GrpcConfig {
     pub provisional: ProvisionalConfig,
 }
 
+/// The status metadata that tells a caller how many whole seconds to wait before retrying.
+pub const RETRY_AFTER_SECONDS: &str = "retry-after-seconds";
+
 impl From<Error> for Status {
     fn from(value: Error) -> Self {
         match value {
@@ -262,6 +266,14 @@ impl From<Error> for Status {
             Error::InvalidArgument(err) => Status::invalid_argument(err),
             Error::NotFound(err) => Status::not_found(err),
             Error::ResourceExhausted(err) => Status::resource_exhausted(err),
+            Error::RetryAfter {
+                message,
+                retry_after_seconds,
+            } => {
+                let mut metadata = MetadataMap::new();
+                metadata.insert(RETRY_AFTER_SECONDS, retry_after_seconds.into());
+                Status::with_metadata(Code::ResourceExhausted, message, metadata)
+            }
             Error::Unavailable(err) => Status::unavailable(err),
         }
     }
@@ -270,5 +282,33 @@ impl From<Error> for Status {
 fn handle_error_metric(metrics: Arc<MetricsDriven>, domain: &str, error: &Error) {
     if let Error::Unexpected(err) = error {
         metrics.domain_error("grpc", domain, &err.to_string());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_should_carry_the_retry_after_as_status_metadata() {
+        let status: Status = Error::RetryAfter {
+            message: "ip_cap".into(),
+            retry_after_seconds: 3600,
+        }
+        .into();
+
+        assert_eq!(status.code(), Code::ResourceExhausted);
+        assert_eq!(status.message(), "ip_cap");
+        let value = status.metadata().get(RETRY_AFTER_SECONDS).unwrap();
+        assert_eq!(value.to_str().unwrap(), "3600");
+    }
+
+    #[test]
+    fn it_should_keep_a_plain_resource_exhausted_without_metadata() {
+        let status: Status = Error::ResourceExhausted("port_cap".into()).into();
+
+        assert_eq!(status.code(), Code::ResourceExhausted);
+        assert_eq!(status.message(), "port_cap");
+        assert!(status.metadata().get(RETRY_AFTER_SECONDS).is_none());
     }
 }

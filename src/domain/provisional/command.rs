@@ -19,6 +19,8 @@ use super::{
 const AGENT_NAME_MAX: usize = 64;
 const AGENT_FIELD_MAX: usize = 256;
 const USER_CODE_ATTEMPTS: usize = 5;
+/// The trailing window the per-IP cap counts registrations in.
+const IP_CAP_WINDOW: Duration = Duration::hours(24);
 
 /// Registers a provisional project for an anonymous agent and mints its pre-claim API key.
 ///
@@ -44,11 +46,21 @@ pub async fn register(
     let now = Utc::now();
 
     let source_ip_hash = hash_source_ip(&cmd.client_ip, secret);
+    let since = now - IP_CAP_WINDOW;
     let recent = cache
-        .count_registrations_by_source(&source_ip_hash, &(now - Duration::hours(24)))
+        .count_registrations_by_source(&source_ip_hash, &since)
         .await?;
     if recent >= config.ip_cap {
-        return Err(Error::ResourceExhausted(IP_CAP.into()));
+        // The window slides, so the source may register again once enough of its registrations
+        // age out to bring it back under the cap. Usually that is the oldest one; past a burst
+        // that slipped over the cap, it is the one `recent - ip_cap` places later.
+        let freeing = cache
+            .find_registration_created_at_by_source(&source_ip_hash, &since, recent - config.ip_cap)
+            .await?;
+        return Err(Error::RetryAfter {
+            message: IP_CAP.into(),
+            retry_after_seconds: ip_cap_retry_after(freeing, now),
+        });
     }
 
     if cache.count_live_provisional().await? >= config.global_cap {
@@ -126,6 +138,18 @@ pub async fn sweep_expired(
     }
 
     Ok(projects.len())
+}
+
+/// Whole seconds until a registration created at `created_at` leaves the cap's window, rounded
+/// up and at least one. Without one to wait for, as when the projection moved between the two
+/// reads, the whole window.
+fn ip_cap_retry_after(created_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> u64 {
+    let Some(created_at) = created_at else {
+        return IP_CAP_WINDOW.num_seconds().unsigned_abs();
+    };
+    let millis = (created_at + IP_CAP_WINDOW - now).num_milliseconds();
+    let seconds = millis.div_euclid(1000) + i64::from(millis.rem_euclid(1000) > 0);
+    seconds.max(1).unsigned_abs()
 }
 
 async fn unused_user_code(cache: Arc<dyn ProjectDrivenCache>) -> Result<String> {
@@ -528,7 +552,11 @@ mod tests {
             RegisterCmd::default(),
         )
         .await;
-        assert!(matches!(&result, Err(Error::ResourceExhausted(code)) if code == IP_CAP));
+        assert!(matches!(
+            &result,
+            Err(Error::RetryAfter { message, retry_after_seconds })
+                if message == IP_CAP && *retry_after_seconds > 23 * 3600
+        ));
         assert!(bridge.keys().is_empty());
 
         let other = RegisterCmd {
@@ -537,6 +565,71 @@ mod tests {
         };
         let result = register(projects, bridge, &config(), SECRET, other).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn it_should_wait_for_the_oldest_registration_in_the_window_to_age_out() {
+        let (projects, _, bridge) = sqlite().await;
+        let now = Utc::now();
+        let hash = hash_source_ip(CLIENT_IP, SECRET);
+        seed(&projects, &hash, now - Duration::hours(25), now).await;
+        seed(&projects, &hash, now - Duration::hours(23), now).await;
+        seed(&projects, &hash, now - Duration::hours(1), now).await;
+        seed(&projects, &hash, now - Duration::minutes(5), now).await;
+
+        let result = register(projects, bridge, &config(), SECRET, RegisterCmd::default()).await;
+        let Err(Error::RetryAfter {
+            message,
+            retry_after_seconds,
+        }) = result
+        else {
+            panic!("the fourth registration is not refused with a retry after");
+        };
+        assert_eq!(message, IP_CAP);
+        // The one from 23 hours ago leaves the window in an hour, less the test's own runtime.
+        assert!((3500..=3600).contains(&retry_after_seconds));
+    }
+
+    #[tokio::test]
+    async fn it_should_wait_past_a_burst_that_slipped_over_the_ip_cap() {
+        let mut cache = MockProjectDrivenCache::new();
+        cache
+            .expect_count_registrations_by_source()
+            .return_once(|_, _| Ok(5));
+        let now = Utc::now();
+        cache
+            .expect_find_registration_created_at_by_source()
+            .withf(|_, _, offset| *offset == 2)
+            .return_once(move |_, _, _| Ok(Some(now - Duration::hours(22))));
+
+        let result = register(
+            Arc::new(cache),
+            Arc::new(MockEventDrivenBridge::new()),
+            &config(),
+            SECRET,
+            RegisterCmd::default(),
+        )
+        .await;
+        assert!(matches!(
+            result,
+            Err(Error::RetryAfter { retry_after_seconds, .. })
+                if (7100..=7200).contains(&retry_after_seconds)
+        ));
+    }
+
+    #[test]
+    fn it_should_round_the_ip_cap_retry_after_up_to_whole_seconds() {
+        let now = Utc::now();
+        let window = IP_CAP_WINDOW;
+        let at = |left: Duration| Some(now - window + left);
+
+        assert_eq!(ip_cap_retry_after(at(Duration::hours(1)), now), 3600);
+        assert_eq!(ip_cap_retry_after(at(Duration::milliseconds(3001)), now), 4);
+        assert_eq!(ip_cap_retry_after(at(Duration::milliseconds(1)), now), 1);
+        // Already out of the window, as at the edge of the query: retry at once, but not at zero.
+        assert_eq!(ip_cap_retry_after(at(Duration::zero()), now), 1);
+        assert_eq!(ip_cap_retry_after(at(-Duration::seconds(5)), now), 1);
+        assert_eq!(ip_cap_retry_after(None, now), 86400);
     }
 
     #[tokio::test]

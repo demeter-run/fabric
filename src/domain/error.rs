@@ -18,6 +18,13 @@ pub enum Error {
     NotFound(String),
     #[error("{0}")]
     ResourceExhausted(String),
+    /// A `ResourceExhausted` that knows when the caller may retry: the status carries the wait
+    /// in whole seconds as the `retry-after-seconds` metadata, and the message is unchanged.
+    #[error("{message}")]
+    RetryAfter {
+        message: String,
+        retry_after_seconds: u64,
+    },
     #[error("{0}")]
     Unavailable(String),
 }
