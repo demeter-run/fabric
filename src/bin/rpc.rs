@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
     let grpc = fabric::drivers::grpc::server(config.clone().into(), metrics_driven.clone());
     let subscribe = fabric::drivers::cache::subscribe(config.clone().into());
     let metrics = fabric::drivers::metrics::server(&config.prometheus.addr, metrics_driven.clone());
-    let sweep = fabric::drivers::provisional::sweep(config.clone().into());
+    let sweep = fabric::drivers::provisional::sweep(config.clone().into(), metrics_driven.clone());
 
     try_join!(grpc, subscribe, metrics, sweep)?;
 
