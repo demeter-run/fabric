@@ -208,6 +208,53 @@ mod tests {
         );
     }
 
+    /// One spec per kind carrying every field any shipped `.hbs` reads, with
+    /// only the tier varying.
+    fn port_at_tier(kind: &str, tier: &str) -> Resource {
+        Resource {
+            kind: kind.into(),
+            name: "port-name".into(),
+            spec: format!(
+                r#"{{"network":"cardano-mainnet","version":6,"throughputTier":"{tier}","authToken":"authtoken","username":"username","password":"password"}}"#
+            ),
+            ..Default::default()
+        }
+    }
+
+    /// Website2 promises "Switching plan or port never changes your
+    /// endpoints" (`src/content/portPricing.ts:34`). A tier change only
+    /// merge-patches the spec, so the endpoints stay put only while every
+    /// tier of a kind renders the same output. Comparing whole renders, not
+    /// just the `dns` entries, also catches a template that starts reading
+    /// the tier directly.
+    #[test]
+    fn every_tier_of_every_kind_renders_the_same_endpoints() {
+        let metadata = shipped_metadata();
+
+        for kind_metadata in metadata.find().unwrap() {
+            let kind = &kind_metadata.crd.spec.names.kind;
+            let baseline = metadata.render_hbs(&port_at_tier(kind, "0")).unwrap();
+
+            let mut tiers: Vec<_> = kind_metadata.plan.iter().collect();
+            tiers.sort_by_key(|(tier, _)| *tier);
+
+            for (tier, plan) in tiers {
+                assert!(!plan.dns.is_empty(), "{kind} tier {tier} has an empty dns");
+
+                let rendered = metadata.render_hbs(&port_at_tier(kind, tier)).unwrap();
+                assert_eq!(
+                    rendered, baseline,
+                    "{kind} tier {tier} renders different endpoints than tier 0"
+                );
+                assert!(
+                    rendered.contains(&plan.dns),
+                    "{kind} tier {tier} rendered without its dns {}: {rendered}",
+                    plan.dns
+                );
+            }
+        }
+    }
+
     /// The enterprise tier is invoiced by an explicit adjustment, not by the
     /// automatic per-unit calculation, so it must carry no cost -- while the
     /// self-serve tiers still do.
