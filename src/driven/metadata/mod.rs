@@ -235,6 +235,18 @@ mod tests {
             let kind = &kind_metadata.crd.spec.names.kind;
             let baseline = metadata.render_hbs(&port_at_tier(kind, "0")).unwrap();
 
+            // Without a tier-0 entry the loop below could run zero times and
+            // pass on a baseline rendered with no dns at all.
+            let tier_zero = kind_metadata
+                .plan
+                .get("0")
+                .unwrap_or_else(|| panic!("{kind} plan has no tier 0"));
+            assert!(
+                !tier_zero.dns.is_empty() && baseline.contains(&tier_zero.dns),
+                "{kind} tier 0 rendered without its dns {}: {baseline}",
+                tier_zero.dns
+            );
+
             let mut tiers: Vec<_> = kind_metadata.plan.iter().collect();
             tiers.sort_by_key(|(tier, _)| *tier);
 
