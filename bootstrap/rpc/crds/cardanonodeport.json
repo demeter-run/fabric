@@ -53,30 +53,6 @@
         "version": "stable",
         "throughputTier": "0"
       }
-    },
-    {
-      "description": "vector-mainnet - stable (10.1.4)",
-      "spec": {
-        "network": "vector-mainnet",
-        "version": "stable",
-        "throughputTier": "0"
-      }
-    },
-    {
-      "description": "vector-testnet - stable (10.1.4)",
-      "spec": {
-        "network": "vector-testnet",
-        "version": "stable",
-        "throughputTier": "0"
-      }
-    },
-    {
-      "description": "prime-testnet - stable (8.7.3)",
-      "spec": {
-        "network": "prime-testnet",
-        "version": "stable",
-        "throughputTier": "0"
-      }
     }
   ],
   "crd": {
