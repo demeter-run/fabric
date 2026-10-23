@@ -80,22 +80,6 @@
         "throughputTier": "0",
         "version": 7
       }
-    },
-    {
-      "description": "vector-testnet - v6",
-      "spec": {
-        "network": "vector-testnet",
-        "throughputTier": "0",
-        "version": 6
-      }
-    },
-    {
-      "description": "prime-testnet - v6",
-      "spec": {
-        "network": "prime-testnet",
-        "throughputTier": "0",
-        "version": 6
-      }
     }
   ],
   "crd": {
